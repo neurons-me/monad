@@ -22,10 +22,10 @@
     "docs:publish": "npm run docs:build && touch docs/.vitepress/dist/.nojekyll"
   },
   "dependencies": {
-    "cleaker": "file:../../cleaker/npm",
+    "cleaker": "workspace:*",
     "cors": "^2.8.5",
     "express": "^4.21.1",
-    "this.me": "file:../../../this/.me/npm"
+    "this.me": "workspace:*"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

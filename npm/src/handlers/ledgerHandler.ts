@@ -19,6 +19,15 @@ export type LedgerHandlerConfig = {
   onBridgeRequest: express.RequestHandler;
 };
 
+export type LedgerHandlers = {
+  root: express.RequestHandler;
+  rootRead: express.RequestHandler;
+  blocks: express.RequestHandler;
+  blockchain: express.RequestHandler;
+  atPath: express.RequestHandler;
+  catchAll: express.RequestHandler;
+};
+
 function readBlocks(ns: string, identityHash: string, limit: number) {
   const all = getAllBlocks();
   let blocks = filterBlocksByNamespace(all, ns);
@@ -26,7 +35,7 @@ function readBlocks(ns: string, identityHash: string, limit: number) {
   return blocks.slice().sort((a: any, b: any) => Number(b?.timestamp || 0) - Number(a?.timestamp || 0)).slice(0, limit);
 }
 
-export function createLedgerHandlers(config: LedgerHandlerConfig) {
+export function createLedgerHandlers(config: LedgerHandlerConfig): LedgerHandlers {
   // GET / — HTML shell (with ?target bridge delegation) or ledger read
   const root: express.RequestHandler = (req, res, next) => {
     if ((req.query as any)?.target) return config.onBridgeRequest(req, res, next);

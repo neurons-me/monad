@@ -6,13 +6,34 @@ import {
   type NamespaceProviderBoot,
 } from "./provider.js";
 
-export const GUI_PKG_DIST_DIR = process.env.GUI_PKG_DIST_DIR
-  ? path.resolve(process.env.GUI_PKG_DIST_DIR)
-  : path.resolve(process.cwd(), "../../../this/GUI/npm/dist");
+export interface MonadShellConfig {
+  cwd?: string;
+  guiPkgDistDir?: string;
+  indexPath?: string;
+}
 
-export const MONAD_INDEX_PATH = process.env.MONAD_INDEX_PATH
-  ? path.resolve(process.env.MONAD_INDEX_PATH)
-  : path.resolve(process.cwd(), "../index.html");
+let shellConfig: MonadShellConfig = {};
+
+export function configureMonadShell(config: MonadShellConfig): void {
+  shellConfig = { ...shellConfig, ...config };
+}
+
+export function getGuiPkgDistDir(): string {
+  return path.resolve(
+    shellConfig.cwd || process.cwd(),
+    shellConfig.guiPkgDistDir || process.env.GUI_PKG_DIST_DIR || "../../../this/GUI/npm/dist",
+  );
+}
+
+export function getMonadIndexPath(): string {
+  return path.resolve(
+    shellConfig.cwd || process.cwd(),
+    shellConfig.indexPath || process.env.MONAD_INDEX_PATH || "../index.html",
+  );
+}
+
+export const GUI_PKG_DIST_DIR = getGuiPkgDistDir();
+export const MONAD_INDEX_PATH = getMonadIndexPath();
 
 export function wantsHtml(req: express.Request) {
   const accept = String(req.headers.accept || "");
@@ -21,9 +42,10 @@ export function wantsHtml(req: express.Request) {
 
 export function htmlShell(options: { providerBoot?: NamespaceProviderBoot | null } = {}) {
   const providerBoot = options.providerBoot || null;
+  const indexPath = getMonadIndexPath();
   try {
-    if (fs.existsSync(MONAD_INDEX_PATH)) {
-      const html = fs.readFileSync(MONAD_INDEX_PATH, "utf8");
+    if (fs.existsSync(indexPath)) {
+      const html = fs.readFileSync(indexPath, "utf8");
       return providerBoot ? injectNamespaceProviderShell(html, providerBoot) : html;
     }
   } catch {

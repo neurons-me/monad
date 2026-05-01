@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Router as ExpressRouter } from "express";
 import { createEnvelope, createErrorEnvelope } from "../http/envelope.js";
 import { normalizeHttpRequestToMeTarget } from "../http/meTarget.js";
 
@@ -18,7 +18,7 @@ export type FetchSurfaceConfig = {
   timeoutMs: number;
 };
 
-export function createFetchSurface(config: FetchSurfaceConfig) {
+export function createFetchSurface(config: FetchSurfaceConfig): ExpressRouter {
   const router = Router();
 
   router.get("/__fetch", async (req, res) => {

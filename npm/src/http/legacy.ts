@@ -1,7 +1,7 @@
 import express from "express";
 import { claimUser, getUser } from "../Blockchain/users.js";
 
-export function createLegacyRouter() {
+export function createLegacyRouter(): express.Router {
   const router = express.Router();
 
   // Fetch a single claimed username.

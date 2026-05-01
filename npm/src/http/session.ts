@@ -132,7 +132,7 @@ function makeCloudSession(body: CreateCloudSessionRequest): CleakerSession {
   };
 }
 
-export function createSessionRouter() {
+export function createSessionRouter(): express.Router {
   const router = express.Router();
   // Ensure read-model projection can recover after daemon/server restarts.
   rebuildAuthorizedHostsProjection();

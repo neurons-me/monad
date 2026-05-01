@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Router as ExpressRouter } from "express";
 import { createEnvelope, createErrorEnvelope } from "../http/envelope.js";
 import { normalizeHttpRequestToMeTarget } from "../http/meTarget.js";
 import { resolveNamespace, resolveTransportHost } from "../http/namespace.js";
@@ -52,7 +52,7 @@ export function buildProviderBoot(
   });
 }
 
-export function createProviderSurface(config: ProviderSurfaceConfig) {
+export function createProviderSurface(config: ProviderSurfaceConfig): ExpressRouter {
   const router = Router();
 
   router.get("/__bootstrap", (req, res) => {

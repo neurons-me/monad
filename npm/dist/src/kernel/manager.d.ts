@@ -1,0 +1,10 @@
+import ME from "this.me";
+export declare function getKernelStateDir(): string;
+export declare function getKernelStatePath(...segments: string[]): string;
+export declare function getKernel(): InstanceType<typeof ME>;
+export declare function saveSnapshot(): void;
+export declare function kernelReady(): boolean;
+export declare function getRootNamespace(): string;
+export declare function namespaceToKernelPrefix(namespace: string): string;
+export declare function kernelPathFor(namespace: string, path: string): string;
+export declare function resetKernelStateForTests(): void;

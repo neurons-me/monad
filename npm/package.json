@@ -5,17 +5,25 @@
   "author": "suiGn",
   "license": "ISC",
   "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
   "scripts": {
     "dev": "tsx watch server.ts",
-    "build": "tsc && node --input-type=commonjs -e \"require('fs').writeFileSync('dist/package.json', JSON.stringify({ type: 'commonjs' }, null, 2) + '\\n')\"",
+    "build": "tsc && node --input-type=commonjs -e \"require('fs').writeFileSync('dist/package.json', JSON.stringify({ type: 'module' }, null, 2) + '\\n')\"",
     "start": "tsx server.ts",
     "test": "vitest run",
     "test:claims": "tsx tests/claim_test_verification.ts",
     "init:public-figures": "tsx tests/inits/public_figures/index.ts",
     "lint": "eslint . --ext .ts",
     "runBuild": "npm run build && npm run start",
-    "docs:api": "typedoc --entryPoints ./server.ts --out docs/api --plugin typedoc-plugin-markdown --readme none --excludePrivate --excludeInternal",
-    "docs:api:watch": "typedoc --watch --entryPoints ./server.ts --out docs/api --plugin typedoc-plugin-markdown --readme none --excludePrivate --excludeInternal",
+    "docs:api": "typedoc --entryPoints ./src/index.ts --out docs/api --plugin typedoc-plugin-markdown --readme none --excludePrivate --excludeInternal",
+    "docs:api:watch": "typedoc --watch --entryPoints ./src/index.ts --out docs/api --plugin typedoc-plugin-markdown --readme none --excludePrivate --excludeInternal",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",

@@ -234,7 +234,7 @@ export const openRequestHandler: express.RequestHandler = (req, res) => {
   }));
 };
 
-export function createClaimsRouter() {
+export function createClaimsRouter(): express.Router {
   const router = express.Router();
   router.post("/claims", claimRequestHandler);
   router.post("/claims/signIn", openRequestHandler);

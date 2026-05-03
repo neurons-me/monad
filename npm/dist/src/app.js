@@ -9,6 +9,7 @@ import { createClaimsRouter } from "./http/claims.js";
 import { createLegacyRouter } from "./http/legacy.js";
 import { formatObserverRelationLabel, resolveHostNamespace, resolveTransportHost } from "./http/namespace.js";
 import { normalizeHttpRequestToMeTarget } from "./http/meTarget.js";
+import { createMonadsControlRouter } from "./http/monadsControl.js";
 import { createSessionRouter } from "./http/session.js";
 import { configureMonadShell } from "./http/shell.js";
 import { recordSurfaceRequest } from "./http/surfaceTelemetry.js";
@@ -96,6 +97,7 @@ export async function createMonadApp(options = {}) {
         return res.sendFile(config.routesPath);
     });
     app.use(requestLogger());
+    app.use(createMonadsControlRouter());
     app.use(createProviderSurface(surfaceConfig));
     app.use(createFetchSurface({ timeoutMs: config.fetchProxyTimeoutMs }));
     app.get("/resolve", bridgeHandler);

@@ -5,6 +5,10 @@ import { normalizeNamespaceIdentity, parseNamespaceIdentityParts } from "../name
 
 export interface SelfNodeConfig {
   identity: string;
+  monadId?: string;
+  monadName?: string;
+  publicKey?: string;
+  privateKey?: string;
   tags: string[];
   endpoint: string;
   hostname: string;
@@ -26,7 +30,33 @@ export interface SelfSurfaceCapacity {
   bandwidthMbps: number | null;
 }
 
+export interface SelfSurfaceCleakerProof {
+  protocol: "cleaker(monad)";
+  version: 1;
+  subject: "monad";
+  id: string;
+  publicKey: {
+    type: "spki";
+    format: "pem";
+    key: string;
+  };
+  signature: {
+    algorithm: "ed25519";
+    message: string;
+    value: string;
+    issuedAt: number;
+  };
+}
+
 export interface SelfSurfaceEntry {
+  monad: {
+    id: string;
+    name?: string;
+    publicKey?: string;
+  };
+  monadId: string;
+  monadName?: string;
+  cleaker?: SelfSurfaceCleakerProof;
   hostId: string;
   type: SelfSurfaceType;
   trust: SelfSurfaceTrust;
@@ -116,6 +146,142 @@ function generateSelfIdentity(hostname: string) {
   return `monad-${crypto.randomBytes(4).toString("hex")}.local`;
 }
 
+function normalizeMonadProcessName(input: unknown) {
+  return String(input || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function normalizePublicKey(input: unknown) {
+  return String(input || "").trim().replace(/\r\n/g, "\n");
+}
+
+function deriveMonadId(publicKey: unknown) {
+  const key = normalizePublicKey(publicKey);
+  if (!key) return "";
+  return `monad:${crypto.createHash("sha256").update(key).digest("hex")}`;
+}
+
+function generateCleakerKeyPair() {
+  const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
+  return {
+    publicKey: publicKey.export({ type: "spki", format: "pem" }).toString(),
+    privateKey: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+  };
+}
+
+function publicKeyFromPrivateKey(privateKey: string) {
+  try {
+    return crypto.createPublicKey(privateKey).export({ type: "spki", format: "pem" }).toString();
+  } catch {
+    return "";
+  }
+}
+
+function defaultCleakerKeyPath(configPath: string) {
+  return configPath.replace(/\.json$/i, ".keys.json");
+}
+
+function readCleakerKeyFile(filePath: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function ensureCleakerIdentityConfig(input: {
+  configPath: string;
+  env: NodeJS.ProcessEnv;
+  fileConfig: Record<string, unknown>;
+}): Record<string, unknown> {
+  const keyPath = path.resolve(
+    path.dirname(input.configPath),
+    String(input.env.MONAD_PRIVATE_KEY_PATH || input.fileConfig.privateKeyPath || defaultCleakerKeyPath(input.configPath)),
+  );
+  const keyFile = readCleakerKeyFile(keyPath);
+  let privateKey = normalizePublicKey(
+    input.env.MONAD_PRIVATE_KEY ||
+      keyFile.privateKey ||
+      input.fileConfig.privateKey,
+  );
+  let publicKey = normalizePublicKey(input.env.MONAD_PUBLIC_KEY || input.fileConfig.publicKey);
+
+  if (!publicKey && privateKey) {
+    publicKey = publicKeyFromPrivateKey(privateKey);
+  }
+
+  if (!publicKey || !privateKey) {
+    const generated = generateCleakerKeyPair();
+    publicKey = generated.publicKey;
+    privateKey = generated.privateKey;
+  }
+
+  const monadId = String(input.env.MONAD_ID || input.fileConfig.monadId || deriveMonadId(publicKey)).trim();
+  const { privateKey: _privateKey, ...publicConfig } = input.fileConfig;
+  const next = {
+    ...publicConfig,
+    monadId,
+    publicKey,
+    privateKeyPath: path.relative(path.dirname(input.configPath), keyPath) || path.basename(keyPath),
+  };
+  const changed =
+    input.fileConfig.monadId !== next.monadId ||
+    input.fileConfig.publicKey !== next.publicKey ||
+    input.fileConfig.privateKey !== undefined ||
+    input.fileConfig.privateKeyPath !== next.privateKeyPath;
+
+  if (changed) {
+    fs.mkdirSync(path.dirname(input.configPath), { recursive: true });
+    fs.writeFileSync(input.configPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  }
+  if (keyFile.privateKey !== privateKey || keyFile.publicKey !== publicKey) {
+    fs.mkdirSync(path.dirname(keyPath), { recursive: true });
+    fs.writeFileSync(keyPath, `${JSON.stringify({ publicKey, privateKey }, null, 2)}\n`, "utf8");
+    try {
+      fs.chmodSync(keyPath, 0o600);
+    } catch {}
+  }
+
+  input.env.MONAD_ID = monadId;
+  input.env.MONAD_PUBLIC_KEY = publicKey;
+  input.env.MONAD_PRIVATE_KEY = privateKey;
+  input.env.MONAD_PRIVATE_KEY_PATH = keyPath;
+  return next;
+}
+
+function inferMonadProcessName(input: {
+  env: NodeJS.ProcessEnv;
+  fileConfig: Record<string, unknown>;
+  configPath: string;
+}): string | undefined {
+  const direct = normalizeMonadProcessName(
+    input.env.MONAD_NAME ||
+      input.env.MONAD_SURFACE ||
+      input.fileConfig.monadName ||
+      input.fileConfig.surface,
+  );
+  if (direct) return direct;
+
+  const rawTags = [
+    ...(Array.isArray(input.fileConfig.tags) ? input.fileConfig.tags : []),
+    ...String(input.env.MONAD_SELF_TAGS || "").split(","),
+  ].map((tag) => String(tag || "").trim().toLowerCase());
+  const surfaceTag = rawTags.find((tag) => tag.startsWith("surface:"));
+  const fromTag = normalizeMonadProcessName(surfaceTag?.slice("surface:".length));
+  if (fromTag) return fromTag;
+
+  const parent = normalizeMonadProcessName(path.basename(path.dirname(input.configPath)));
+  if (parent && parent !== "env" && parent !== "config" && parent !== "runtime") {
+    return parent;
+  }
+
+  return undefined;
+}
+
 function ensureSelfIdentityConfig(input: {
   configPath: string;
   env: NodeJS.ProcessEnv;
@@ -124,7 +290,18 @@ function ensureSelfIdentityConfig(input: {
   fileConfig: Record<string, unknown>;
 }): Record<string, unknown> {
   const explicitIdentity = normalizeNamespace(input.env.MONAD_SELF_IDENTITY || input.fileConfig.identity);
-  if (explicitIdentity) return input.fileConfig;
+  const monadName = inferMonadProcessName(input);
+  if (monadName) input.env.MONAD_NAME = monadName;
+  if (explicitIdentity) {
+    const config = monadName && !input.fileConfig.monadName
+      ? { ...input.fileConfig, monadName }
+      : input.fileConfig;
+    return ensureCleakerIdentityConfig({
+      configPath: input.configPath,
+      env: input.env,
+      fileConfig: config,
+    });
+  }
 
   const normalizedHostname = normalizeToken(input.hostname);
   const defaultEndpointHost = normalizedHostname
@@ -136,6 +313,7 @@ function ensureSelfIdentityConfig(input: {
   const generated = {
     ...input.fileConfig,
     identity: generateSelfIdentity(input.hostname),
+    monadName,
     endpoint: String(
       input.env.MONAD_SELF_ENDPOINT || input.fileConfig.endpoint || `http://${defaultEndpointHost}:${input.port}`,
     ).trim(),
@@ -151,7 +329,12 @@ function ensureSelfIdentityConfig(input: {
   fs.writeFileSync(input.configPath, `${JSON.stringify(generated, null, 2)}\n`, "utf8");
   input.env.MONAD_SELF_IDENTITY = String(generated.identity || "");
   input.env.MONAD_SELF_ENDPOINT = String(generated.endpoint || "");
-  return generated;
+  if (monadName) input.env.MONAD_NAME = monadName;
+  return ensureCleakerIdentityConfig({
+    configPath: input.configPath,
+    env: input.env,
+    fileConfig: generated,
+  });
 }
 
 function normalizeToken(input: unknown) {
@@ -327,6 +510,51 @@ function resolveSurfaceRootName(identity: string, fallbackHost: string) {
   return normalizeToken(fallbackHost);
 }
 
+function buildCleakerProof(input: {
+  id: string;
+  name?: string;
+  publicKey?: string;
+  privateKey?: string;
+  namespace: string;
+  endpoint: string;
+  now: number;
+}): SelfSurfaceCleakerProof | undefined {
+  if (!input.id || !input.publicKey || !input.privateKey) return undefined;
+  const message = JSON.stringify({
+    protocol: "cleaker(monad)",
+    version: 1,
+    subject: "monad",
+    id: input.id,
+    name: input.name || null,
+    namespace: input.namespace,
+    endpoint: input.endpoint,
+    issuedAt: input.now,
+  });
+
+  try {
+    const signature = crypto.sign(null, Buffer.from(message), input.privateKey).toString("base64url");
+    return {
+      protocol: "cleaker(monad)",
+      version: 1,
+      subject: "monad",
+      id: input.id,
+      publicKey: {
+        type: "spki",
+        format: "pem",
+        key: input.publicKey,
+      },
+      signature: {
+        algorithm: "ed25519",
+        message,
+        value: signature,
+        issuedAt: input.now,
+      },
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 export function buildSelfSurfaceEntry(input: {
   self: SelfNodeConfig | null;
   origin: string;
@@ -361,8 +589,29 @@ export function buildSelfSurfaceEntry(input: {
     input.self?.identity || input.requestNamespace,
     namespaceHost || hostId,
   );
+  const monadName = input.self?.monadName || process.env.MONAD_NAME || process.env.MONAD_SURFACE || undefined;
+  const publicKey = input.self?.publicKey || process.env.MONAD_PUBLIC_KEY || undefined;
+  const privateKey = input.self?.privateKey || process.env.MONAD_PRIVATE_KEY || undefined;
+  const monadId = input.self?.monadId || process.env.MONAD_ID || deriveMonadId(publicKey);
+  const cleaker = buildCleakerProof({
+    id: monadId,
+    name: monadName,
+    publicKey,
+    privateKey,
+    namespace,
+    endpoint,
+    now,
+  });
 
   return {
+    monad: {
+      id: monadId,
+      name: monadName,
+      publicKey,
+    },
+    monadId,
+    monadName,
+    cleaker,
     hostId,
     type,
     trust,
@@ -462,6 +711,8 @@ export function loadSelfNodeConfig(input: {
 
   const identity = normalizeNamespace(input.env.MONAD_SELF_IDENTITY || fileConfig.identity);
   if (!identity) return null;
+  const monadName = inferMonadProcessName({ env: input.env, fileConfig, configPath });
+  if (monadName) input.env.MONAD_NAME = monadName;
 
   const normalizedHostname = normalizeToken(input.hostname);
   const defaultEndpointHost = normalizedHostname
@@ -497,6 +748,10 @@ export function loadSelfNodeConfig(input: {
 
   return {
     identity,
+    monadId: String(input.env.MONAD_ID || fileConfig.monadId || deriveMonadId(fileConfig.publicKey)).trim() || undefined,
+    monadName,
+    publicKey: normalizePublicKey(input.env.MONAD_PUBLIC_KEY || fileConfig.publicKey) || undefined,
+    privateKey: normalizePublicKey(input.env.MONAD_PRIVATE_KEY || fileConfig.privateKey) || undefined,
     tags,
     endpoint,
     hostname,

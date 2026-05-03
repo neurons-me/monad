@@ -1,7 +1,7 @@
 # monad.ai, Cleaker, and Public Roots
 This page fixes a common confusion in the stack:
 - `.me` is the semantic kernel
-- `monad.ai` is the daemon
+- `monad.ai` runs Monads: active execution agents
 - `cleaker` is the binder that projects a `.me` into a namespace
 - `cleaker.me` is the canonical public root
 These are related, but they are not the same thing.
@@ -25,16 +25,39 @@ Examples:
 - `me://self:explain/profile.netWorth`
 
 ### `monad.ai`
-`monad.ai` is the daemon that runs a `.me` kernel and exposes it over the network.
+`monad.ai` runs Monads: active agents that serve, resolve, and execute inside a namespace.
 It owns:
 - serving namespace requests over HTTP
 - resolving namespaces from the `Host` header
 - persisting the kernel state via DiskStore
 - handling claim/open lifecycle
-- transport and routing
+- Monad process lifecycle, logs, status, and local execution
 
-A `monad.ai` can run only for you on localhost, or it can be exposed publicly on a domain.
+A Monad can run only for you on localhost, or it can be exposed publicly on a domain.
 The kernel is the storage. There is no separate database.
+
+A Monad is not the namespace, not the host, and not the port. It is an invisible execution route chosen by the resolver:
+
+```txt
+jabellae.cleaker.me/profile                 semantic path / meaning
+jabellae.cleaker.me/photos/iphone           semantic path / meaning
+jabellae.cleaker.me/.mesh/monads            internal Monad registry
+jabellae.cleaker.me[monadlisa]/profile      technical execution override
+monadlisa@127.0.0.1:8161                    Monad instance + endpoint
+```
+
+The normal user-facing address has no Monad selector:
+
+```txt
+me://jabellae.cleaker.me/profile
+```
+
+A Monad selector is only a technical override. These still target the same semantic node:
+
+```txt
+me://jabellae.cleaker.me[monadlisa]/profile
+me://jabellae.cleaker.me[monadluis]/profile
+```
 
 ### `cleaker`
 `cleaker` is the binder.
@@ -48,7 +71,7 @@ It takes a `.me` instance and projects it into a namespace context. It handles t
 const node = cleaker(me, {
   secret,
   namespace: 'username.cleaker.me',
-  origin: 'https://cleaker.me',
+  space: 'cleaker.me',
 })
 
 await node.ready
@@ -56,19 +79,21 @@ await node.ready
 
 `cleaker` does not store anything. It does not own the identity. It connects `.me` to a namespace and hands control back.
 
+Cleaker does not decide where a Monad runs. That belongs to NetGet.
+
 ### `cleaker.me`
 `cleaker.me` is not a different protocol.
-It is a **public domain** running a `monad.ai` that acts as a canonical public root — a common agreement where identities can be anchored publicly.
+It is a **public domain** with Monads that act as a canonical public root — a common agreement where identities can be anchored publicly.
 That means:
-- infrastructure-wise, it is a public `monad.ai`
+- infrastructure-wise, it is a public namespace served by Monads
 - semantically, it is a well-known root for public namespaces like `jabellae.cleaker.me`
-Any domain running a `monad.ai` can play this role. `cleaker.me` is the default, not the only option.
+Any domain running compatible Monads can play this role. `cleaker.me` is the default, not the only option.
 
 ---
 
 ## Deployment Roles
-### Local-only monad
-A local-only monad runs `monad.ai` only for you — on your laptop, your home server, your LAN. It does not need to be publicly accessible.
+### Local-only Monad
+A local-only Monad runs only for you — on your laptop, your home server, your LAN. It does not need to be publicly accessible.
 
 ```
 http://suis-macbook-air.local:8161/
@@ -114,22 +139,35 @@ The semantic target is primary. The web URL is a projection chosen by the host.
 
 ## Key Spaces and Privacy
 Topology does not imply publicity.
-A space can be replicated to multiple surfaces — laptop, iPhone, home server — and still remain completely private. The distinction is:
+A space can be replicated to multiple Monads — laptop, iPhone, home server, VM — and still remain completely private. The distinction is:
 - **topology** decides where the ciphertext exists
 - **audience** decides who can open it
-So a key space may live on many surfaces and still remain private if its audience is cryptographically closed.
+So a key space may live on many Monads and still remain private if its audience is cryptographically closed.
 
 ```
-T = {laptop, iphone, home-server}   ← surfaces where it lives
-A = {jabellae}                       ← who can read it
+T = {monadlisa, worker-a, phone-agent}  ← Monads where it lives
+A = {jabellae}                         ← who can read it
 ```
+
+---
+
+## NetGet
+NetGet is the physical placement and endpoint layer. It can place a Monad on a laptop, iPhone, Raspberry Pi, VM, relay, or localhost and resolve that placement into a current endpoint.
+
+```txt
+me.monad[monad_id].endpoint("netget://iphone/monadlisa")
+NetGet resolves that to http://10.0.0.12:8161
+```
+
+The user asks for meaning. The resolver chooses a Monad route. NetGet handles the body that route runs in.
 
 ---
 
 ## One-line Model
 - `.me` holds the identity and the tree
 - `cleaker` binds `.me` to a namespace
-- `monad.ai` serves that namespace over the network
+- `monad.ai` runs Monads that serve and execute inside that namespace
+- `NetGet` places those Monads and resolves endpoints
 - `cleaker.me` is one public root among many possible ones
 
 ---

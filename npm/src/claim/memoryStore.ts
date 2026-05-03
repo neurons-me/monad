@@ -40,6 +40,11 @@ export interface AuthorizedHostRow {
   revoked_at: number | null;
 }
 
+export function isSystemSemanticPath(pathInput: string): boolean {
+  const path = String(pathInput || "").trim().toLowerCase();
+  return path.startsWith("schema.") || path.startsWith("gui.");
+}
+
 // ─── session nonces (ephemeral, in-memory) ───────────────────────────────────
 
 interface NonceRecord { nonce: string; iat: number; exp: number }
@@ -292,7 +297,7 @@ export function readSemanticValueForNamespace(namespaceInput: string, pathInput:
 
 export function listSemanticMemoriesByRootNamespace(
   rootNamespaceInput: string,
-  options: { limit?: number } = {},
+  options: { limit?: number; includeSystem?: boolean } = {},
 ): SemanticMemoryRow[] {
   const rootNamespace = normalizeNamespaceRootName(rootNamespaceInput);
   if (!rootNamespace) return [];
@@ -303,6 +308,7 @@ export function listSemanticMemoriesByRootNamespace(
   return mems
     .map((m, i) => memoryToRow(m, i))
     .filter((row) => normalizeNamespaceRootName(row.namespace) === rootNamespace)
+    .filter((row) => options.includeSystem || !isSystemSemanticPath(row.path))
     .slice(0, limit);
 }
 

@@ -112,13 +112,13 @@ export async function createMonadApp(options: MonadOptions = {}): Promise<MonadA
     return res.sendFile(config.routesPath);
   });
 
+  app.use(requestLogger());
   app.use(createProviderSurface(surfaceConfig));
   app.use(createFetchSurface({ timeoutMs: config.fetchProxyTimeoutMs }));
 
   app.get("/resolve", bridgeHandler);
   app.post("/me/*", meCommandHandler);
   app.get("/", ledger.root);
-  app.use(requestLogger());
   app.post("/", rootCompatHandler);
   app.post("/", rootCommandHandler);
   app.get("/", ledger.rootRead);

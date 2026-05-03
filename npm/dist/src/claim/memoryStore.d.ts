@@ -32,6 +32,7 @@ export interface AuthorizedHostRow {
     last_used: number;
     revoked_at: number | null;
 }
+export declare function isSystemSemanticPath(pathInput: string): boolean;
 export declare function createSessionNonce(usernameInput: string, ttlMs?: number): {
     username: string;
     nonce: string;
@@ -66,6 +67,7 @@ export declare function readSemanticBranchForNamespace(namespaceInput: string, p
 export declare function readSemanticValueForNamespace(namespaceInput: string, pathInput: string): unknown;
 export declare function listSemanticMemoriesByRootNamespace(rootNamespaceInput: string, options?: {
     limit?: number;
+    includeSystem?: boolean;
 }): SemanticMemoryRow[];
 export declare function listHostsByNamespace(namespaceInput: string, usernameInput: string): AuthorizedHostRow[];
 export declare function listHostsByUsername(usernameInput: string): AuthorizedHostRow[];

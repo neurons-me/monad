@@ -90,10 +90,14 @@ export function createProviderSurface(config) {
         const host = resolveTransportHost(req);
         const target = normalizeHttpRequestToMeTarget(req);
         const surfaceEntry = buildSurfaceEntry(req, namespace, config);
+        const telemetry = getSurfaceTelemetrySnapshot();
         return res.json(createEnvelope(target, {
             host,
             namespace,
-            surfaceEntry: { ...surfaceEntry, ...getSurfaceTelemetrySnapshot() },
+            monad: surfaceEntry.monad,
+            monadId: surfaceEntry.monadId,
+            cleaker: surfaceEntry.cleaker,
+            surfaceEntry: { ...surfaceEntry, ...telemetry },
         }));
     });
     router.get("/__surface/events", (req, res) => {

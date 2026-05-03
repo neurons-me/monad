@@ -95,12 +95,12 @@ export async function createMonadApp(options = {}) {
         res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
         return res.sendFile(config.routesPath);
     });
+    app.use(requestLogger());
     app.use(createProviderSurface(surfaceConfig));
     app.use(createFetchSurface({ timeoutMs: config.fetchProxyTimeoutMs }));
     app.get("/resolve", bridgeHandler);
     app.post("/me/*", meCommandHandler);
     app.get("/", ledger.root);
-    app.use(requestLogger());
     app.post("/", rootCompatHandler);
     app.post("/", rootCommandHandler);
     app.get("/", ledger.rootRead);

@@ -1,5 +1,9 @@
 {
   "identity": "example.cleaker.me",
+  "monadId": "monad:<sha256-public-key>",
+  "monadName": "haiku",
+  "publicKey": "-----BEGIN PUBLIC KEY-----\\n...\\n-----END PUBLIC KEY-----\\n",
+  "privateKeyPath": "self.keys.json",
   "tags": ["desktop", "local", "primary"],
   "endpoint": "http://localhost:8161",
   "hostname": "example-host.local",

@@ -2,7 +2,7 @@
 
 ###### Everything is just a hash of a knowledge unit
 
- More information about this approach to information structure can be found on the **npm package page.**
+More information about this approach to information structure can be found on the **npm package page.**
 
 **Github:**
 

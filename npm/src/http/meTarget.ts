@@ -37,6 +37,7 @@ function normalizePathSegments(rawPath: string) {
 
 function inferOperation(req: express.Request): MeOperationKind {
   if (req.method === "POST" && req.path === "/claims") return "claim";
+  if (req.method === "POST" && req.path === "/claims/signIn") return "open";
   if (req.method === "POST" && req.path === "/claims/open") return "open";
   if (req.method === "POST") return "write";
   return "read";

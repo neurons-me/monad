@@ -1,5 +1,9 @@
 export interface SelfNodeConfig {
     identity: string;
+    monadId?: string;
+    monadName?: string;
+    publicKey?: string;
+    privateKey?: string;
     tags: string[];
     endpoint: string;
     hostname: string;
@@ -18,7 +22,32 @@ export interface SelfSurfaceCapacity {
     storageGb: number | null;
     bandwidthMbps: number | null;
 }
+export interface SelfSurfaceCleakerProof {
+    protocol: "cleaker(monad)";
+    version: 1;
+    subject: "monad";
+    id: string;
+    publicKey: {
+        type: "spki";
+        format: "pem";
+        key: string;
+    };
+    signature: {
+        algorithm: "ed25519";
+        message: string;
+        value: string;
+        issuedAt: number;
+    };
+}
 export interface SelfSurfaceEntry {
+    monad: {
+        id: string;
+        name?: string;
+        publicKey?: string;
+    };
+    monadId: string;
+    monadName?: string;
+    cleaker?: SelfSurfaceCleakerProof;
     hostId: string;
     type: SelfSurfaceType;
     trust: SelfSurfaceTrust;

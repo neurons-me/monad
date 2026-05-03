@@ -1,6 +1,6 @@
 import { getAllBlocks } from "../Blockchain/blockchain.js";
 import { getUsersForRootNamespace } from "../Blockchain/users.js";
-import { listSemanticMemoriesByRootNamespace } from "../claim/memoryStore.js";
+import { isSystemSemanticPath, listSemanticMemoriesByRootNamespace } from "../claim/memoryStore.js";
 import { createEnvelope } from "../http/envelope.js";
 import { normalizeHttpRequestToMeTarget } from "../http/meTarget.js";
 import { filterBlocksByNamespace, formatObserverRelationLabel, resolveNamespace, resolveNamespaceProjectionRoot, } from "../http/namespace.js";
@@ -51,8 +51,20 @@ export function createLedgerHandlers(config) {
         const target = normalizeHttpRequestToMeTarget(req);
         const lens = formatObserverRelationLabel(target.relation);
         const limit = Math.max(1, Math.min(5000, Number(req.query?.limit ?? 500)));
-        const memories = listSemanticMemoriesByRootNamespace(rootNamespace, { limit });
-        return res.json(createEnvelope(target, { namespace: chainNs, rootNamespace, lens, memories, count: memories.length }));
+        const includeSystem = String(req.query?.includeSystem || "").trim() === "1";
+        const memories = listSemanticMemoriesByRootNamespace(rootNamespace, { limit, includeSystem });
+        const systemHidden = includeSystem
+            ? 0
+            : listSemanticMemoriesByRootNamespace(rootNamespace, { limit: 5000, includeSystem: true })
+                .filter((row) => isSystemSemanticPath(row.path)).length;
+        return res.json(createEnvelope(target, {
+            namespace: chainNs,
+            rootNamespace,
+            lens,
+            memories,
+            count: memories.length,
+            systemHidden,
+        }));
     };
     const atPath = (req, res) => {
         const chainNs = resolveNamespace(req);

@@ -56,8 +56,8 @@ export function htmlShell(options: { providerBoot?: NamespaceProviderBoot | null
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="/vendor/react/react.production.min.js"></script>
+    <script src="/vendor/react-dom/react-dom.production.min.js"></script>
     <link rel="icon" href="/gui/favicon.ico" />
     <link rel="stylesheet" href="/gui/styles.css" />
     <title>cleaker.me</title>

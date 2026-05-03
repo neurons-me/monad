@@ -1,6 +1,10 @@
 import crypto from "crypto";
 import { normalizeNamespaceRootName } from "../namespace/identity.js";
 import { getKernel, kernelPathFor, namespaceToKernelPrefix, getRootNamespace } from "../kernel/manager.js";
+export function isSystemSemanticPath(pathInput) {
+    const path = String(pathInput || "").trim().toLowerCase();
+    return path.startsWith("schema.") || path.startsWith("gui.");
+}
 const _nonces = new Map();
 export function createSessionNonce(usernameInput, ttlMs = 120000) {
     const username = usernameInput.trim().toLowerCase();
@@ -222,6 +226,7 @@ export function listSemanticMemoriesByRootNamespace(rootNamespaceInput, options 
     return mems
         .map((m, i) => memoryToRow(m, i))
         .filter((row) => normalizeNamespaceRootName(row.namespace) === rootNamespace)
+        .filter((row) => options.includeSystem || !isSystemSemanticPath(row.path))
         .slice(0, limit);
 }
 // ─── authorized hosts (kernel-backed projection) ─────────────────────────────

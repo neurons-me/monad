@@ -238,5 +238,6 @@ export function createClaimsRouter(): express.Router {
   const router = express.Router();
   router.post("/claims", claimRequestHandler);
   router.post("/claims/signIn", openRequestHandler);
+  router.post("/claims/open", openRequestHandler);
   return router;
 }

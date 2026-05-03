@@ -7,6 +7,9 @@
   "type": "module",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
+  "bin": {
+    "monads": "./dist/src/cli/monads.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",

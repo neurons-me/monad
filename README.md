@@ -4,8 +4,10 @@
 </picture>
 
 # monad.ai
-###### Serve `me://` 
-Your computer has a name on the network.`monad.ai` turns that name into something meaningful — a place where your data lives, your identity is anchored, and any app can find what it needs about you.
+###### Serve `me://Everything.is.just.a.hash.of.a.knowledge.unit`
+`monad.ai` runs active Monads: agents that serve, resolve, and execute inside a `.me` namespace.
+
+A namespace is the semantic tree. A Monad is an invisible execution route through that tree. The endpoint is only transport.
 
 ------
 
@@ -29,13 +31,13 @@ If you want to run the compiled build:
 ME_SEED="mi-seed-local-dev" node dist/server.js
 ```
 
-Run this on any machine, and that machine becomes **your node** — a place that knows **who you are** and answers questions about you.
+Run this on any machine, and that machine can host one or many **Monads** tuned into the same namespace.
 
 ------
 
 ## What it looks like:
 
-You install it. You run it. Now you have a personal server that speaks a simple language:
+You install it. You run it. Now you have a local Monad that speaks a simple language:
 
 ```
 "give me suiGn's profile name"
@@ -49,9 +51,29 @@ Any app, any device, any language can talk to it.
 
 ## How it works:
 It's a service you run locally or on any machine you control.
-It has one job: **answer questions about a namespace**.
+It has one job: **answer semantic questions about a namespace**.
 
-A **namespace** is just a name — like a domain name`jabellae.cleaker.me` or `myComputerHostName.local` your hostname on a local network.
+A **namespace** is a named semantic tree — like `jabellae.cleaker.me` or `suis-macbook-air.local`.
+
+A **Monad** is not the namespace, not the host, and not the port. It is the runtime agent the resolver may use internally to answer for the namespace:
+
+```txt
+jabellae.cleaker.me/profile                 semantic path / meaning
+jabellae.cleaker.me/photos/iphone           semantic path / meaning
+jabellae.cleaker.me/.mesh/monads            internal Monad registry
+jabellae.cleaker.me[monadlisa]/profile      technical execution override
+monadlisa@127.0.0.1:8161                    Monad instance + endpoint
+```
+
+Monads are invisible by default. A selector is only an advanced/debug override:
+
+```txt
+me://jabellae.cleaker.me/profile
+me://jabellae.cleaker.me[monadlisa]/profile
+me://jabellae.cleaker.me[monadluis]/profile
+```
+
+All target `jabellae.cleaker.me/profile`. The selected Monad only changes execution, not meaning.
 
 **When an app asks:**
 
@@ -71,8 +93,9 @@ There are three things working together:
 
 **[.me](https://github.com/neurons-me/.me)** — the kernel. Knows how to store, encrypt, and derive your data from a single seed.
 
-**monad.ai** — the surface. Takes that engine and puts it on the network so other things can talk to it.
+**monad.ai** — the Monad runtime. Takes that engine and gives it active agents that can serve, resolve, execute, and coordinate.
 **[cleaker](https://github.com/neurons-me/cleaker)** — the connector. Takes your identity and plugs it into a namespace so apps can find you.
+**NetGet** — the placement and endpoint layer. It knows where a Monad physically runs: laptop, iPhone, Raspberry Pi, VM, relay, or localhost.
 
 ------
 

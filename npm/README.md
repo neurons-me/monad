@@ -1,6 +1,6 @@
 # monad.ai 
 
-`monad.ai` runs Monads: active execution agents inside a namespace.
+`monad.ai` runs monads: active execution agents inside a namespace.
 
 ```txt
 namespace                 = semantic tree / meaning

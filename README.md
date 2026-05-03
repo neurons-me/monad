@@ -3,12 +3,11 @@
   <img src="https://res.cloudinary.com/dkwnxf6gm/image/upload/v1762832023/me.profile-removebg-preview_1_bskwyz.png" alt=".me Logo" width="203" />
 </picture>
 
-# monad.ai
+# monad
 ###### Serve `me://Everything.is.just.a.hash.of.a.knowledge.unit`
-`monad.ai` runs active **monads**: agents that serve, resolve, and execute `.me` expressions.
+Run **monads**: agents that serve, resolve, and execute `.me` expressions.
 
 A **namespace** is the *semantic tree*. 
-
 A **monad** endpoint is only transport.
 
 ------
@@ -17,9 +16,15 @@ A **monad** endpoint is only transport.
 
 ```bash
 git clone https://github.com/neurons-me/monad.ai.git
-cd monad.ai/npm
-npm install
 ```
+
+Select your language:
+| Language    | Source                        | Status            | Documentation                                                |
+| ----------- | ----------------------------- | ----------------- | ------------------------------------------------------------ |
+| **Node.js** | `cd monad/npm && npm install` | **Stable 3.6.40** | [node.js Docs ⟡ ](https://neurons-me.github.io/.me/npm/typedocs/) |
+| **Python**  | `cd monad/pip/`               | Not Available     |                                                              |
+| **Rust**    | `cd monad/crate/`             | Not Available     |                                                              |
+
 
 **Then run providing your local seed:**
 

@@ -5,9 +5,11 @@
 
 # monad.ai
 ###### Serve `me://Everything.is.just.a.hash.of.a.knowledge.unit`
-`monad.ai` runs active Monads: agents that serve, resolve, and execute inside a `.me` namespace.
+`monad.ai` runs active **monads**: agents that serve, resolve, and execute `.me` expressions.
 
-A namespace is the semantic tree. A Monad is an invisible execution route through that tree. The endpoint is only transport.
+A **namespace** is the *semantic tree*. 
+
+A **monad** endpoint is only transport.
 
 ------
 
@@ -22,16 +24,16 @@ npm install
 **Then run providing your local seed:**
 
 ```bash
-ME_SEED="mi-seed-local-dev" npm run dev
+ME_SEED="Tetragramaton" npm run dev
 ```
 
 If you want to run the compiled build:
 
 ```bash
-ME_SEED="mi-seed-local-dev" node dist/server.js
+ME_SEED="Tetragramaton" node dist/server.js
 ```
 
-Run this on any machine, and that machine can host one or many **Monads** tuned into the same namespace.
+Run this on any machine, and that machine can host one or many **monads** tuned into the same **namespace.**
 
 ------
 

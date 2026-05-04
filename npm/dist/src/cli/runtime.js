@@ -277,7 +277,7 @@ export async function startMonadProcess(options = {}) {
     const env = {
         ...process.env,
         PORT: String(port),
-        ME_SEED: options.seed || process.env.ME_SEED || `monad-local:${name}`,
+        SEED: options.seed || process.env.SEED || process.env.ME_SEED || `monad-local:${name}`,
         ME_NAMESPACE: namespace,
         ME_STATE_DIR: stateDir,
         MONAD_CLAIM_DIR: claimDir,

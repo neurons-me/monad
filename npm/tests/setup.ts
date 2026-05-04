@@ -2,7 +2,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-process.env.ME_SEED = "test-seed-jest-canonical-replay-do-not-use-in-prod";
+process.env.SEED = "test-seed-jest-canonical-replay-do-not-use-in-prod";
 process.env.ME_NAMESPACE = "cleaker.me";
 
 const meStateDir = fs.mkdtempSync(path.join(os.tmpdir(), "monad-me-state-"));

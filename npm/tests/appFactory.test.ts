@@ -5,6 +5,7 @@ import { createMonadApp } from "../src/index";
 import { resetKernelStateForTests } from "../src/kernel/manager";
 
 const ENV_KEYS = [
+  "SEED",
   "ME_SEED",
   "ME_NAMESPACE",
   "ME_STATE_DIR",
@@ -105,9 +106,10 @@ describe("createMonadApp", () => {
     expect(routes).toContain("/api/v1/commit");
   });
 
-  it("validates ME_SEED when the factory bootstraps, not at import time", async () => {
+  it("validates SEED when the factory bootstraps, not at import time", async () => {
     const runtime = createTempRuntime();
     runtimeRoot = runtime.root;
+    delete process.env.SEED;
     delete process.env.ME_SEED;
 
     await expect(createMonadApp({
@@ -121,6 +123,6 @@ describe("createMonadApp", () => {
       selfEndpoint: "http://localhost:0",
       port: 0,
       logger: false,
-    })).rejects.toThrow(/ME_SEED is required/);
+    })).rejects.toThrow(/SEED is required/);
   });
 });

@@ -15,9 +15,9 @@ export function getKernelStatePath(...segments) {
 export function getKernel() {
     if (_kernel)
         return _kernel;
-    const seed = process.env.ME_SEED;
+    const seed = process.env.SEED || process.env.ME_SEED;
     if (!seed)
-        throw new Error("ME_SEED is required — set it in your environment before starting monad.ai");
+        throw new Error("SEED is required — set it in your environment before starting monad.ai");
     mkdirSync(getKernelStateDir(), { recursive: true });
     _kernel = new ME(seed, {
         store: new ME.DiskStore({ baseDir: getKernelStateDir() }),

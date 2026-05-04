@@ -109,7 +109,7 @@ authority, and budget policy internally, but the caller gets one semantic answer
 If no name is provided, the CLI creates one automatically. In the interactive
 control panel, namespace is derived from this machine's host rootspace. Use
 `--namespace` or `--rootspace` only when you intentionally need an advanced
-override. If no `ME_SEED` is provided, the CLI uses a local deterministic
+override. If no `SEED` is provided, the CLI uses a local deterministic
 development seed for that monad name.
 
 `monads logs <name>` follows the live stdout/stderr stream, so incoming requests
@@ -118,7 +118,7 @@ appear as they happen. Use `--tail` when you only want the latest snapshot.
 ## Manual Server
 
 ```bash
-ME_SEED="mi-seed-local-dev" npm run dev
+SEED="mi-seed-local-dev" npm run dev
 ```
 
 If you prefer to run from dist:
@@ -126,7 +126,7 @@ If you prefer to run from dist:
 bash
 
 ```bash
-ME_SEED="mi-seed-local-dev" node dist/server.js
+SEED="mi-seed-local-dev" node dist/server.js
 ```
 
 # License

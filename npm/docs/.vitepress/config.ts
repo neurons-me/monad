@@ -4,7 +4,7 @@ const base = process.env.VITEPRESS_BASE || '/monad.ai/npm/docs/';
 
 export default defineConfig({
   title: 'monad.ai',
-  description: 'Daemon runtime and ledger host for the me:// protocol.',
+  description: 'Serves namespace me:// protocol.',
   base,
   cleanUrls: true,
   themeConfig: {

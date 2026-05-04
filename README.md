@@ -8,7 +8,6 @@
 Run **monads**: agents that serve, resolve, and execute `.me` expressions.
 
 A **namespace** is the *semantic tree*. 
-A **monad** endpoint is only transport.
 
 ------
 
@@ -19,23 +18,23 @@ git clone https://github.com/neurons-me/monad.ai.git
 ```
 
 Select your language:
-| Language    | Source                        | Status            | Documentation                                                |
-| ----------- | ----------------------------- | ----------------- | ------------------------------------------------------------ |
-| **Node.js** | `cd monad/npm && npm install` | **Stable 3.6.40** | [node.js Docs ⟡ ](https://neurons-me.github.io/.me/npm/typedocs/) |
-| **Python**  | `cd monad/pip/`               | Not Available     |                                                              |
-| **Rust**    | `cd monad/crate/`             | Not Available     |                                                              |
+| Language    | Source                        | Status           | Documentation                                                |
+| ----------- | ----------------------------- | ---------------- | ------------------------------------------------------------ |
+| **Node.js** | `cd monad/npm && npm install` | **Stable 2.1.1** | [node.js Docs ⟡ ](https://neurons-me.github.io/.me/npm/typedocs/) |
+| **Python**  | `cd monad/pip/`               | Not Available    |                                                              |
+| **Rust**    | `cd monad/crate/`             | Not Available    |                                                              |
 
 
 **Then run providing your local seed:**
 
 ```bash
-ME_SEED="Tetragramaton" npm run dev
+SEED="Tetragramaton" npm run dev
 ```
 
 If you want to run the compiled build:
 
 ```bash
-ME_SEED="Tetragramaton" node dist/server.js
+SEED="Tetragramaton" node dist/server.js
 ```
 
 Run this on any machine, and that machine can host one or many **monads** tuned into the same **namespace.**

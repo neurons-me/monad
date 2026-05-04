@@ -35,7 +35,7 @@ export function resolveMonadRuntimeConfig(options = {}) {
     const nodeHostname = options.hostname || sourceEnv.MONAD_SELF_HOSTNAME || os.hostname();
     const fetchProxyTimeoutMs = Number(options.fetchProxyTimeoutMs || sourceEnv.MONAD_FETCH_TIMEOUT_MS || 15000);
     writeEnv(env, "PORT", port);
-    writeEnv(env, "ME_SEED", resolveEnvValue(options, sourceEnv, "seed", "ME_SEED"));
+    writeEnv(env, "SEED", resolveEnvValue(options, sourceEnv, "seed", "SEED") || sourceEnv.ME_SEED);
     writeEnv(env, "ME_NAMESPACE", resolveEnvValue(options, sourceEnv, "namespace", "ME_NAMESPACE"));
     writeEnv(env, "ME_STATE_DIR", resolveEnvValue(options, sourceEnv, "stateDir", "ME_STATE_DIR"));
     writeEnv(env, "MONAD_CLAIM_DIR", resolveEnvValue(options, sourceEnv, "claimDir", "MONAD_CLAIM_DIR"));

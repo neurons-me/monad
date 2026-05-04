@@ -103,7 +103,7 @@ cleaker    →  the binder. takes a .me instance and projects it into a namespac
 cd npm
 npm install
 npm run build
-ME_SEED="your-seed" node dist/server.js
+SEED="your-seed" node dist/server.js
 ```
 
 The daemon listens on port `8161` by default. Set `PORT` to change it.
@@ -153,4 +153,3 @@ POST /         Host: <namespace>   →  write | claim | open
 ## License
 
 **MIT** — [neurons.me](https://neurons.me/)
-

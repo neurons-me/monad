@@ -3,6 +3,7 @@ import path from "path";
 import { rebuildProjectedNamespaceClaims } from "./claim/records.js";
 import { ensureRootSemanticBootstrap } from "./claim/semanticBootstrap.js";
 import { getKernel, getKernelStateDir } from "./kernel/manager.js";
+import { seedSelfMonadIndexEntry } from "./kernel/monadIndex.js";
 import { normalizeNamespaceIdentity, normalizeNamespaceRootName } from "./namespace/identity.js";
 import { loadSelfNodeConfig, type SelfNodeConfig } from "./http/selfMapping.js";
 
@@ -152,6 +153,7 @@ export async function bootstrapMonad(options: MonadOptions = {}): Promise<MonadB
   const config = resolveMonadRuntimeConfig(options);
 
   getKernel();
+  seedSelfMonadIndexEntry(config);
 
   const rebuiltProjectedClaims = rebuildProjectedNamespaceClaims();
   const semanticBootstrapRoot = normalizeNamespaceRootName(

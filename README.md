@@ -8,6 +8,8 @@
 Run **monads**: agents that serve, resolve, and execute `.me` expressions.
 A **namespace** is the *semantic tree*. **Chained of truths.**
 
+Subtractive Synthesiser.
+
 ------
 
 ### Clone Git Repository
@@ -17,7 +19,6 @@ git clone https://github.com/neurons-me/monad.ai.git
 ```
 
 ##### Select your language:
-
 | Language    | Source                        | Status           | Documentation                                                |
 | ----------- | ----------------------------- | ---------------- | ------------------------------------------------------------ |
 | **Node.js** | `cd monad/npm && npm install` | **Stable 2.1.1** | [node.js Docs ⟡ ](https://neurons-me.github.io/.me/npm/typedocs/) |

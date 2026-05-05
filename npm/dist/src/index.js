@@ -2,6 +2,7 @@ import { createMonadApp } from "./app.js";
 import { bootstrapMonad, } from "./bootstrap.js";
 import { getKernelStateDir } from "./kernel/manager.js";
 import { setupPersistence } from "./kernel/persist.js";
+import { touchSelfMonadLastSeen } from "./kernel/monadIndex.js";
 function resolveLogger(logger) {
     if (logger === false)
         return null;
@@ -66,6 +67,11 @@ export async function startMonad(options = {}) {
         if (logger)
             printStartupBanner(app.monad, logger);
     });
+    const selfMonadId = config.selfNodeConfig?.monadId || process.env.MONAD_ID || "";
+    if (selfMonadId) {
+        const heartbeat = setInterval(() => touchSelfMonadLastSeen(selfMonadId), 30000);
+        heartbeat.unref();
+    }
     return {
         app,
         server,

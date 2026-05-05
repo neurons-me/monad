@@ -15,6 +15,7 @@ import type {
 } from "./http/selfMapping.js";
 import { getKernelStateDir } from "./kernel/manager.js";
 import { setupPersistence } from "./kernel/persist.js";
+import { touchSelfMonadLastSeen } from "./kernel/monadIndex.js";
 
 export interface StartMonadOptions extends MonadOptions {
   setupPersistence?: boolean;
@@ -95,6 +96,12 @@ export async function startMonad(options: StartMonadOptions = {}): Promise<Start
   const server = app.listen(config.port, () => {
     if (logger) printStartupBanner(app.monad, logger);
   });
+
+  const selfMonadId = config.selfNodeConfig?.monadId || process.env.MONAD_ID || "";
+  if (selfMonadId) {
+    const heartbeat = setInterval(() => touchSelfMonadLastSeen(selfMonadId), 30_000);
+    heartbeat.unref();
+  }
 
   return {
     app,

@@ -1,5 +1,7 @@
 # monad.ai
 
+###### Subtractive Synthesis
+
 - Resolves namespace paths from the `Host` header of incoming HTTP requests
 - Accepts writes as semantic memory events, appended to a hash-chained log
 - Serves reads as path resolutions over the kernel tree

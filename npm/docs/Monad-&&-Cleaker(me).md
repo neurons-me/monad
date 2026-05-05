@@ -1,18 +1,17 @@
 # monad.ai, Cleaker, and Public Roots
 This page fixes a common confusion in the stack:
 - `.me` is the semantic kernel
-- `monad.ai` runs Monads: active execution agents
+- `monad.ai` runs monads: active execution agents
 - `cleaker` is the binder that projects a `.me` into a namespace
-- `cleaker.me` is the canonical public root
-These are related, but they are not the same thing.
+- `cleaker.me` is the canonical public root.
 
 ---
 
 ## Core Roles
 ### `.me`
-`.me` is the local sovereign kernel.
+`.me` is the kernel.
 
-It owns:
+**It owns:**
 - identity derivation from seed
 - keys and secret scopes
 - semantic tree and memory log
@@ -25,18 +24,18 @@ Examples:
 - `me://self:explain/profile.netWorth`
 
 ### `monad.ai`
-`monad.ai` runs Monads: active agents that serve, resolve, and execute inside a namespace.
+`monad.ai` runs monads: active agents that serve, resolve, and execute inside a namespace.
 It owns:
+
 - serving namespace requests over HTTP
 - resolving namespaces from the `Host` header
 - persisting the kernel state via DiskStore
 - handling claim/open lifecycle
 - Monad process lifecycle, logs, status, and local execution
 
-A Monad can run only for you on localhost, or it can be exposed publicly on a domain.
+A **monad** can run only for you on localhost, or it can be exposed publicly on a domain.
 The kernel is the storage. There is no separate database.
-
-A Monad is not the namespace, not the host, and not the port. It is an invisible execution route chosen by the resolver:
+A **monad** is not the namespace, not the host, and not the port. It is a *semantic execution route* chosen by the resolver:
 
 ```txt
 jabellae.cleaker.me/profile                 semantic path / meaning
@@ -46,13 +45,13 @@ jabellae.cleaker.me[monadlisa]/profile      technical execution override
 monadlisa@127.0.0.1:8161                    Monad instance + endpoint
 ```
 
-The normal user-facing address has no Monad selector:
+The normal user-facing address has no monad selector:
 
 ```txt
 me://jabellae.cleaker.me/profile
 ```
 
-A Monad selector is only a technical override. These still target the same semantic node:
+A monad selector is only a technical override. These still target the same semantic node:
 
 ```txt
 me://jabellae.cleaker.me[monadlisa]/profile
@@ -81,17 +80,18 @@ await node.ready
 
 Cleaker does not decide where a Monad runs. That belongs to NetGet.
 
-### `cleaker.me`
+### `https://cleaker.me`
 `cleaker.me` is not a different protocol.
 It is a **public domain** with Monads that act as a canonical public root — a common agreement where identities can be anchored publicly.
-That means:
+
+###### That means:
 - infrastructure-wise, it is a public namespace served by Monads
 - semantically, it is a well-known root for public namespaces like `jabellae.cleaker.me`
 Any domain running compatible Monads can play this role. `cleaker.me` is the default, not the only option.
 
 ---
 
-## Deployment Roles
+# Deployment Roles
 ### Local-only Monad
 A local-only Monad runs only for you — on your laptop, your home server, your LAN. It does not need to be publicly accessible.
 

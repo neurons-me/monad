@@ -1,24 +1,16 @@
 # monad.ai
 
-###### Serve `me://` 
-A `.me` kernel exposed over a network.
-`monad.ai` is a daemon that runs a [`.me`](https://github.com/neurons-me/.me) semantic kernel and makes it accessible over **HTTP**. It is a **surface** — a process that speaks on behalf of a **namespace.**
-
-------
-
-## What it does
-When you run `monad.ai`, you get a local daemon that:
-- Holds a `.me` kernel as its single source of truth
 - Resolves namespace paths from the `Host` header of incoming HTTP requests
 - Accepts writes as semantic memory events, appended to a hash-chained log
 - Serves reads as path resolutions over the kernel tree
 - Handles claim/open lifecycle for anchoring identities to namespaces
-The storage is the kernel. There is no database, no parallel ledger, no second truth.
+  The storage is the kernel. There is no database, no parallel ledger, no second truth.
 
 ```
 GET /profile/name
 Host: jabellae.cleaker.me
 → resolves profile.name within the jabellae.cleaker.me namespace
+
 POST /
 Host: jabellae.cleaker.me
 { "expression": "profile.name", "value": "José" }
@@ -28,16 +20,17 @@ Host: jabellae.cleaker.me
 ------
 
 ## How namespace resolution works
-The `Host` header of each request determines the namespace. The daemon does not need to be told which namespace it "is" — every request carries its own namespace context.
+The `Host` header of each request determines the namespace. The **monad.ai** does not need to be told which namespace it "is" — every request carries its own namespace context.
 
 ```
-Host: cleaker.me           → namespace: cleaker.me
-Host: jabellae.cleaker.me  → namespace: jabellae.cleaker.me
-Host: mexicoencuesta.com   → namespace: mexicoencuesta.com
+Host: cleaker.me → namespace: cleaker.me
+Host: jabellae.cleaker.me → namespace: jabellae.cleaker.me
+Host: mexicoencuesta.com → namespace: mexicoencuesta.com
 ```
 
-This means a single daemon can serve multiple namespaces, and any namespace is accessible as long as the `Host` header matches.
-In production, a reverse proxy routes the real domain to the daemon port:
+This means a **monad.ai** can serve multiple namespaces, and any namespace is accessible as long as the `Host` header matches.
+
+**Netget** routes the real domain to the **monad** port:
 
 ```
 https://cleaker.me  →  reverse proxy  →  localhost:8161

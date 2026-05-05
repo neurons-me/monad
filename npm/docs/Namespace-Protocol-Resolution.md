@@ -17,7 +17,6 @@ me://jabellae.cleaker.me/photos/iphone
 ```
 
 The user names meaning. The system chooses execution.
-
 It is the protocol that closes the gap between:
 
 - **Semantic resolution** — already implemented in `this.me`: local, mathematical, derivation-based. The kernel resolves `me.get("wallet.balance")` entirely offline.

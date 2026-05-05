@@ -6,24 +6,23 @@
 # monad
 ###### Serve `me://Everything.is.just.a.hash.of.a.knowledge.unit`
 Run **monads**: agents that serve, resolve, and execute `.me` expressions.
-
-A **namespace** is the *semantic tree*. 
+A **namespace** is the *semantic tree*. **Chained of truths.**
 
 ------
 
-### Git Clone Repository
+### Clone Git Repository
 
 ```bash
 git clone https://github.com/neurons-me/monad.ai.git
 ```
 
-Select your language:
+##### Select your language:
+
 | Language    | Source                        | Status           | Documentation                                                |
 | ----------- | ----------------------------- | ---------------- | ------------------------------------------------------------ |
 | **Node.js** | `cd monad/npm && npm install` | **Stable 2.1.1** | [node.js Docs ⟡ ](https://neurons-me.github.io/.me/npm/typedocs/) |
 | **Python**  | `cd monad/pip/`               | Not Available    |                                                              |
 | **Rust**    | `cd monad/crate/`             | Not Available    |                                                              |
-
 
 **Then run providing your local seed:**
 
@@ -42,7 +41,6 @@ Run this on any machine, and that machine can host one or many **monads** tuned 
 ------
 
 ## What it looks like:
-
 You install it. You run it. Now you have a local Monad that speaks a simple language:
 
 ```
@@ -53,6 +51,8 @@ You install it. You run it. Now you have a local Monad that speaks a simple lang
 
 Any app, any device, any language can talk to it.
 
+`.me` → `cleaker` → `monad.ai` → `NetGet` → `cleaker.me`
+
 ------
 
 ## How it works:
@@ -61,26 +61,19 @@ It has one job: **answer semantic questions about a namespace**.
 
 A **namespace** is a named semantic tree — like `jabellae.cleaker.me` or `suis-macbook-air.local`.
 
-A **Monad** is not the namespace, not the host, and not the port. It is the runtime agent the resolver may use internally to answer for the namespace:
+A **monad** is the runtime agent the resolver may use internally to answer for the namespace:
 
 ```txt
 jabellae.cleaker.me/profile                 semantic path / meaning
 jabellae.cleaker.me/photos/iphone           semantic path / meaning
 jabellae.cleaker.me/.mesh/monads            internal Monad registry
-jabellae.cleaker.me[monadlisa]/profile      technical execution override
+me://jabellae.cleaker.me[Lisa]/profile			technical execution override
+me://jabellae.cleaker.me[Haiku]/profile			technical execution override
 monadlisa@127.0.0.1:8161                    Monad instance + endpoint
 ```
 
-Monads are invisible by default. A selector is only an advanced/debug override:
-
-```txt
-me://jabellae.cleaker.me/profile
-me://jabellae.cleaker.me[monadlisa]/profile
-me://jabellae.cleaker.me[monadluis]/profile
-```
-
-All target `jabellae.cleaker.me/profile`. The selected Monad only changes execution, not meaning.
-
+All target `jabellae.cleaker.me/profile`. 
+> ***The selected monad only changes execution, not meaning.***
 **When an app asks:**
 
 ```
@@ -89,7 +82,6 @@ Host: suiGn.cleaker.me
 ```
 
 It gets back: `"Sui Gn"`
-
 *That's it.*
 
 ------
@@ -99,9 +91,11 @@ There are three things working together:
 
 **[.me](https://github.com/neurons-me/.me)** — the kernel. Knows how to store, encrypt, and derive your data from a single seed.
 
-**monad.ai** — the Monad runtime. Takes that engine and gives it active agents that can serve, resolve, execute, and coordinate.
-**[cleaker](https://github.com/neurons-me/cleaker)** — the connector. Takes your identity and plugs it into a namespace so apps can find you.
-**NetGet** — the placement and endpoint layer. It knows where a Monad physically runs: laptop, iPhone, Raspberry Pi, VM, relay, or localhost.
+**monads** — active agents that can serve, resolve, execute, and coordinate.
+
+**[cleaker](https://github.com/neurons-me/cleaker)** — the connector. Takes your identity and *plugs it into a namespace* so apps can find you.
+
+**netGet** — the placement and endpoint layer. It knows where a Monad physically runs: *laptop, iPhone, Raspberry Pi, VM, relay, or localhost.*
 
 ------
 
@@ -114,7 +108,5 @@ There are three things working together:
 ------
 
 **MIT —** [neurons.me](https://neurons.me/)
-
-
 
 <img src="https://res.cloudinary.com/dkwnxf6gm/image/upload/v1760629064/neurons.me_b50f6a.png" alt="neurons.me Logo" width="89"/>

@@ -3,6 +3,7 @@ import { createEnvelope, createErrorEnvelope } from "../http/envelope.js";
 import { buildMeTargetNrp } from "../http/meTarget.js";
 import { resolveObserverRelation, resolveTransportHost } from "../http/namespace.js";
 import { resolveSelfDispatch, type SelfNodeConfig } from "../http/selfMapping.js";
+import { correlateOutcome, recordDecision } from "../kernel/decisionLog.js";
 import { selectMeshClaimant } from "../kernel/meshSelect.js";
 import { recordForwardResult } from "../kernel/scoring.js";
 import {
@@ -119,6 +120,7 @@ export function createBridgeHandler(config: BridgeHandlerConfig): express.Reques
       const monadSelector = String((req.query as any)?.monad || "").trim();
       const selfMonadId = process.env.MONAD_ID || "";
       const selfEndpoint = `http://localhost:${config.port}`;
+      const explorationRate = parseFloat(process.env.MONAD_EXPLORATION_RATE ?? "0");
       const fetchStart = Date.now();
 
       const selection = await selectMeshClaimant({
@@ -129,6 +131,7 @@ export function createBridgeHandler(config: BridgeHandlerConfig): express.Reques
         selectorConstraint: meshSelectorConstraint,
         stalenessMs: staleMs,
         now: fetchStart,
+        explorationRate,
       });
 
       if (!selection && meshSelectorConstraint) {
@@ -147,7 +150,60 @@ export function createBridgeHandler(config: BridgeHandlerConfig): express.Reques
       const origin = meshOrigin ?? selfEndpoint;
       const resolveReason = selection?.reason ?? "self";
 
-      console.log(`[bridge] ns=${parsed.namespace} reason=${resolveReason} origin=${origin}${selection ? ` monad_id=${selection.entry.monad_id}` : ""}`);
+      console.log(`[bridge] ns=${parsed.namespace} reason=${resolveReason} origin=${origin}${selection ? ` monad_id=${selection.entry.monad_id} score=${selection.score?.toFixed(3)}` : ""}`);
+
+      // margin < 1 means runner-up exists; margin = 1 is sentinel for "sole claimant"
+      const selectionMargin = selection?.runnerUp
+        ? (selection.score ?? 0) - selection.runnerUp.score
+        : 1;
+
+      // decisionId is the primary correlation key — unique per request, not per monad.
+      const decisionId =
+        selection?.reason === "mesh-claim" || selection?.reason === "exploration"
+          ? `${fetchStart}:${selection.entry.monad_id}`
+          : null;
+
+      if (decisionId && selection) {
+        recordDecision({
+          decisionId,
+          timestamp: fetchStart,
+          namespace: parsed.namespace,
+          monadId: selection.entry.monad_id,
+          score: selection.score ?? 0,
+          margin: selectionMargin,
+          breakdown: selection.breakdown?.breakdown ?? {},
+          ...(selection.runnerUp
+            ? { runnerUp: { monad_id: selection.runnerUp.entry.monad_id, score: selection.runnerUp.score } }
+            : {}),
+        });
+      }
+
+      const sampleRate = parseFloat(process.env.MONAD_SCORE_SAMPLE_RATE ?? "0");
+      const marginThreshold = parseFloat(process.env.MONAD_SCORE_MARGIN_THRESHOLD ?? "0.05");
+      const isFragile = selectionMargin < marginThreshold;
+      // always log fragile decisions; sample the rest
+      const shouldLog =
+        process.env.MONAD_DEBUG_SCORING === "1" ||
+        isFragile ||
+        (sampleRate > 0 && Math.random() < sampleRate);
+      if (shouldLog && selection?.breakdown) {
+        const logEntry: Record<string, unknown> = {
+          winner: {
+            monad_id: selection.entry.monad_id,
+            score: selection.score,
+            breakdown: selection.breakdown.breakdown,
+          },
+        };
+        if (selection.runnerUp) {
+          logEntry.runnerUp = {
+            monad_id: selection.runnerUp.entry.monad_id,
+            score: selection.runnerUp.score,
+          };
+          logEntry.margin = parseFloat(selectionMargin.toFixed(4));
+        }
+        if (isFragile) logEntry.fragile = true;
+        console.log("[scoring]", JSON.stringify(logEntry));
+      }
 
       const url = new URL(`/${parsed.pathSlash}`, origin);
       for (const [key, value] of Object.entries(req.query || {})) {
@@ -179,6 +235,9 @@ export function createBridgeHandler(config: BridgeHandlerConfig): express.Reques
 
       if (selection) {
         recordForwardResult(selection.entry.monad_id, parsed.namespace, elapsed, response.ok);
+        if (decisionId) {
+          correlateOutcome(decisionId, elapsed, response.ok);
+        }
       }
 
       const meshMeta = selection
@@ -187,6 +246,7 @@ export function createBridgeHandler(config: BridgeHandlerConfig): express.Reques
               origin: meshOrigin,
               monad_id: selection.entry.monad_id,
               monad_name: selection.entry.name ?? null,
+              score: selection.score,
               forwardedAt: fetchStart,
               hops: 1,
               reason: selection.reason,

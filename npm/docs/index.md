@@ -2,6 +2,18 @@
 
 ###### Subtractive Synthesis
 
+**Current status:** monad.ai v2.1.1 includes the mesh-aware NRP work through
+Phase 6: namespace discovery, selector-aware routing, production scoring,
+decision introspection, decision logs, continuous reward, and low-margin
+exploration.
+
+Start here for the current NRP implementation:
+
+- [NRP Implementation Status](./NRP/status.md)
+- [NRP Scoring Engine](./NRP/scoring.md)
+- [NRP Test Documentation](./NRP/testing.md)
+- [Generated API Reference](./api/README.md)
+
 - Resolves namespace paths from the `Host` header of incoming HTTP requests
 - Accepts writes as semantic memory events, appended to a hash-chained log
 - Serves reads as path resolutions over the kernel tree
@@ -89,6 +101,15 @@ monad.ai   →  the daemon. runs the kernel, exposes it over HTTP, resolves name
 cleaker    →  the binder. takes a .me instance and projects it into a namespace context.
 ```
 
+The current mesh layer adds:
+
+```txt
+monad index      → fast structural discovery: who could answer?
+mesh selector    → execution constraint: which candidates qualify?
+scoring engine   → adaptive decision: who should answer?
+decision log     → correlated outcome: did that choice work?
+```
+
 `monad.ai` is one possible surface. You can run your own daemon on any hostname or domain. The namespace is not tied to this implementation.
 
 ------
@@ -120,12 +141,12 @@ curl -H "Host: jabellae.localhost" http://localhost:8161/profile/name
 ------
 
 ## Protocol
-`monad.ai` implements the HTTP binding described in [Namespace Resolution Protocol v0.1.2](https://claude.ai/docs/en/Namespace Resolution Protocol.md).
+`monad.ai` implements the HTTP binding described in [Namespace Resolution Protocol v0.2.1](./Namespace-Protocol-Resolution.md).
 
 The canonical resource grammar is:
 
 ```
-me://namespace[selector]/path
+me://namespace[selector]:operation/path
 ```
 
 The current HTTP binding maps this to:
@@ -133,6 +154,22 @@ The current HTTP binding maps this to:
 ```
 GET  /<path>   Host: <namespace>   →  read
 POST /         Host: <namespace>   →  write | claim | open
+GET  /resolve?target=me://namespace:read/path → bridge through the mesh
+```
+
+Mesh discovery endpoints:
+
+```bash
+curl http://localhost:8161/.mesh/monads
+curl "http://localhost:8161/.mesh/resolve?namespace=suis-macbook-air.local"
+curl "http://localhost:8161/.mesh/resolve?monad=frank"
+```
+
+Decision observability:
+
+```bash
+MONAD_DECISION_LOG=~/.monad/decisions.jsonl npm run dev
+tsx scripts/analyze-decisions.ts ~/.monad/decisions.jsonl
 ```
 
 ------

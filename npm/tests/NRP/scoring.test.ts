@@ -2,11 +2,12 @@
  * NRP Scoring Engine — test suite
  *
  * Organization:
- *   1. claim meta I/O     — readClaimMeta / writeClaimMeta
- *   2. computeScore       — behavioral (scorers work correctly)
- *   3. computeScore       — invariants (contracts that must NEVER break)
+ *   1. claim meta I/O      — readClaimMeta / writeClaimMeta
+ *   2. computeScore        — behavioral (scorers work correctly)
+ *   3. computeScore        — invariants (contracts that must NEVER break)
  *   4. recordForwardResult — learning loop
- *   5. integration        — selectMeshClaimant uses scoring to pick the best node
+ *   5. computeScoreDetailed — breakdown is primary, computeScore delegates
+ *   6. integration         — selectMeshClaimant uses scoring to pick the best node
  */
 
 import fs from "fs";
@@ -16,6 +17,7 @@ import { resetKernelStateForTests } from "../../src/kernel/manager.js";
 import { writeMonadIndexEntry, type MonadIndexEntry } from "../../src/kernel/monadIndex.js";
 import {
   computeScore,
+  computeScoreDetailed,
   readClaimMeta,
   recordForwardResult,
   writeClaimMeta,
@@ -309,7 +311,74 @@ describe("recordForwardResult — learning loop", () => {
   });
 });
 
-// ── 5. Integration — selectMeshClaimant uses scoring ─────────────────────────
+// ── 5. computeScoreDetailed — breakdown is primary ────────────────────────────
+// computeScore must delegate to computeScoreDetailed, never diverge.
+
+describe("computeScoreDetailed — introspection", () => {
+  it("breakdown keys match the scorer names", () => {
+    const { breakdown } = computeScoreDetailed(baseEntry(), {}, baseCtx());
+    expect(Object.keys(breakdown).sort()).toEqual(["latency", "recency", "resonance"]);
+  });
+
+  it("sum of contributions equals total", () => {
+    const { total, breakdown } = computeScoreDetailed(baseEntry(), { resonance: 50, avgLatencyMs: 80 }, baseCtx());
+    const sum = Object.values(breakdown).reduce((a, b) => a + b.contribution, 0);
+    expect(sum).toBeCloseTo(total, 10);
+  });
+
+  it("weights in breakdown sum to 1 in normalized mode", () => {
+    const { breakdown } = computeScoreDetailed(baseEntry(), {}, baseCtx({ mode: "normalized" }));
+    const weightSum = Object.values(breakdown).reduce((a, b) => a + b.weight, 0);
+    expect(weightSum).toBeCloseTo(1, 10);
+  });
+
+  it("extra scorers appear in breakdown", () => {
+    const { breakdown } = computeScoreDetailed(baseEntry(), {}, baseCtx(), [
+      { name: "geo", defaultWeight: 0.2, fn: () => 0.7 },
+    ]);
+    expect(breakdown).toHaveProperty("geo");
+    expect(breakdown.geo!.value).toBeCloseTo(0.7, 5);
+  });
+
+  it("computeScore and computeScoreDetailed produce identical totals", () => {
+    const m = baseEntry();
+    const meta: ClaimMeta = { resonance: 60, avgLatencyMs: 90 };
+    const c = baseCtx({ requestedAt: 1_000_000_000 });
+    expect(computeScore(m, meta, c)).toBe(computeScoreDetailed(m, meta, c).total);
+  });
+
+  it("selectMeshClaimant exposes score and breakdown on result", async () => {
+    const now = Date.now();
+    writeMonadIndexEntry(baseEntry({ monad_id: "frank-m", endpoint: "http://localhost:8282", last_seen: now - 1_000 }));
+    const r = await selectMeshClaimant({ monadSelector: "", namespace: NS, selfEndpoint: SELF, selfMonadId: SELF_ID, now });
+    expect(r).not.toBeNull();
+    expect(typeof r!.score).toBe("number");
+    expect(r!.breakdown).toBeDefined();
+    expect(r!.breakdown!.breakdown).toHaveProperty("recency");
+  });
+
+  it("exposes runnerUp when multiple claimants exist", async () => {
+    const now = Date.now();
+    writeMonadIndexEntry(baseEntry({ monad_id: "a", endpoint: "http://localhost:8282", last_seen: now - 500 }));
+    writeMonadIndexEntry(baseEntry({ monad_id: "b", endpoint: "http://localhost:8283", last_seen: now - 1_000 }));
+    const r = await selectMeshClaimant({ monadSelector: "", namespace: NS, selfEndpoint: SELF, selfMonadId: SELF_ID, now });
+    expect(r).not.toBeNull();
+    expect(r!.runnerUp).toBeDefined();
+    expect(r!.runnerUp!.entry.monad_id).not.toBe(r!.entry.monad_id);
+    // winner score is always >= runner-up score
+    expect(r!.score!).toBeGreaterThanOrEqual(r!.runnerUp!.score);
+  });
+
+  it("runnerUp is undefined when only one claimant", async () => {
+    const now = Date.now();
+    writeMonadIndexEntry(baseEntry({ monad_id: "solo", endpoint: "http://localhost:8282", last_seen: now - 500 }));
+    const r = await selectMeshClaimant({ monadSelector: "", namespace: NS, selfEndpoint: SELF, selfMonadId: SELF_ID, now });
+    expect(r).not.toBeNull();
+    expect(r!.runnerUp).toBeUndefined();
+  });
+});
+
+// ── 6. Integration — selectMeshClaimant uses scoring ─────────────────────────
 
 describe("selectMeshClaimant — scoring integration", () => {
   it("selects the higher-resonance claimant over a fresher but unknown node", async () => {

@@ -5,6 +5,11 @@ This page fixes a common confusion in the stack:
 - `cleaker` is the binder that projects a `.me` into a namespace
 - `cleaker.me` is the canonical public root.
 
+**Current implementation note:** monad.ai now includes the NRP mesh layer:
+monads declare claimed namespaces, selectors constrain execution candidates,
+the scoring engine chooses the best claimant, and the bridge records outcomes
+for learning and analysis.
+
 ---
 
 ## Core Roles
@@ -32,6 +37,8 @@ It owns:
 - persisting the kernel state via DiskStore
 - handling claim/open lifecycle
 - Monad process lifecycle, logs, status, and local execution
+- mesh discovery via `/.mesh/monads` and `/.mesh/resolve`
+- adaptive route selection via scoring and decision logs
 
 A **monad** can run only for you on localhost, or it can be exposed publicly on a domain.
 The kernel is the storage. There is no separate database.
@@ -56,7 +63,11 @@ A monad selector is only a technical override. These still target the same seman
 ```txt
 me://jabellae.cleaker.me[monadlisa]/profile
 me://jabellae.cleaker.me[monadluis]/profile
+me://jabellae.cleaker.me[device:macbook]/profile
 ```
+
+Named selectors force or identify execution. Device/tag/host selectors constrain
+the mesh candidates while leaving the semantic path unchanged.
 
 ### `cleaker`
 `cleaker` is the binder.

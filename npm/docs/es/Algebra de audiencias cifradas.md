@@ -1,5 +1,13 @@
 # **Algebra de audiencias cifradas**.
 
+**Actualización NRP:** el mesh actual separa explícitamente topología y
+decisión. `claimed_namespaces` y `tags` describen el conjunto topológico
+rápido (`T`: qué monads pueden cargar/servir algo). La capa abierta
+`_.mesh.monads.<id>.claimed.<namespace>` guarda señales de decisión
+(`resonance`, `avgLatencyMs`, `effectiveResonance`, etc.) sin cerrar el schema.
+La audiencia criptográfica (`A`) sigue siendo independiente: que un monad pueda
+transportar o servir un path no significa que pueda abrir su contenido.
+
 - el context define **dónde/cuáles nodos**
 - la capability define **qué acción está permitida**
 - la encryption define **quién puede abrir ese contenido**
@@ -60,8 +68,8 @@ A clean way to hold it is:
 So:
 
 - public space = its readable audience approaches the open set
-- private space = audience is tightly bounded, often {self}
-- shared space = audience is a union like {me ∪ wife ∪ ...}
+- private space = audience is tightly bounded, often `{self}`
+- shared space = audience is a union like `{me ∪ wife ∪ ...}`
 - encrypted space = membership in the readable audience is enforced cryptographically
 - replicated space = the topology set has multiple carriers
 - local space, remote space, hosted space = just different topology bindings

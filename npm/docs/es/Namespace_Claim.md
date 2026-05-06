@@ -1,5 +1,17 @@
 # La Visión: El Claim del Namespace
 
+**Estado actual:** esta visión ya está parcialmente implementada en
+`monad.ai` v2.1.1. El claim del namespace sigue siendo la base de autoridad,
+pero ahora el runtime también anuncia monads en `_.mesh.monads`, resuelve
+claimants con `/.mesh/resolve`, y usa scoring para decidir qué monad debe
+responder cuando varios pueden servir el mismo namespace.
+
+Ver también:
+
+- `docs/NRP/status.md`
+- `docs/NRP/scoring.md`
+- `docs/NRP/testing.md`
+
 Lo que buscas es que el primer acto de tu kernel sea un **Claim**.
 
 1. **Local Claim:** `me://local` (Yo soy este nodo).

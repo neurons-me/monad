@@ -6,7 +6,9 @@
 
 # Interface: StartMonadResult
 
-Defined in: [index.ts:23](https://github.com/neurons-me/monad/blob/0a2e78c3b84b834a9a3d0fd8117a0f5fd29abe8f/npm/src/index.ts#L23)
+Defined in: [index.ts:31](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/index.ts#L31)
+
+Handles returned by [startMonad](../functions/startMonad.md).
 
 ## Properties
 
@@ -14,7 +16,7 @@ Defined in: [index.ts:23](https://github.com/neurons-me/monad/blob/0a2e78c3b84b8
 
 > **app**: [`MonadApp`](../type-aliases/MonadApp.md)
 
-Defined in: [index.ts:24](https://github.com/neurons-me/monad/blob/0a2e78c3b84b834a9a3d0fd8117a0f5fd29abe8f/npm/src/index.ts#L24)
+Defined in: [index.ts:32](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/index.ts#L32)
 
 ***
 
@@ -22,7 +24,7 @@ Defined in: [index.ts:24](https://github.com/neurons-me/monad/blob/0a2e78c3b84b8
 
 > **bootstrap**: [`MonadBootstrapResult`](MonadBootstrapResult.md)
 
-Defined in: [index.ts:26](https://github.com/neurons-me/monad/blob/0a2e78c3b84b834a9a3d0fd8117a0f5fd29abe8f/npm/src/index.ts#L26)
+Defined in: [index.ts:34](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/index.ts#L34)
 
 ***
 
@@ -30,4 +32,4 @@ Defined in: [index.ts:26](https://github.com/neurons-me/monad/blob/0a2e78c3b84b8
 
 > **server**: `Server`
 
-Defined in: [index.ts:25](https://github.com/neurons-me/monad/blob/0a2e78c3b84b834a9a3d0fd8117a0f5fd29abe8f/npm/src/index.ts#L25)
+Defined in: [index.ts:33](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/index.ts#L33)

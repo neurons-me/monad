@@ -220,6 +220,69 @@ describe("matchesMeshSelector", () => {
   });
 });
 
+// ── Phase 6: epsilon-greedy exploration ──────────────────────────────────────
+
+describe("selectMeshClaimant — exploration", () => {
+  it("with explorationRate=0 always returns the highest-scoring node", async () => {
+    const now = Date.now();
+    // "a" is fresher → higher recency score → should win
+    writeMonadIndexEntry(mesh({ monad_id: "a", endpoint: "http://localhost:8282", last_seen: now - 500 }));
+    writeMonadIndexEntry(mesh({ monad_id: "b", endpoint: "http://localhost:8283", last_seen: now - 5_000 }));
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () =>
+        selectMeshClaimant({ monadSelector: "", namespace: NS, selfEndpoint: SELF, selfMonadId: SELF_ID, now, explorationRate: 0 }),
+      ),
+    );
+    expect(results.every((r) => r!.entry.monad_id === "a")).toBe(true);
+    expect(results.every((r) => r!.reason === "mesh-claim")).toBe(true);
+  });
+
+  it("with explorationRate=1 and low margin routes to runner-up with reason 'exploration'", async () => {
+    const now = Date.now();
+    // nearly identical freshness → margin will be tiny → exploration triggers
+    writeMonadIndexEntry(mesh({ monad_id: "a", endpoint: "http://localhost:8282", last_seen: now - 100 }));
+    writeMonadIndexEntry(mesh({ monad_id: "b", endpoint: "http://localhost:8283", last_seen: now - 120 }));
+    const r = await selectMeshClaimant({
+      monadSelector: "", namespace: NS, selfEndpoint: SELF, selfMonadId: SELF_ID, now,
+      explorationRate: 1,
+    });
+    // If margin < 0.05, exploration triggers: runner-up "b" is selected over winner "a"
+    if (r!.reason === "exploration") {
+      expect(r!.entry.monad_id).toBe("b");
+      expect(r!.runnerUp!.entry.monad_id).toBe("a"); // original winner is now the runnerUp
+    } else {
+      // margin was >= 0.05 despite similar timestamps — winner returned normally
+      expect(r!.reason).toBe("mesh-claim");
+    }
+  });
+
+  it("exploration does not trigger when only one claimant (no runner-up)", async () => {
+    const now = Date.now();
+    writeMonadIndexEntry(mesh({ monad_id: "solo", endpoint: "http://localhost:8282", last_seen: now - 100 }));
+    const r = await selectMeshClaimant({
+      monadSelector: "", namespace: NS, selfEndpoint: SELF, selfMonadId: SELF_ID, now,
+      explorationRate: 1, // rate=1 but no runner-up → no exploration possible
+    });
+    expect(r!.reason).toBe("mesh-claim");
+    expect(r!.runnerUp).toBeUndefined();
+  });
+
+  it("exploration does not trigger when margin is above threshold", async () => {
+    const now = Date.now();
+    // large gap: "a" is very fresh, "b" is nearly stale → margin >> 0.05
+    writeMonadIndexEntry(mesh({ monad_id: "a", endpoint: "http://localhost:8282", last_seen: now - 100 }));
+    writeMonadIndexEntry(mesh({ monad_id: "b", endpoint: "http://localhost:8283", last_seen: now - 290_000 }));
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        selectMeshClaimant({ monadSelector: "", namespace: NS, selfEndpoint: SELF, selfMonadId: SELF_ID, now, explorationRate: 1 }),
+      ),
+    );
+    // explorationRate=1 but margin is large → winner always wins
+    expect(results.every((r) => r!.entry.monad_id === "a")).toBe(true);
+    expect(results.every((r) => r!.reason === "mesh-claim")).toBe(true);
+  });
+});
+
 describe("selectMeshClaimant — selectorConstraint", () => {
   it("only returns claimants matching the selector", async () => {
     writeMonadIndexEntry(mesh({ monad_id: "desktop-m", tags: ["desktop"], type: "desktop", endpoint: "http://localhost:8282" }));

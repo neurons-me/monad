@@ -1,0 +1,41 @@
+[**monad.ai**](../README.md)
+
+***
+
+[monad.ai](../README.md) / recordForwardResult
+
+# Function: recordForwardResult()
+
+> **recordForwardResult**(`monadId`, `namespace`, `elapsedMs`, `ok`): `void`
+
+Defined in: [kernel/scoring.ts:103](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/kernel/scoring.ts#L103)
+
+Records the outcome of a forwarded mesh request.
+
+This is the learning loop. It updates:
+- decayed `resonance`
+- failure-penalized `effectiveResonance`
+- EWMA `avgLatencyMs`
+- forward/failure counters
+
+## Parameters
+
+### monadId
+
+`string`
+
+### namespace
+
+`string`
+
+### elapsedMs
+
+`number`
+
+### ok
+
+`boolean`
+
+## Returns
+
+`void`

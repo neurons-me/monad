@@ -6,7 +6,7 @@
 
 # Interface: MonadBootstrapResult
 
-Defined in: [bootstrap.ts:57](https://github.com/neurons-me/monad/blob/0a2e78c3b84b834a9a3d0fd8117a0f5fd29abe8f/npm/src/bootstrap.ts#L57)
+Defined in: [bootstrap.ts:58](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/bootstrap.ts#L58)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [bootstrap.ts:57](https://github.com/neurons-me/monad/blob/0a2e78c3b
 
 > **config**: [`MonadRuntimeConfig`](MonadRuntimeConfig.md)
 
-Defined in: [bootstrap.ts:58](https://github.com/neurons-me/monad/blob/0a2e78c3b84b834a9a3d0fd8117a0f5fd29abe8f/npm/src/bootstrap.ts#L58)
+Defined in: [bootstrap.ts:59](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/bootstrap.ts#L59)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [bootstrap.ts:58](https://github.com/neurons-me/monad/blob/0a2e78c3b
 
 > **kernelStateDir**: `string`
 
-Defined in: [bootstrap.ts:59](https://github.com/neurons-me/monad/blob/0a2e78c3b84b834a9a3d0fd8117a0f5fd29abe8f/npm/src/bootstrap.ts#L59)
+Defined in: [bootstrap.ts:60](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/bootstrap.ts#L60)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [bootstrap.ts:59](https://github.com/neurons-me/monad/blob/0a2e78c3b
 
 > **rebuiltProjectedClaims**: `number`
 
-Defined in: [bootstrap.ts:60](https://github.com/neurons-me/monad/blob/0a2e78c3b84b834a9a3d0fd8117a0f5fd29abe8f/npm/src/bootstrap.ts#L60)
+Defined in: [bootstrap.ts:61](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/bootstrap.ts#L61)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [bootstrap.ts:60](https://github.com/neurons-me/monad/blob/0a2e78c3b
 
 > **seededSemanticBootstrap**: `number`
 
-Defined in: [bootstrap.ts:61](https://github.com/neurons-me/monad/blob/0a2e78c3b84b834a9a3d0fd8117a0f5fd29abe8f/npm/src/bootstrap.ts#L61)
+Defined in: [bootstrap.ts:62](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/bootstrap.ts#L62)

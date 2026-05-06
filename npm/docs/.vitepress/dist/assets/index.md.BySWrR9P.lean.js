@@ -1,1 +1,0 @@
-import{_ as e,o as i,c as s,ae as n}from"./chunks/framework.S2bkbjdq.js";const k=JSON.parse('{"title":"Monad.ai","description":"","frontmatter":{},"headers":[],"relativePath":"index.md","filePath":"index.md"}'),t={name:"index.md"};function l(o,a,r,d,h,p){return i(),s("div",null,[...a[0]||(a[0]=[n("",10)])])}const m=e(t,[["render",l]]);export{k as __pageData,m as default};

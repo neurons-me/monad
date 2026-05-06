@@ -8,7 +8,10 @@
 
 > **startMonad**(`options?`): `Promise`\<[`StartMonadResult`](../interfaces/StartMonadResult.md)\>
 
-Defined in: [index.ts:86](https://github.com/neurons-me/monad/blob/0a2e78c3b84b834a9a3d0fd8117a0f5fd29abe8f/npm/src/index.ts#L86)
+Defined in: [index.ts:98](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/index.ts#L98)
+
+Boots the monad runtime, creates the Express app, starts listening, and
+schedules the local monad heartbeat.
 
 ## Parameters
 

@@ -8,7 +8,7 @@
 
 > **bootstrapMonad**(`options?`): `Promise`\<[`MonadBootstrapResult`](../interfaces/MonadBootstrapResult.md)\>
 
-Defined in: [bootstrap.ts:151](https://github.com/neurons-me/monad/blob/0a2e78c3b84b834a9a3d0fd8117a0f5fd29abe8f/npm/src/bootstrap.ts#L151)
+Defined in: [bootstrap.ts:152](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/bootstrap.ts#L152)
 
 ## Parameters
 

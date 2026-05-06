@@ -11,11 +11,18 @@ function monadKey(monadId) {
 function nav(root, path) {
     return path.split(".").reduce((proxy, key) => proxy[key], root);
 }
+/**
+ * Writes or replaces a monad index entry in the local `.me` kernel.
+ *
+ * The index is the fast structural layer: it answers "who could serve this
+ * namespace?" before the scoring engine decides "who should serve it?"
+ */
 export function writeMonadIndexEntry(entry, persist = false) {
     nav(getKernel(), `${INDEX_ROOT}.${monadKey(entry.monad_id)}`)(entry);
     if (persist)
         saveSnapshot();
 }
+/** Reads a single local-kernel monad index entry by stable monad id. */
 export function readMonadIndexEntry(monadId) {
     const kernelRead = getKernel();
     const result = kernelRead(`${INDEX_ROOT}.${monadKey(monadId)}`);
@@ -23,6 +30,12 @@ export function readMonadIndexEntry(monadId) {
         ? result
         : undefined;
 }
+/**
+ * Lists local-kernel index entries ordered by freshness.
+ *
+ * This does not include the CLI record store; use `listMonadIndexAsync` when
+ * discovering sibling monads running in other processes on the same machine.
+ */
 export function listMonadIndex() {
     const prefix = `${INDEX_ROOT}.`;
     const mems = (getKernel().memories ?? []);
@@ -45,6 +58,12 @@ export function listMonadIndex() {
         .filter((v) => v !== null)
         .sort(byRecency);
 }
+/**
+ * Seeds the current process into the local monad index.
+ *
+ * Host-like tags are projected into `claimed_namespaces`, while all tags remain
+ * available for selector constraints.
+ */
 export function seedSelfMonadIndexEntry(config) {
     const self = config.selfNodeConfig;
     if (!self?.monadId)
@@ -70,6 +89,7 @@ export function seedSelfMonadIndexEntry(config) {
         last_seen: now,
     }, true);
 }
+/** Updates the local heartbeat timestamp for this monad. */
 export function touchSelfMonadLastSeen(monadId) {
     const existing = readMonadIndexEntry(monadId);
     if (!existing)
@@ -85,8 +105,11 @@ function byRecency(a, b) {
         return t;
     return (a.name ?? a.monad_id).localeCompare(b.name ?? b.monad_id);
 }
-// Returns all index entries that claim to serve targetNs (namespace or rootspace).
-// Results are sorted by last_seen desc (most recent first).
+/**
+ * Finds local-kernel monads that claim a namespace.
+ *
+ * Results are ordered by `last_seen`, with deterministic name/id tie-breaking.
+ */
 export function findMonadsForNamespace(targetNs) {
     const target = normalizeNs(targetNs);
     if (!target)
@@ -97,7 +120,7 @@ export function findMonadsForNamespace(targetNs) {
         return (entry.claimed_namespaces ?? []).some((ns) => normalizeNs(ns) === target);
     });
 }
-// Find a monad by name (case-insensitive) or by full monad_id.
+/** Finds a local-kernel monad by human name or full monad id. */
 export function findMonadByName(nameOrId) {
     const q = String(nameOrId || "").trim().toLowerCase();
     if (!q)
@@ -106,7 +129,12 @@ export function findMonadByName(nameOrId) {
         entry.monad_id === nameOrId ||
         normalizeNs(entry.monad_id) === q);
 }
-// Add extra namespaces to this monad's claimed set (called after a claim ceremony).
+/**
+ * Adds namespaces to a monad's claimed set.
+ *
+ * This is the compatibility/fast-index layer. Rich per-namespace metadata lives
+ * in `_.mesh.monads.<id>.claimed.<namespace>` and is read by the scoring engine.
+ */
 export function announceClaimedNamespaces(monadId, namespaces) {
     const existing = readMonadIndexEntry(monadId);
     if (!existing)
@@ -130,7 +158,12 @@ function cliRecordToEntry(r) {
         last_seen: new Date(r.updatedAt).getTime() || Date.now(),
     };
 }
-// Async version: local kernel + CLI records, deduplicated by endpoint.
+/**
+ * Finds namespace claimants across the local kernel and CLI record store.
+ *
+ * This is the bridge-facing discovery function. It sees sibling monad processes
+ * because the CLI `monad.json` records are shared across processes.
+ */
 export async function findMonadsForNamespaceAsync(targetNs) {
     const target = normalizeNs(targetNs);
     if (!target)
@@ -157,7 +190,7 @@ export async function findMonadsForNamespaceAsync(targetNs) {
     ];
     return merged.sort(byRecency);
 }
-// Async version: local kernel name lookup + CLI fallback.
+/** Finds a monad by name/id across local kernel entries and CLI records. */
 export async function findMonadByNameAsync(nameOrId) {
     const kernelResult = findMonadByName(nameOrId);
     if (kernelResult)
@@ -172,7 +205,7 @@ export async function findMonadByNameAsync(nameOrId) {
     catch { }
     return undefined;
 }
-// Async version of listMonadIndex: local kernel + all CLI-known monads.
+/** Lists local-kernel entries plus all CLI-known monads, deduped by endpoint. */
 export async function listMonadIndexAsync() {
     const kernelEntries = listMonadIndex();
     let cliEntries = [];

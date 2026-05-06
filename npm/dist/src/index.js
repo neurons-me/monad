@@ -56,6 +56,10 @@ function printStartupBanner(bootstrap, logger) {
     logger.log("  - Resolve path:   GET  /<any/path>   e.g. /profile/displayName");
     logger.log("");
 }
+/**
+ * Boots the monad runtime, creates the Express app, starts listening, and
+ * schedules the local monad heartbeat.
+ */
 export async function startMonad(options = {}) {
     const app = await createMonadApp(options);
     const { config } = app.monad;
@@ -79,3 +83,9 @@ export async function startMonad(options = {}) {
     };
 }
 export { createMonadApp, bootstrapMonad };
+export { announceClaimedNamespaces, findMonadByName, findMonadByNameAsync, findMonadsForNamespace, findMonadsForNamespaceAsync, listMonadIndex, listMonadIndexAsync, readMonadIndexEntry, seedSelfMonadIndexEntry, touchSelfMonadLastSeen, writeMonadIndexEntry, } from "./kernel/monadIndex.js";
+export { DEFAULT_STALE_MS, matchesMeshSelector, selectMeshClaimant, } from "./kernel/meshSelect.js";
+export { DEFAULT_WEIGHTS, GLOBAL_BACKGROUND_SHARE, LEARNING_RATE, NAMESPACE_MATURITY_SAMPLES, WEIGHT_MIN, getWeightReport, readAdaptiveWeights, resolveAdaptiveWeights, updateAdaptiveWeights, } from "./kernel/adaptiveWeights.js";
+export { computeScore, computeScoreDetailed, readClaimMeta, recordForwardResult, writeClaimMeta, } from "./kernel/scoring.js";
+export { correlateOutcome, recordDecision, } from "./kernel/decisionLog.js";
+export { NRP_TEST_CATALOG, } from "./testing/nrpTestCatalog.js";

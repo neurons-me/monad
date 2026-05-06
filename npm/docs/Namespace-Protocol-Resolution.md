@@ -1,9 +1,30 @@
 # Namespace Resolution Protocol v0.2.1
 **neurons.me / suiGn**
-**Status:** Semantic Path Draft
+**Status:** Implemented mesh draft through monad.ai Phase 6
 **License:** CC0 1.0 Universal — Public Domain
 
 ---
+
+## Current Implementation Snapshot
+
+This document is the protocol-level spec. The `monad.ai` package currently
+implements the local HTTP/mesh binding through Phase 6:
+
+- `GET /.mesh/monads` lists local-kernel plus CLI-known monads.
+- `GET /.mesh/resolve?namespace=...` returns namespace claimants.
+- `GET /.mesh/resolve?monad=...` returns a named monad.
+- `GET /resolve?target=me://namespace:read/path` bridges an NRP target.
+- `[device:...]`, `[tag:...]`, and `[host:...]` selectors constrain mesh
+  candidates.
+- `computeScoreDetailed` selects among eligible monads and explains the score.
+- `DecisionEntry` JSONL logs correlate decisions with outcome, latency, and
+  continuous reward when `MONAD_DECISION_LOG` is set.
+
+See also:
+
+- [`NRP/status.md`](./NRP/status.md) for implementation status.
+- [`NRP/scoring.md`](./NRP/scoring.md) for the production scoring contract.
+- [`NRP/testing.md`](./NRP/testing.md) for the regression suite taxonomy.
 
 ## Preamble
 This document specifies the **Namespace Resolution Protocol (NRP)** for the `me://` URI scheme.

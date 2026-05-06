@@ -1,6 +1,8 @@
 import { parseSelectorGroups } from "../http/selfMapping.js";
+import { resolveAdaptiveWeights } from "./adaptiveWeights.js";
 import { findMonadByNameAsync, findMonadsForNamespaceAsync } from "./monadIndex.js";
-import { computeScore, readClaimMeta } from "./scoring.js";
+import { getPatchScorers } from "./patchBay.js";
+import { BUILT_IN_SCORERS, computeScoreDetailed, readClaimMeta } from "./scoring.js";
 export const DEFAULT_STALE_MS = 300000; // 5 min
 function normalizeToken(s) {
     return String(s || "").trim().toLowerCase().replace(/[^a-z0-9._-]/g, "");
@@ -13,8 +15,12 @@ function endpointHost(endpoint) {
         return "";
     }
 }
-// Returns true if the entry satisfies the DNF selector (device/tag/host clauses).
-// An empty or null selector always matches.
+/**
+ * Tests whether a monad entry satisfies a selector constraint.
+ *
+ * The selector uses the same DNF grammar as self mapping:
+ * `device:macbook|host:edge;tag:primary`. Empty selectors always match.
+ */
 export function matchesMeshSelector(entry, selectorRaw) {
     if (!selectorRaw)
         return true;
@@ -37,9 +43,38 @@ export function matchesMeshSelector(entry, selectorRaw) {
         return false;
     }));
 }
-// Priority: name-selector > highest-scored mesh claimant matching selectorConstraint > null
+// Margin below this value qualifies a decision for epsilon-greedy exploration.
+const EXPLORATION_MARGIN_THRESHOLD = 0.05;
+// Softmax temperature for exploration sampling: lower = more peaked (winner likely),
+// higher = more uniform. Fixed at a value that gives ~40% exploration probability
+// at margin=0.01 and ~10% at margin=0.05.
+const SOFTMAX_TEMPERATURE = 0.1;
+// Samples an index from allScored using softmax probabilities with the given temperature.
+// index 0 = highest scorer (winner). index > 0 = exploration candidates.
+function sampleSoftmax(allScored, temperature) {
+    const maxScore = allScored[0].detailed.total;
+    const expScores = allScored.map((s) => Math.exp((s.detailed.total - maxScore) / temperature));
+    const expSum = expScores.reduce((a, b) => a + b, 0);
+    let rand = Math.random();
+    for (let i = 0; i < allScored.length; i++) {
+        rand -= expScores[i] / expSum;
+        if (rand <= 0)
+            return i;
+    }
+    return 0;
+}
+/**
+ * Selects the best mesh claimant for a namespace request.
+ *
+ * Selection proceeds in this order:
+ * 1. explicit `monadSelector` lookup, if present
+ * 2. namespace claim filtering
+ * 3. selector constraint filtering
+ * 4. scoring via `computeScoreDetailed`
+ * 5. optional epsilon-greedy exploration for low-margin decisions
+ */
 export async function selectMeshClaimant(opts) {
-    const { monadSelector, namespace, selfEndpoint, selfMonadId, selectorConstraint = null, stalenessMs = DEFAULT_STALE_MS, now = Date.now(), extraScorers = [], } = opts;
+    const { monadSelector, namespace, selfEndpoint, selfMonadId, selectorConstraint = null, stalenessMs = DEFAULT_STALE_MS, now = Date.now(), extraScorers = [], explorationRate = 0, } = opts;
     const normSelf = selfEndpoint.replace(/\/+$/, "");
     if (monadSelector) {
         const named = await findMonadByNameAsync(monadSelector);
@@ -53,9 +88,51 @@ export async function selectMeshClaimant(opts) {
         matchesMeshSelector(m, selectorConstraint));
     if (claimants.length === 0)
         return null;
-    const ctx = { namespace, requestedAt: now };
-    const scored = claimants
-        .map((m) => ({ m, score: computeScore(m, readClaimMeta(m.monad_id, namespace), ctx, extraScorers) }))
-        .sort((a, b) => b.score - a.score);
-    return { entry: scored[0].m, reason: "mesh-claim" };
+    // Inject one pre-blended adaptive weight object for this request.
+    // This keeps the hot path at one blend per request, not per claimant.
+    const adaptiveWeights = resolveAdaptiveWeights(namespace);
+    const ctx = { namespace, requestedAt: now, adaptiveWeights };
+    // Merge patch bay scorers (Phase 8) with caller-supplied extras.
+    // Patch scorers resolve against built-ins only — patch-of-patch not yet supported.
+    const patchScorers = getPatchScorers(BUILT_IN_SCORERS);
+    const allExtraScorers = [...patchScorers, ...extraScorers];
+    // Score all claimants and sort descending. O(N) scoring + O(N log N) sort.
+    // N is typically 2–5 in a real mesh, so the sort cost is negligible.
+    const allScored = claimants
+        .map((m) => {
+        const meta = readClaimMeta(m.monad_id, namespace);
+        return { entry: m, detailed: computeScoreDetailed(m, meta, ctx, allExtraScorers) };
+    })
+        .sort((a, b) => {
+        const d = b.detailed.total - a.detailed.total;
+        return d !== 0 ? d : a.entry.monad_id.localeCompare(b.entry.monad_id);
+    });
+    const best = allScored[0];
+    const second = allScored[1] ?? null;
+    const margin = second ? best.detailed.total - second.detailed.total : 1;
+    // Epsilon-greedy gate: only explore on fragile decisions.
+    // Within the gate, softmax samples from all candidates — avoids top-2 bias
+    // when 3+ claimants are present.
+    if (second && explorationRate > 0 && margin < EXPLORATION_MARGIN_THRESHOLD && Math.random() < explorationRate) {
+        const idx = sampleSoftmax(allScored, SOFTMAX_TEMPERATURE);
+        if (idx > 0) {
+            return {
+                entry: allScored[idx].entry,
+                reason: "exploration",
+                score: allScored[idx].detailed.total,
+                breakdown: allScored[idx].detailed,
+                runnerUp: { entry: best.entry, score: best.detailed.total, breakdown: best.detailed },
+            };
+        }
+        // softmax chose index 0 (winner) — fall through to normal return
+    }
+    return {
+        entry: best.entry,
+        reason: "mesh-claim",
+        score: best.detailed.total,
+        breakdown: best.detailed,
+        ...(second
+            ? { runnerUp: { entry: second.entry, score: second.detailed.total, breakdown: second.detailed } }
+            : {}),
+    };
 }

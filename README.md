@@ -34,11 +34,11 @@ cd monad/
 
 ##### Select your language:
 
-| Language    | Source                        | Status           | Documentation |
-| ----------- | ----------------------------- | ---------------- | ------------- |
-| **Node.js** | `cd monad/npm && npm install` | **Stable 2.1.1** | [node.js Docs ⟡](https://neurons-me.github.io/.me/npm/typedocs/) |
-| **Python**  | `cd monad/pip/`               | Not Available    |               |
-| **Rust**    | `cd monad/crate/`             | Not Available    |               |
+| Language    | Source                        | Status           | Documentation                                             |
+| ----------- | ----------------------------- | ---------------- | --------------------------------------------------------- |
+| **Node.js** | `cd monad/npm && npm install` | **Stable 2.1.1** | [node.js Docs ⟡](https://neurons-me.github.io/monad/npm/) |
+| **Python**  | `cd monad/pip/`               | Not Available    | [pip Docs](https://neurons-me.github.io/monad/pip/)       |
+| **Rust**    | `cd monad/crate/`             | Not Available    |                                                           |
 
 **Example in npm:**
 

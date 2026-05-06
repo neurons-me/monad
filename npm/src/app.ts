@@ -6,7 +6,9 @@ import { meCommandHandler, rootCommandHandler, rootCompatHandler } from "./handl
 import { createLedgerHandlers } from "./handlers/ledgerHandler.js";
 import { commitHandler, syncEventsHandler } from "./handlers/syncHandler.js";
 import { createClaimsRouter } from "./http/claims.js";
+import { createDisclosureMiddleware } from "./http/disclosure.js";
 import { createMeshMonadsRouter } from "./http/meshMonads.js";
+import { createMeshResolveRouter } from "./http/meshResolve.js";
 import { createLegacyRouter } from "./http/legacy.js";
 import { formatObserverRelationLabel, resolveHostNamespace, resolveTransportHost } from "./http/namespace.js";
 import { normalizeHttpRequestToMeTarget } from "./http/meTarget.js";
@@ -115,6 +117,7 @@ export async function createMonadApp(options: MonadOptions = {}): Promise<MonadA
   });
 
   app.use(requestLogger());
+  app.use(createDisclosureMiddleware());
   app.use(createMonadsControlRouter());
   app.use(createProviderSurface(surfaceConfig));
   app.use(createFetchSurface({ timeoutMs: config.fetchProxyTimeoutMs }));
@@ -131,6 +134,7 @@ export async function createMonadApp(options: MonadOptions = {}): Promise<MonadA
   app.post("/api/v1/commit", commitHandler);
   app.get("/api/v1/sync", syncEventsHandler);
   app.use(createMeshMonadsRouter());
+  app.use(createMeshResolveRouter());
   app.use(createClaimsRouter());
   app.use(createSessionRouter());
   app.use(createLegacyRouter());

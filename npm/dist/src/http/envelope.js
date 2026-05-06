@@ -1,3 +1,4 @@
+import { buildDisclosureOrigin, isDisclosureEnabled } from "./disclosure.js";
 function isNamespaceShape(value) {
     if (!value || typeof value !== "object")
         return false;
@@ -48,19 +49,19 @@ export function createEnvelope(target, body = {}) {
     const normalizedTarget = normalizeTarget(target);
     const normalizedBody = normalizeEnvelopeBody(body, normalizedTarget);
     const { target: nestedTarget, remaining } = nestResponseFields(normalizedTarget, normalizedBody);
-    return {
-        ok: true,
-        target: nestedTarget,
-        ...remaining,
-    };
+    const base = { ok: true, target: nestedTarget, ...remaining };
+    if (isDisclosureEnabled()) {
+        base._disclosure = { status: "ok", path: normalizedTarget.path, origin: buildDisclosureOrigin() };
+    }
+    return base;
 }
 export function createErrorEnvelope(target, body = {}) {
     const normalizedTarget = normalizeTarget(target);
     const normalizedBody = normalizeEnvelopeBody(body, normalizedTarget);
     const { target: nestedTarget, remaining } = nestResponseFields(normalizedTarget, normalizedBody);
-    return {
-        ok: false,
-        target: nestedTarget,
-        ...remaining,
-    };
+    const base = { ok: false, target: nestedTarget, ...remaining };
+    if (isDisclosureEnabled()) {
+        base._disclosure = { status: "error", path: normalizedTarget.path, origin: buildDisclosureOrigin() };
+    }
+    return base;
 }

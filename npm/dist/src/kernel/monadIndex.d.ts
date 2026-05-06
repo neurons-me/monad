@@ -8,6 +8,8 @@ export interface MonadIndexEntry {
     type?: SelfSurfaceType;
     trust?: SelfSurfaceTrust;
     public_key?: string;
+    tags?: string[];
+    claimed_namespaces?: string[];
     first_seen: number;
     last_seen: number;
     version?: string;
@@ -18,3 +20,9 @@ export declare function readMonadIndexEntry(monadId: string): MonadIndexEntry | 
 export declare function listMonadIndex(): MonadIndexEntry[];
 export declare function seedSelfMonadIndexEntry(config: MonadRuntimeConfig): void;
 export declare function touchSelfMonadLastSeen(monadId: string): void;
+export declare function findMonadsForNamespace(targetNs: string): MonadIndexEntry[];
+export declare function findMonadByName(nameOrId: string): MonadIndexEntry | undefined;
+export declare function announceClaimedNamespaces(monadId: string, namespaces: string[]): void;
+export declare function findMonadsForNamespaceAsync(targetNs: string): Promise<MonadIndexEntry[]>;
+export declare function findMonadByNameAsync(nameOrId: string): Promise<MonadIndexEntry | undefined>;
+export declare function listMonadIndexAsync(): Promise<MonadIndexEntry[]>;

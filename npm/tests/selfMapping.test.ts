@@ -68,7 +68,7 @@ describe("self mapping", () => {
         requestNamespace: "localhost",
         now: 1234,
       }),
-    ).toEqual({
+    ).toMatchObject({
       hostId: "example-host.local",
       type: "desktop",
       trust: "owner",

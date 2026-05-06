@@ -1,4 +1,5 @@
 import type { NormalizedMeTarget } from "./meTarget.js";
+import { buildDisclosureOrigin, isDisclosureEnabled } from "./disclosure.js";
 
 type EnvelopeShape = Record<string, unknown>;
 
@@ -70,11 +71,11 @@ export function createEnvelope(
   const normalizedTarget = normalizeTarget(target);
   const normalizedBody = normalizeEnvelopeBody(body, normalizedTarget);
   const { target: nestedTarget, remaining } = nestResponseFields(normalizedTarget, normalizedBody);
-  return {
-    ok: true,
-    target: nestedTarget,
-    ...remaining,
-  };
+  const base: EnvelopeShape = { ok: true, target: nestedTarget, ...remaining };
+  if (isDisclosureEnabled()) {
+    base._disclosure = { status: "ok", path: normalizedTarget.path, origin: buildDisclosureOrigin() };
+  }
+  return base;
 }
 
 export function createErrorEnvelope(
@@ -84,9 +85,9 @@ export function createErrorEnvelope(
   const normalizedTarget = normalizeTarget(target);
   const normalizedBody = normalizeEnvelopeBody(body, normalizedTarget);
   const { target: nestedTarget, remaining } = nestResponseFields(normalizedTarget, normalizedBody);
-  return {
-    ok: false,
-    target: nestedTarget,
-    ...remaining,
-  };
+  const base: EnvelopeShape = { ok: false, target: nestedTarget, ...remaining };
+  if (isDisclosureEnabled()) {
+    base._disclosure = { status: "error", path: normalizedTarget.path, origin: buildDisclosureOrigin() };
+  }
+  return base;
 }

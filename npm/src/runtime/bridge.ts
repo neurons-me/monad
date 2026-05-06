@@ -77,10 +77,11 @@ export function parseBridgeTarget(rawInput: string): BridgeTarget | null {
   if (!raw) return null;
   try {
     const parsed = parseTarget(raw.startsWith("me://") ? raw : `me://${raw}`, { allowShorthandRead: true });
-    const namespace = normalizeNamespaceIdentity(parsed.namespace.fqdn);
+    const t = (parsed as any).__ptr?.target ?? parsed;
+    const namespace = normalizeNamespaceIdentity(t.namespace?.fqdn ?? t.namespace ?? "");
     if (!namespace) return null;
-    const selector = String(parsed.operation || parsed.intent.selector || "read").trim() || "read";
-    const pathSlash = String(parsed.path || "").trim().replace(/^\/+/, "");
+    const selector = String(t.operation || t.intent?.selector || "read").trim() || "read";
+    const pathSlash = String(t.path || "").trim().replace(/^\/+/, "");
     const pathDot = pathSlash.split("/").map((p) => p.trim()).filter(Boolean).join(".");
     const nrp = `me://${namespace}:${selector}/${pathDot || "_"}`;
     return { namespace, selector, pathSlash, pathDot, nrp };

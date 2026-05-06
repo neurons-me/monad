@@ -34,7 +34,7 @@ export declare function buildBridgeTarget(resolved: BridgeTarget | null, request
 export declare function buildNormalizedTarget(req: express.Request, namespace: string, operation: "read" | "write" | "claim" | "open", path: string): {
     host: string;
     namespace: string;
-    operation: "claim" | "write" | "read" | "open";
+    operation: "claim" | "write" | "open" | "read";
     path: string;
     nrp: string;
     relation: ObserverRelation;

@@ -7,5 +7,8 @@
     "primary"
   ],
   "type": "desktop",
-  "trust": "owner"
+  "trust": "owner",
+  "monadId": "monad:a192b84f20b39d5f1d8c42d4244c6a3659fbf2ac1d91bdc1817f2bd5d99f7379",
+  "publicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEALCv1y5fI3rcWRZM35o66a/L4ZtC9FM5MIvDA/4XCS0k=\n-----END PUBLIC KEY-----",
+  "privateKeyPath": "self.keys.json"
 }

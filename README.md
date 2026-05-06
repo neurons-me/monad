@@ -38,7 +38,7 @@ cd monad/
 | ----------- | ----------------------------- | ---------------- | --------------------------------------------------------- |
 | **Node.js** | `cd monad/npm && npm install` | **Stable 2.1.1** | [node.js Docs ⟡](https://neurons-me.github.io/monad/npm/) |
 | **Python**  | `cd monad/pip/`               | Not Available    | [pip Docs](https://neurons-me.github.io/monad/pip/)       |
-| **Rust**    | `cd monad/crate/`             | Not Available    |                                                           |
+| **Rust**    | `cd monad/crate/`             | Not Available    | [crate Docs](https://neurons-me.github.io/monad/crate/)   |
 
 **Example in npm:**
 

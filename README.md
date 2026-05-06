@@ -17,10 +17,11 @@
 
 # monad
 ###### Serve `me://Everything.is.just.a.hash.of.a.knowledge.unit`
-Run **monads**: agents that serve, resolve, and execute `.me` expressions.
-A **namespace** is the *semantic tree*. **Chained of truths.**
+**monad** - agent that serve, resolve, and execute `.me` expressions.
 
-Subtractive Synthesiser.
+> [!NOTE]
+>
+> **A namespace is the semantic tree chained with truths.**
 
 ------
 
@@ -79,6 +80,9 @@ Any app, any device, any language can talk to it.
 ------
 
 ## How it works:
+
+###### Subtractive Synthesiser.
+
 It's a service you run locally or on any machine you control.
 It has one job: **answer semantic questions about a namespace**.
 

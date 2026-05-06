@@ -2,13 +2,6 @@
 ###### npm README.md
 `monad.ai` is a system for running **monads**: active execution agents that live inside a *namespace.*
 
-```bash
-git clone https://github.com/neurons-me/monad.git
-cd monad/npm/
-npm install
-npm run test
-```
-
 Everything is addressed semantically. The port is just an implementation detail for routing — it never changes the underlying **meaning/namespace**.
 *namespace = semantic tree = meaning*
 **Semantic Paths** (user-facing, canonical):

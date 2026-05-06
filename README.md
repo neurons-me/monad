@@ -1,6 +1,13 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://res.cloudinary.com/dkwnxf6gm/image/upload/v1778090977/monad.ai.profile-removebg-preview_np26yp.png" />
-  <img src="https://res.cloudinary.com/dkwnxf6gm/image/upload/v1762832023/me.profile-removebg-preview_1_bskwyz.png" alt=".me Logo" width="203" />
+  <source
+    media="(prefers-color-scheme: dark)"
+    srcset="https://res.cloudinary.com/dkwnxf6gm/image/upload/v1778090977/monad.ai.profile-removebg-preview_np26yp.png"
+  />
+  <img
+    src="https://res.cloudinary.com/dkwnxf6gm/image/upload/v1762832023/me.profile-removebg-preview_1_bskwyz.png"
+    alt=".me Logo"
+    width="203"
+  />
 </picture>
 
 # monad
@@ -15,15 +22,25 @@ Subtractive Synthesiser.
 ### Clone Git Repository
 
 ```bash
-git clone https://github.com/neurons-me/monad.ai.git
+git clone https://github.com/neurons-me/monad.git
+cd monad/
 ```
 
 ##### Select your language:
-| Language    | Source                        | Status           | Documentation                                                |
-| ----------- | ----------------------------- | ---------------- | ------------------------------------------------------------ |
-| **Node.js** | `cd monad/npm && npm install` | **Stable 2.1.1** | [node.js Docs ⟡ ](https://neurons-me.github.io/.me/npm/typedocs/) |
-| **Python**  | `cd monad/pip/`               | Not Available    |                                                              |
-| **Rust**    | `cd monad/crate/`             | Not Available    |                                                              |
+
+| Language    | Source                        | Status           | Documentation |
+| ----------- | ----------------------------- | ---------------- | ------------- |
+| **Node.js** | `cd monad/npm && npm install` | **Stable 2.1.1** | [node.js Docs ⟡](https://neurons-me.github.io/.me/npm/typedocs/) |
+| **Python**  | `cd monad/pip/`               | Not Available    |               |
+| **Rust**    | `cd monad/crate/`             | Not Available    |               |
+
+**Example in npm:**
+
+```bash
+cd npm
+npm install
+npm run test
+```
 
 **Then run providing your local seed:**
 

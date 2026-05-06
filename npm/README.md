@@ -1,5 +1,4 @@
 # monad.ai 
-
 ###### npm README.md
 `monad.ai` is a system for running **monads**: active execution agents that live inside a *namespace.*
 
@@ -11,9 +10,7 @@ npm run test
 ```
 
 Everything is addressed semantically. The port is just an implementation detail for routing — it never changes the underlying **meaning/namespace**.
-
 *namespace = semantic tree = meaning*
-
 **Semantic Paths** (user-facing, canonical):
 
 ```txt
@@ -45,9 +42,7 @@ me://jabellae.cleaker.me[]/profile
 That still targets the same semantic node: `jabellae.cleaker.me/profile`.
 
 ### Adaptive Mesh Routing
-
 The current NRP mesh is adaptive:
-
 - monads announce which namespaces they can serve
 - selectors constrain eligible execution routes
 - the scoring engine chooses the best claimant
@@ -71,7 +66,6 @@ tsx scripts/watch-weights.ts --namespace suis-macbook-air.local
 ```
 
 ### Install the CLI
-
 **Run in your terminal:**
 
 ```bash
@@ -103,11 +97,8 @@ Each **monad** gets its own process name, port, state directory, claim directory
 runtime tags, and logs under `~/.monad/<name>/`.
 
 Each **monad** also gets a local `cleaker(monad)` **keypair**. 
-
 - The ***private key*** stays in that *monad's local key file.* 
-
 - The ***public key*** derives `monad.id`, and `__surface` publishes a <u>signed proof</u> so the same **monad can be recognized** even if its port or endpoint changes.
-
 The **namespace/rootspace** is the <u>host or domain</u> context; the port only belongs to the endpoint. That means many **monads** can run on different ports while *serving the same rootspace.*
 
 Normal reads should use semantic paths:
@@ -133,16 +124,12 @@ me://suis-macbook-air.local/.monad[lisa]/status
 
 Default resolution may use latest hash, quorum, stale-state detection,
 authority, and budget policy internally, but the caller gets one semantic answer.
-
 If no name is provided, the CLI creates one automatically. In the interactive
 control panel, namespace is derived from this machine's host rootspace. 
-
 If no `SEED` is provided, the CLI uses a local deterministic development seed for that **monad** name.
-
 `monads logs <name>` follows the live stdout/stderr stream, so incoming requests appear as they happen. Use `--tail` when you only want the latest snapshot.
 
 ## Manual Server
-
 ```bash
 SEED="mi-seed-local-dev" npm run dev
 ```

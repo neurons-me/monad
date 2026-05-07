@@ -8,7 +8,7 @@
 
 > **ScoringContext** = `object`
 
-Defined in: [kernel/scoring.ts:31](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/kernel/scoring.ts#L31)
+Defined in: [kernel/scoring.ts:31](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/scoring.ts#L31)
 
 Per-request context supplied to scoring.
 
@@ -21,7 +21,7 @@ scorers may also use `pathPrefix` for workload-specific policy.
 
 > `optional` **adaptiveWeights?**: `Record`\<`string`, `number`\>
 
-Defined in: [kernel/scoring.ts:47](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/kernel/scoring.ts#L47)
+Defined in: [kernel/scoring.ts:47](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/scoring.ts#L47)
 
 Globally learned scorer weights (Phase 7).
 
@@ -39,7 +39,7 @@ Weight resolution order (highest priority first):
 
 > `optional` **mode?**: [`ScoringMode`](ScoringMode.md)
 
-Defined in: [kernel/scoring.ts:35](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/kernel/scoring.ts#L35)
+Defined in: [kernel/scoring.ts:35](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/scoring.ts#L35)
 
 ***
 
@@ -47,7 +47,7 @@ Defined in: [kernel/scoring.ts:35](https://github.com/neurons-me/monad/blob/1dff
 
 > **namespace**: `string`
 
-Defined in: [kernel/scoring.ts:32](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/kernel/scoring.ts#L32)
+Defined in: [kernel/scoring.ts:32](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/scoring.ts#L32)
 
 ***
 
@@ -55,7 +55,7 @@ Defined in: [kernel/scoring.ts:32](https://github.com/neurons-me/monad/blob/1dff
 
 > `optional` **pathPrefix?**: `string`
 
-Defined in: [kernel/scoring.ts:34](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/kernel/scoring.ts#L34)
+Defined in: [kernel/scoring.ts:34](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/scoring.ts#L34)
 
 ***
 
@@ -63,4 +63,4 @@ Defined in: [kernel/scoring.ts:34](https://github.com/neurons-me/monad/blob/1dff
 
 > **requestedAt**: `number`
 
-Defined in: [kernel/scoring.ts:33](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/kernel/scoring.ts#L33)
+Defined in: [kernel/scoring.ts:33](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/scoring.ts#L33)

@@ -8,7 +8,7 @@
 
 > **DecisionEntry** = `object`
 
-Defined in: kernel/decisionLog.ts:13
+Defined in: [kernel/decisionLog.ts:13](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/decisionLog.ts#L13)
 
 One correlated scoring decision, suitable for JSONL logging and offline
 analysis.
@@ -23,7 +23,7 @@ success approaches `0.7`, and failure is `-0.7`.
 
 > **breakdown**: `Record`\<`string`, [`ScorerBreakdown`](ScorerBreakdown.md)\>
 
-Defined in: kernel/decisionLog.ts:20
+Defined in: [kernel/decisionLog.ts:20](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/decisionLog.ts#L20)
 
 ***
 
@@ -31,7 +31,7 @@ Defined in: kernel/decisionLog.ts:20
 
 > **decisionId**: `string`
 
-Defined in: kernel/decisionLog.ts:14
+Defined in: [kernel/decisionLog.ts:14](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/decisionLog.ts#L14)
 
 ***
 
@@ -39,7 +39,7 @@ Defined in: kernel/decisionLog.ts:14
 
 > `optional` **latencyMs?**: `number`
 
-Defined in: kernel/decisionLog.ts:23
+Defined in: [kernel/decisionLog.ts:23](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/decisionLog.ts#L23)
 
 ***
 
@@ -47,7 +47,7 @@ Defined in: kernel/decisionLog.ts:23
 
 > **margin**: `number`
 
-Defined in: kernel/decisionLog.ts:19
+Defined in: [kernel/decisionLog.ts:19](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/decisionLog.ts#L19)
 
 ***
 
@@ -55,7 +55,7 @@ Defined in: kernel/decisionLog.ts:19
 
 > **monadId**: `string`
 
-Defined in: kernel/decisionLog.ts:17
+Defined in: [kernel/decisionLog.ts:17](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/decisionLog.ts#L17)
 
 ***
 
@@ -63,7 +63,7 @@ Defined in: kernel/decisionLog.ts:17
 
 > **namespace**: `string`
 
-Defined in: kernel/decisionLog.ts:16
+Defined in: [kernel/decisionLog.ts:16](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/decisionLog.ts#L16)
 
 ***
 
@@ -71,7 +71,7 @@ Defined in: kernel/decisionLog.ts:16
 
 > `optional` **outcome?**: `"success"` \| `"failure"`
 
-Defined in: kernel/decisionLog.ts:22
+Defined in: [kernel/decisionLog.ts:22](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/decisionLog.ts#L22)
 
 ***
 
@@ -79,7 +79,7 @@ Defined in: kernel/decisionLog.ts:22
 
 > `optional` **reward?**: `number`
 
-Defined in: kernel/decisionLog.ts:26
+Defined in: [kernel/decisionLog.ts:26](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/decisionLog.ts#L26)
 
 ***
 
@@ -87,7 +87,7 @@ Defined in: kernel/decisionLog.ts:26
 
 > `optional` **runnerUp?**: `object`
 
-Defined in: kernel/decisionLog.ts:21
+Defined in: [kernel/decisionLog.ts:21](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/decisionLog.ts#L21)
 
 #### monad\_id
 
@@ -103,7 +103,7 @@ Defined in: kernel/decisionLog.ts:21
 
 > **score**: `number`
 
-Defined in: kernel/decisionLog.ts:18
+Defined in: [kernel/decisionLog.ts:18](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/decisionLog.ts#L18)
 
 ***
 
@@ -111,4 +111,4 @@ Defined in: kernel/decisionLog.ts:18
 
 > **timestamp**: `number`
 
-Defined in: kernel/decisionLog.ts:15
+Defined in: [kernel/decisionLog.ts:15](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/decisionLog.ts#L15)

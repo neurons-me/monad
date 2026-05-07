@@ -6,7 +6,6 @@ decision introspection, decision logs, continuous reward, and low-margin
 exploration.
 
 Start here for the current NRP implementation:
-
 - [NRP Implementation Status](./NRP/status.md)
 - [NRP Scoring Engine](./NRP/scoring.md)
 - [NRP Test Documentation](./NRP/testing.md)

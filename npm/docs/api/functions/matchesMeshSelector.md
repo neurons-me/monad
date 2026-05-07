@@ -8,7 +8,7 @@
 
 > **matchesMeshSelector**(`entry`, `selectorRaw`): `boolean`
 
-Defined in: [kernel/meshSelect.ts:52](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/kernel/meshSelect.ts#L52)
+Defined in: [kernel/meshSelect.ts:52](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/meshSelect.ts#L52)
 
 Tests whether a monad entry satisfies a selector constraint.
 

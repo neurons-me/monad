@@ -6,7 +6,7 @@
 
 # Interface: SelfNodeConfig
 
-Defined in: [http/selfMapping.ts:6](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/http/selfMapping.ts#L6)
+Defined in: [http/selfMapping.ts:6](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/http/selfMapping.ts#L6)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [http/selfMapping.ts:6](https://github.com/neurons-me/monad/blob/1df
 
 > `optional` **capacity?**: `Partial`\<[`SelfSurfaceCapacity`](SelfSurfaceCapacity.md)\>
 
-Defined in: [http/selfMapping.ts:19](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/http/selfMapping.ts#L19)
+Defined in: [http/selfMapping.ts:19](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/http/selfMapping.ts#L19)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [http/selfMapping.ts:19](https://github.com/neurons-me/monad/blob/1d
 
 > **configPath**: `string`
 
-Defined in: [http/selfMapping.ts:15](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/http/selfMapping.ts#L15)
+Defined in: [http/selfMapping.ts:15](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/http/selfMapping.ts#L15)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [http/selfMapping.ts:15](https://github.com/neurons-me/monad/blob/1d
 
 > **endpoint**: `string`
 
-Defined in: [http/selfMapping.ts:13](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/http/selfMapping.ts#L13)
+Defined in: [http/selfMapping.ts:13](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/http/selfMapping.ts#L13)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [http/selfMapping.ts:13](https://github.com/neurons-me/monad/blob/1d
 
 > **hostname**: `string`
 
-Defined in: [http/selfMapping.ts:14](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/http/selfMapping.ts#L14)
+Defined in: [http/selfMapping.ts:14](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/http/selfMapping.ts#L14)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [http/selfMapping.ts:14](https://github.com/neurons-me/monad/blob/1d
 
 > **identity**: `string`
 
-Defined in: [http/selfMapping.ts:7](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/http/selfMapping.ts#L7)
+Defined in: [http/selfMapping.ts:7](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/http/selfMapping.ts#L7)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [http/selfMapping.ts:7](https://github.com/neurons-me/monad/blob/1df
 
 > `optional` **monadId?**: `string`
 
-Defined in: [http/selfMapping.ts:8](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/http/selfMapping.ts#L8)
+Defined in: [http/selfMapping.ts:8](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/http/selfMapping.ts#L8)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [http/selfMapping.ts:8](https://github.com/neurons-me/monad/blob/1df
 
 > `optional` **monadName?**: `string`
 
-Defined in: [http/selfMapping.ts:9](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/http/selfMapping.ts#L9)
+Defined in: [http/selfMapping.ts:9](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/http/selfMapping.ts#L9)
 
 ***
 
@@ -70,7 +70,7 @@ Defined in: [http/selfMapping.ts:9](https://github.com/neurons-me/monad/blob/1df
 
 > `optional` **privateKey?**: `string`
 
-Defined in: [http/selfMapping.ts:11](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/http/selfMapping.ts#L11)
+Defined in: [http/selfMapping.ts:11](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/http/selfMapping.ts#L11)
 
 ***
 
@@ -78,7 +78,7 @@ Defined in: [http/selfMapping.ts:11](https://github.com/neurons-me/monad/blob/1d
 
 > `optional` **publicKey?**: `string`
 
-Defined in: [http/selfMapping.ts:10](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/http/selfMapping.ts#L10)
+Defined in: [http/selfMapping.ts:10](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/http/selfMapping.ts#L10)
 
 ***
 
@@ -86,7 +86,7 @@ Defined in: [http/selfMapping.ts:10](https://github.com/neurons-me/monad/blob/1d
 
 > `optional` **resources?**: `string`[]
 
-Defined in: [http/selfMapping.ts:18](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/http/selfMapping.ts#L18)
+Defined in: [http/selfMapping.ts:18](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/http/selfMapping.ts#L18)
 
 ***
 
@@ -94,7 +94,7 @@ Defined in: [http/selfMapping.ts:18](https://github.com/neurons-me/monad/blob/1d
 
 > **tags**: `string`[]
 
-Defined in: [http/selfMapping.ts:12](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/http/selfMapping.ts#L12)
+Defined in: [http/selfMapping.ts:12](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/http/selfMapping.ts#L12)
 
 ***
 
@@ -102,7 +102,7 @@ Defined in: [http/selfMapping.ts:12](https://github.com/neurons-me/monad/blob/1d
 
 > `optional` **trust?**: [`SelfSurfaceTrust`](../type-aliases/SelfSurfaceTrust.md)
 
-Defined in: [http/selfMapping.ts:17](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/http/selfMapping.ts#L17)
+Defined in: [http/selfMapping.ts:17](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/http/selfMapping.ts#L17)
 
 ***
 
@@ -110,4 +110,4 @@ Defined in: [http/selfMapping.ts:17](https://github.com/neurons-me/monad/blob/1d
 
 > `optional` **type?**: [`SelfSurfaceType`](../type-aliases/SelfSurfaceType.md)
 
-Defined in: [http/selfMapping.ts:16](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/http/selfMapping.ts#L16)
+Defined in: [http/selfMapping.ts:16](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/http/selfMapping.ts#L16)

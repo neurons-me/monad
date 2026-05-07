@@ -8,7 +8,7 @@
 
 > **WeightHealth** = `object`
 
-Defined in: kernel/adaptiveWeights.ts:51
+Defined in: [kernel/adaptiveWeights.ts:51](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/adaptiveWeights.ts#L51)
 
 Runtime health signals for the adaptive learning loop.
 
@@ -22,7 +22,7 @@ simultaneously on a healthy, well-calibrated system.
 
 > **deadScorer**: `string` \| `null`
 
-Defined in: kernel/adaptiveWeights.ts:74
+Defined in: [kernel/adaptiveWeights.ts:74](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/adaptiveWeights.ts#L74)
 
 Name of a scorer whose weight has dropped near the `WEIGHT_MIN` floor.
 
@@ -40,7 +40,7 @@ override to inject a floor above `WEIGHT_MIN`.
 
 > **dominantScorer**: `string` \| `null`
 
-Defined in: kernel/adaptiveWeights.ts:62
+Defined in: [kernel/adaptiveWeights.ts:62](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/adaptiveWeights.ts#L62)
 
 Name of a scorer that has captured more than 70% of total weight.
 
@@ -57,7 +57,7 @@ the offline analyzer to distinguish the two.
 
 > **noLearning**: `boolean`
 
-Defined in: kernel/adaptiveWeights.ts:93
+Defined in: [kernel/adaptiveWeights.ts:93](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/adaptiveWeights.ts#L93)
 
 True when 10 or more updates have been applied but no weight has moved
 more than 0.002 from its default.
@@ -73,7 +73,7 @@ all zero), or the bridge is not calling `correlateOutcome`. Check that
 
 > **oscillation**: `boolean`
 
-Defined in: kernel/adaptiveWeights.ts:83
+Defined in: [kernel/adaptiveWeights.ts:83](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/adaptiveWeights.ts#L83)
 
 True when the recent reward signal alternates sign frequently.
 

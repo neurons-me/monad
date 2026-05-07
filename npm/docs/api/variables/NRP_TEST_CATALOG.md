@@ -8,7 +8,7 @@
 
 > `const` **NRP\_TEST\_CATALOG**: [`NrpTestCatalogEntry`](../type-aliases/NrpTestCatalogEntry.md)[]
 
-Defined in: testing/nrpTestCatalog.ts:24
+Defined in: [testing/nrpTestCatalog.ts:24](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/testing/nrpTestCatalog.ts#L24)
 
 Public documentation catalog for `tests/NRP`.
 

@@ -8,7 +8,7 @@
 
 > **recordForwardResult**(`monadId`, `namespace`, `elapsedMs`, `ok`): `void`
 
-Defined in: [kernel/scoring.ts:103](https://github.com/neurons-me/monad/blob/1dffe04df49d5516da9e82882037ae2ce346a55c/npm/src/kernel/scoring.ts#L103)
+Defined in: [kernel/scoring.ts:103](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/scoring.ts#L103)
 
 Records the outcome of a forwarded mesh request.
 

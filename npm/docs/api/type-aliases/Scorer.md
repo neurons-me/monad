@@ -8,7 +8,7 @@
 
 > **Scorer** = `object`
 
-Defined in: [kernel/scoring.ts:56](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/scoring.ts#L56)
+Defined in: [kernel/scoring.ts:56](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/scoring.ts#L56)
 
 A pluggable scorer in the mesh decision pipeline.
 
@@ -21,7 +21,7 @@ out-of-range values, so custom scorers cannot corrupt normalized mode.
 
 > **defaultWeight**: `number`
 
-Defined in: [kernel/scoring.ts:58](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/scoring.ts#L58)
+Defined in: [kernel/scoring.ts:58](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/scoring.ts#L58)
 
 ***
 
@@ -29,7 +29,7 @@ Defined in: [kernel/scoring.ts:58](https://github.com/neurons-me/monad/blob/f6d0
 
 > **fn**: (`m`, `meta`, `ctx`) => `number`
 
-Defined in: [kernel/scoring.ts:59](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/scoring.ts#L59)
+Defined in: [kernel/scoring.ts:59](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/scoring.ts#L59)
 
 #### Parameters
 
@@ -55,4 +55,4 @@ Defined in: [kernel/scoring.ts:59](https://github.com/neurons-me/monad/blob/f6d0
 
 > **name**: `string`
 
-Defined in: [kernel/scoring.ts:57](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/scoring.ts#L57)
+Defined in: [kernel/scoring.ts:57](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/scoring.ts#L57)

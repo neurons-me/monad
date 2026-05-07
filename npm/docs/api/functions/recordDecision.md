@@ -8,7 +8,7 @@
 
 > **recordDecision**(`entry`): `void`
 
-Defined in: [kernel/decisionLog.ts:37](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/decisionLog.ts#L37)
+Defined in: [kernel/decisionLog.ts:37](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/decisionLog.ts#L37)
 
 Stores a decision snapshot until the bridge knows the outcome.
 

@@ -36,16 +36,15 @@ jobs:
           VITEPRESS_BASE: /monad/npm/docs/
 
       - name: Add .nojekyll (prevents Jekyll from processing VitePress output)
-        run: touch npm/docs/.vitepress/dist/.nojekyll
+        run: mkdir -p npm/typedocs && touch npm/typedocs/.nojekyll
 
-      # Deploys to the gh-pages branch under npm/docs/.
-      # Files outside npm/docs/ in gh-pages are preserved (keep_files: true).
-      # After first deploy, set GitHub Pages source to:
-      #   Branch: gh-pages  /  Folder: / (root)
+      # Deploys to the gh-pages branch under npm/typedocs/.
+      # Files outside npm/typedocs/ in gh-pages are preserved (keep_files: true).
+      # GitHub Pages source: Branch: gh-pages  /  Folder: / (root)
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./npm/docs/.vitepress/dist
-          destination_dir: npm/docs
+          publish_dir: ./npm/typedocs
+          destination_dir: npm/typedocs
           keep_files: true

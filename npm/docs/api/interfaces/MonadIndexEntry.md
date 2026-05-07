@@ -6,7 +6,7 @@
 
 # Interface: MonadIndexEntry
 
-Defined in: [kernel/monadIndex.ts:7](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/monadIndex.ts#L7)
+Defined in: [kernel/monadIndex.ts:7](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/monadIndex.ts#L7)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [kernel/monadIndex.ts:7](https://github.com/neurons-me/monad/blob/f6
 
 > `optional` **capabilities?**: `string`[]
 
-Defined in: [kernel/monadIndex.ts:20](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/monadIndex.ts#L20)
+Defined in: [kernel/monadIndex.ts:20](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/monadIndex.ts#L20)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [kernel/monadIndex.ts:20](https://github.com/neurons-me/monad/blob/f
 
 > `optional` **claimed\_namespaces?**: `string`[]
 
-Defined in: [kernel/monadIndex.ts:16](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/monadIndex.ts#L16)
+Defined in: [kernel/monadIndex.ts:16](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/monadIndex.ts#L16)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [kernel/monadIndex.ts:16](https://github.com/neurons-me/monad/blob/f
 
 > **endpoint**: `string`
 
-Defined in: [kernel/monadIndex.ts:10](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/monadIndex.ts#L10)
+Defined in: [kernel/monadIndex.ts:10](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/monadIndex.ts#L10)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [kernel/monadIndex.ts:10](https://github.com/neurons-me/monad/blob/f
 
 > **first\_seen**: `number`
 
-Defined in: [kernel/monadIndex.ts:17](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/monadIndex.ts#L17)
+Defined in: [kernel/monadIndex.ts:17](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/monadIndex.ts#L17)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [kernel/monadIndex.ts:17](https://github.com/neurons-me/monad/blob/f
 
 > **last\_seen**: `number`
 
-Defined in: [kernel/monadIndex.ts:18](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/monadIndex.ts#L18)
+Defined in: [kernel/monadIndex.ts:18](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/monadIndex.ts#L18)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [kernel/monadIndex.ts:18](https://github.com/neurons-me/monad/blob/f
 
 > **monad\_id**: `string`
 
-Defined in: [kernel/monadIndex.ts:8](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/monadIndex.ts#L8)
+Defined in: [kernel/monadIndex.ts:8](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/monadIndex.ts#L8)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [kernel/monadIndex.ts:8](https://github.com/neurons-me/monad/blob/f6
 
 > `optional` **name?**: `string`
 
-Defined in: [kernel/monadIndex.ts:11](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/monadIndex.ts#L11)
+Defined in: [kernel/monadIndex.ts:11](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/monadIndex.ts#L11)
 
 ***
 
@@ -70,7 +70,7 @@ Defined in: [kernel/monadIndex.ts:11](https://github.com/neurons-me/monad/blob/f
 
 > **namespace**: `string`
 
-Defined in: [kernel/monadIndex.ts:9](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/monadIndex.ts#L9)
+Defined in: [kernel/monadIndex.ts:9](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/monadIndex.ts#L9)
 
 ***
 
@@ -78,7 +78,7 @@ Defined in: [kernel/monadIndex.ts:9](https://github.com/neurons-me/monad/blob/f6
 
 > `optional` **public\_key?**: `string`
 
-Defined in: [kernel/monadIndex.ts:14](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/monadIndex.ts#L14)
+Defined in: [kernel/monadIndex.ts:14](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/monadIndex.ts#L14)
 
 ***
 
@@ -86,7 +86,7 @@ Defined in: [kernel/monadIndex.ts:14](https://github.com/neurons-me/monad/blob/f
 
 > `optional` **tags?**: `string`[]
 
-Defined in: [kernel/monadIndex.ts:15](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/monadIndex.ts#L15)
+Defined in: [kernel/monadIndex.ts:15](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/monadIndex.ts#L15)
 
 ***
 
@@ -94,7 +94,7 @@ Defined in: [kernel/monadIndex.ts:15](https://github.com/neurons-me/monad/blob/f
 
 > `optional` **trust?**: [`SelfSurfaceTrust`](../type-aliases/SelfSurfaceTrust.md)
 
-Defined in: [kernel/monadIndex.ts:13](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/monadIndex.ts#L13)
+Defined in: [kernel/monadIndex.ts:13](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/monadIndex.ts#L13)
 
 ***
 
@@ -102,7 +102,7 @@ Defined in: [kernel/monadIndex.ts:13](https://github.com/neurons-me/monad/blob/f
 
 > `optional` **type?**: [`SelfSurfaceType`](../type-aliases/SelfSurfaceType.md)
 
-Defined in: [kernel/monadIndex.ts:12](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/monadIndex.ts#L12)
+Defined in: [kernel/monadIndex.ts:12](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/monadIndex.ts#L12)
 
 ***
 
@@ -110,4 +110,4 @@ Defined in: [kernel/monadIndex.ts:12](https://github.com/neurons-me/monad/blob/f
 
 > `optional` **version?**: `string`
 
-Defined in: [kernel/monadIndex.ts:19](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/kernel/monadIndex.ts#L19)
+Defined in: [kernel/monadIndex.ts:19](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/monadIndex.ts#L19)

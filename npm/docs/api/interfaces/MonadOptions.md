@@ -6,7 +6,7 @@
 
 # Interface: MonadOptions
 
-Defined in: [bootstrap.ts:12](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L12)
+Defined in: [bootstrap.ts:12](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L12)
 
 ## Extended by
 
@@ -18,7 +18,7 @@ Defined in: [bootstrap.ts:12](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **claimDir?**: `string`
 
-Defined in: [bootstrap.ts:20](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L20)
+Defined in: [bootstrap.ts:20](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L20)
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [bootstrap.ts:20](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **cleakerPkgDistDir?**: `string`
 
-Defined in: [bootstrap.ts:31](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L31)
+Defined in: [bootstrap.ts:31](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L31)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [bootstrap.ts:31](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **cwd?**: `string`
 
-Defined in: [bootstrap.ts:15](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L15)
+Defined in: [bootstrap.ts:15](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L15)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [bootstrap.ts:15](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **env?**: `ProcessEnv`
 
-Defined in: [bootstrap.ts:16](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L16)
+Defined in: [bootstrap.ts:16](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L16)
 
 ***
 
@@ -50,7 +50,7 @@ Defined in: [bootstrap.ts:16](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **fetchProxyTimeoutMs?**: `number`
 
-Defined in: [bootstrap.ts:36](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L36)
+Defined in: [bootstrap.ts:36](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L36)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [bootstrap.ts:36](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **guiPkgDistDir?**: `string`
 
-Defined in: [bootstrap.ts:29](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L29)
+Defined in: [bootstrap.ts:29](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L29)
 
 ***
 
@@ -66,7 +66,7 @@ Defined in: [bootstrap.ts:29](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **hostname?**: `string`
 
-Defined in: [bootstrap.ts:14](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L14)
+Defined in: [bootstrap.ts:14](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L14)
 
 ***
 
@@ -74,7 +74,7 @@ Defined in: [bootstrap.ts:14](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **indexPath?**: `string`
 
-Defined in: [bootstrap.ts:35](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L35)
+Defined in: [bootstrap.ts:35](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L35)
 
 ***
 
@@ -82,7 +82,7 @@ Defined in: [bootstrap.ts:35](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **logger?**: `false` \| [`MonadLogger`](../type-aliases/MonadLogger.md)
 
-Defined in: [bootstrap.ts:37](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L37)
+Defined in: [bootstrap.ts:37](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L37)
 
 ***
 
@@ -90,7 +90,7 @@ Defined in: [bootstrap.ts:37](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **mePkgDistDir?**: `string`
 
-Defined in: [bootstrap.ts:30](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L30)
+Defined in: [bootstrap.ts:30](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L30)
 
 ***
 
@@ -98,7 +98,7 @@ Defined in: [bootstrap.ts:30](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **namespace?**: `string`
 
-Defined in: [bootstrap.ts:18](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L18)
+Defined in: [bootstrap.ts:18](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L18)
 
 ***
 
@@ -106,7 +106,7 @@ Defined in: [bootstrap.ts:18](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **port?**: `string` \| `number`
 
-Defined in: [bootstrap.ts:13](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L13)
+Defined in: [bootstrap.ts:13](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L13)
 
 ***
 
@@ -114,7 +114,7 @@ Defined in: [bootstrap.ts:13](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **reactDomUmdDir?**: `string`
 
-Defined in: [bootstrap.ts:33](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L33)
+Defined in: [bootstrap.ts:33](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L33)
 
 ***
 
@@ -122,7 +122,7 @@ Defined in: [bootstrap.ts:33](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **reactUmdDir?**: `string`
 
-Defined in: [bootstrap.ts:32](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L32)
+Defined in: [bootstrap.ts:32](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L32)
 
 ***
 
@@ -130,7 +130,7 @@ Defined in: [bootstrap.ts:32](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **routesPath?**: `string`
 
-Defined in: [bootstrap.ts:34](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L34)
+Defined in: [bootstrap.ts:34](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L34)
 
 ***
 
@@ -138,7 +138,7 @@ Defined in: [bootstrap.ts:34](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **seed?**: `string`
 
-Defined in: [bootstrap.ts:17](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L17)
+Defined in: [bootstrap.ts:17](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L17)
 
 ***
 
@@ -146,7 +146,7 @@ Defined in: [bootstrap.ts:17](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **selfConfigPath?**: `string`
 
-Defined in: [bootstrap.ts:21](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L21)
+Defined in: [bootstrap.ts:21](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L21)
 
 ***
 
@@ -154,7 +154,7 @@ Defined in: [bootstrap.ts:21](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **selfEndpoint?**: `string`
 
-Defined in: [bootstrap.ts:24](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L24)
+Defined in: [bootstrap.ts:24](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L24)
 
 ***
 
@@ -162,7 +162,7 @@ Defined in: [bootstrap.ts:24](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **selfHostname?**: `string`
 
-Defined in: [bootstrap.ts:23](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L23)
+Defined in: [bootstrap.ts:23](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L23)
 
 ***
 
@@ -170,7 +170,7 @@ Defined in: [bootstrap.ts:23](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **selfIdentity?**: `string`
 
-Defined in: [bootstrap.ts:22](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L22)
+Defined in: [bootstrap.ts:22](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L22)
 
 ***
 
@@ -178,7 +178,7 @@ Defined in: [bootstrap.ts:22](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **selfResources?**: `string` \| `string`[]
 
-Defined in: [bootstrap.ts:28](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L28)
+Defined in: [bootstrap.ts:28](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L28)
 
 ***
 
@@ -186,7 +186,7 @@ Defined in: [bootstrap.ts:28](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **selfTags?**: `string` \| `string`[]
 
-Defined in: [bootstrap.ts:25](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L25)
+Defined in: [bootstrap.ts:25](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L25)
 
 ***
 
@@ -194,7 +194,7 @@ Defined in: [bootstrap.ts:25](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **selfTrust?**: `string`
 
-Defined in: [bootstrap.ts:27](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L27)
+Defined in: [bootstrap.ts:27](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L27)
 
 ***
 
@@ -202,7 +202,7 @@ Defined in: [bootstrap.ts:27](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **selfType?**: `string`
 
-Defined in: [bootstrap.ts:26](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L26)
+Defined in: [bootstrap.ts:26](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L26)
 
 ***
 
@@ -210,4 +210,4 @@ Defined in: [bootstrap.ts:26](https://github.com/neurons-me/monad/blob/f6d0fb6d4
 
 > `optional` **stateDir?**: `string`
 
-Defined in: [bootstrap.ts:19](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/bootstrap.ts#L19)
+Defined in: [bootstrap.ts:19](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/bootstrap.ts#L19)

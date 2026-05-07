@@ -8,4 +8,4 @@
 
 > **SelfSurfaceTrust** = `"owner"` \| `"trusted-peer"` \| `"guest"`
 
-Defined in: [http/selfMapping.ts:23](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/http/selfMapping.ts#L23)
+Defined in: [http/selfMapping.ts:23](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/http/selfMapping.ts#L23)

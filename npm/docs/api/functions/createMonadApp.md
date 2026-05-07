@@ -8,7 +8,7 @@
 
 > **createMonadApp**(`options?`): `Promise`\<[`MonadApp`](../type-aliases/MonadApp.md)\>
 
-Defined in: [app.ts:71](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/app.ts#L71)
+Defined in: [app.ts:71](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/app.ts#L71)
 
 ## Parameters
 

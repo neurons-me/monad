@@ -8,7 +8,7 @@
 
 > **NrpTestCatalogEntry** = `object`
 
-Defined in: [testing/nrpTestCatalog.ts:7](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/testing/nrpTestCatalog.ts#L7)
+Defined in: [testing/nrpTestCatalog.ts:7](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/testing/nrpTestCatalog.ts#L7)
 
 Describes one documented test group in the NRP suite.
 
@@ -21,7 +21,7 @@ the runtime APIs. It is not used by Vitest at runtime.
 
 > **category**: `"parsing"` \| `"index"` \| `"selection"` \| `"scoring"` \| `"observability"` \| `"learning"`
 
-Defined in: [testing/nrpTestCatalog.ts:11](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/testing/nrpTestCatalog.ts#L11)
+Defined in: [testing/nrpTestCatalog.ts:11](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/testing/nrpTestCatalog.ts#L11)
 
 Functional area covered by the file.
 
@@ -31,7 +31,7 @@ Functional area covered by the file.
 
 > **covers**: `string`[]
 
-Defined in: [testing/nrpTestCatalog.ts:15](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/testing/nrpTestCatalog.ts#L15)
+Defined in: [testing/nrpTestCatalog.ts:15](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/testing/nrpTestCatalog.ts#L15)
 
 Short description of the behavior under test.
 
@@ -41,7 +41,7 @@ Short description of the behavior under test.
 
 > **file**: `string`
 
-Defined in: [testing/nrpTestCatalog.ts:9](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/testing/nrpTestCatalog.ts#L9)
+Defined in: [testing/nrpTestCatalog.ts:9](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/testing/nrpTestCatalog.ts#L9)
 
 Test file path relative to the package root.
 
@@ -51,6 +51,6 @@ Test file path relative to the package root.
 
 > **invariant**: `boolean`
 
-Defined in: [testing/nrpTestCatalog.ts:13](https://github.com/neurons-me/monad/blob/f6d0fb6d4d7c8661ca9f05a2c1b6bad00e861f5e/npm/src/testing/nrpTestCatalog.ts#L13)
+Defined in: [testing/nrpTestCatalog.ts:13](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/testing/nrpTestCatalog.ts#L13)
 
 Whether this test group protects a production invariant.

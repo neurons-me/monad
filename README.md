@@ -35,7 +35,6 @@ cd monad/
 ```
 
 ##### Select your language:
-
 | Language    | Source                        | Status           | Documentation                                             |
 | ----------- | ----------------------------- | ---------------- | --------------------------------------------------------- |
 | **Node.js** | `cd monad/npm && npm install` | **Stable 2.1.1** | [node.js Docs ⟡](https://neurons-me.github.io/monad/npm/) |

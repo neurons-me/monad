@@ -81,8 +81,6 @@ Any app, any device, any language can talk to it.
 
 ## How it works:
 
-###### Subtractive Synthesiser.
-
 It's a service you run locally or on any machine you control.
 It has one job: **answer semantic questions about a namespace**.
 
@@ -116,24 +114,29 @@ It gets back: `"Sui Gn"`
 ## The pieces:
 There are three things working together:
 
-**[.me](https://github.com/neurons-me/.me)** — the kernel. Knows how to store, encrypt, and derive your data from a single seed.
+**[.me](https://suign.github.io/)** — the kernel. Knows how to store, encrypt, and derive your data from a single seed.
 
-**monads** — active agents that can serve, resolve, execute, and coordinate.
+**[monads](https://neurons-me.github.io/monad/)** — active agents that can serve, resolve, execute, and coordinate.
 
-**[cleaker](https://github.com/neurons-me/cleaker)** — the connector. Takes your identity and *plugs it into a namespace* so apps can find you.
+**[cleaker](https://neurons-me.github.io/Cleaker)** — the connector. Takes your identity and *plugs it into a namespace* so apps can find you.
 
-**netGet** — the placement and endpoint layer. It knows where a Monad physically runs: *laptop, iPhone, Raspberry Pi, VM, relay, or localhost.*
+**[netGet](https://neurons-me.github.io/netget/)** — the placement and endpoint layer. It knows where a Monad physically runs: *laptop, iPhone, Raspberry Pi, VM, relay, or localhost.*
 
 ------
 
 ## Where to go from here:
-- **Want to run it?** → [npm/README.md](https://claude.ai/chat/npm/README.md)
-- **Want to understand the protocol?** → [Namespace Resolution Protocol](https://claude.ai/docs/en/Namespace Resolution Protocol.md)
+- **Want to run it?** → [npm/README.md](https://neurons-me.github.io/monad/npm)
+- **Want to understand the protocol?** → [NRP - Namespace Resolution Protocol](https://claude.ai/docs/en/Namespace Resolution Protocol.md)
 - **Want to build an app on top of this?** → [this.me on npm](https://npmjs.com/package/this.me)
 - **Want to understand the big picture?** → [neurons.me](https://neurons.me/)
+- **Subtractive Synthesiser**
 
 ------
 
-**MIT —** [neurons.me](https://neurons.me/)
+[Github Home](https://neurons-me.github.io)
+
+**MIT —** [neurons.me](https://neurons-me)
+
+**Author:** [suiGn](https://suign.github.io/)
 
 <img src="https://res.cloudinary.com/dkwnxf6gm/image/upload/v1760629064/neurons.me_b50f6a.png" alt="neurons.me Logo" width="89"/>

@@ -1,6 +1,6 @@
 {
   "name": "monad.ai",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Monad daemon for identity, ledger, and semantic runtime surfaces.",
   "author": "suiGn",
   "license": "ISC",
@@ -8,6 +8,7 @@
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
   "bin": {
+    "monad.ai": "./dist/src/cli/monads.js",
     "monads": "./dist/src/cli/monads.js"
   },
   "exports": {

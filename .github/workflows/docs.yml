@@ -24,16 +24,14 @@ jobs:
         with:
           node-version: "20"
 
-      # Install only VitePress — skips workspace:* deps that npm can't resolve.
-      # The TypeDoc API markdown (docs/api/) is committed to the repo, so
-      # VitePress picks it up without re-running typedoc in CI.
+      # Install VitePress from repo root — avoids npm/package.json which contains
+      # workspace:* deps that npm cannot resolve (workspace: is pnpm-only syntax).
+      # TypeDoc API markdown (docs/api/) is committed, so no typedoc run needed.
       - name: Install VitePress
-        working-directory: npm
         run: npm install --no-save vitepress
 
       - name: Build VitePress
-        working-directory: npm
-        run: npx vitepress build docs
+        run: npx vitepress build npm/docs
         env:
           VITEPRESS_BASE: /monad/npm/docs/
 

@@ -130,7 +130,7 @@ There are three things working together:
 - **Want to understand the protocol?** → [NRP - Namespace Resolution Protocol](https://claude.ai/docs/en/Namespace Resolution Protocol.md)
 - **Want to build an app on top of this?** → [this.me on npm](https://npmjs.com/package/this.me)
 - **Want to understand the big picture?** → [neurons.me](https://neurons.me/)
-- **Subtractive Synthesiser**
+- **Subtractive Synthesiser** → subtractive synthesis
 
 ------
 

@@ -22,6 +22,8 @@
 > [!NOTE]
 >
 > **A namespace is the semantic tree chained with truths.**
+>
+> Semantic routing as primary infrastructure
 
 ------
 
@@ -84,29 +86,29 @@ Any app, any device, any language can talk to it.
 It's a service you run locally or on any machine you control.
 It has one job: **answer semantic questions about a namespace**.
 
-A **namespace** is a named semantic tree — like `jabellae.cleaker.me` or `suis-macbook-air.local`.
+A **namespace** is a named semantic tree — like `username.cleaker.me` or `user-macbook-air.local`.
 
 A **monad** is the runtime agent the resolver may use internally to answer for the namespace:
 
 ```txt
-jabellae.cleaker.me/profile                 semantic path / meaning
-jabellae.cleaker.me/photos/iphone           semantic path / meaning
-jabellae.cleaker.me/.mesh/monads            internal Monad registry
-me://jabellae.cleaker.me[Lisa]/profile			technical execution override
-me://jabellae.cleaker.me[Haiku]/profile			technical execution override
-monadlisa@127.0.0.1:8161                    Monad instance + endpoint
+username.cleaker.me/profile                 semantic path / meaning
+username.cleaker.me/photos/iphone           semantic path / meaning
+username.cleaker.me/.mesh/monads            internal Monad registry
+me://username.cleaker.me[Lisa]/profile			technical execution override
+me://username.cleaker.me[Haiku]/profile			technical execution override
+lisa@127.0.0.1:8161                    Monad instance + endpoint
 ```
 
-All target `jabellae.cleaker.me/profile`. 
+All target `username.cleaker.me/profile`. 
 > ***The selected monad only changes execution, not meaning.***
 **When an app asks:**
 
 ```
 GET /profile/name
-Host: suiGn.cleaker.me
+Host: username.cleaker.me
 ```
 
-It gets back: `"Sui Gn"`
+It gets back: `"username"`
 *That's it.*
 
 ------

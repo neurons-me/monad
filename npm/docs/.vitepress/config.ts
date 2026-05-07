@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitepress';
 
-const base = process.env.VITEPRESS_BASE || '/monad.ai/npm/docs/';
+const base = process.env.VITEPRESS_BASE || '/monad/npm/docs/';
 
 export default defineConfig({
   title: 'monad.ai',

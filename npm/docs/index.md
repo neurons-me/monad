@@ -1,7 +1,5 @@
 # monad.ai
-
 ###### Subtractive Synthesis
-
 **Current status:** monad.ai v2.1.1 includes the mesh-aware NRP work through
 Phase 6: namespace discovery, selector-aware routing, production scoring,
 decision introspection, decision logs, continuous reward, and low-margin

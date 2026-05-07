@@ -1,0 +1,53 @@
+name: Deploy monad.ai Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "npm/docs/**"
+      - "npm/src/**"
+      - "npm/typedoc.json"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Install only VitePress — skips workspace:* deps that npm can't resolve.
+      # The TypeDoc API markdown (docs/api/) is committed to the repo, so
+      # VitePress picks it up without re-running typedoc in CI.
+      - name: Install VitePress
+        working-directory: npm
+        run: npm install --no-save vitepress
+
+      - name: Build VitePress
+        working-directory: npm
+        run: npx vitepress build docs
+        env:
+          VITEPRESS_BASE: /monad/npm/docs/
+
+      - name: Add .nojekyll (prevents Jekyll from processing VitePress output)
+        run: touch npm/docs/.vitepress/dist/.nojekyll
+
+      # Deploys to the gh-pages branch under npm/docs/.
+      # Files outside npm/docs/ in gh-pages are preserved (keep_files: true).
+      # After first deploy, set GitHub Pages source to:
+      #   Branch: gh-pages  /  Folder: / (root)
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./npm/docs/.vitepress/dist
+          destination_dir: npm/docs
+          keep_files: true

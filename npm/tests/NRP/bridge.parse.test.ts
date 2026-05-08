@@ -24,7 +24,7 @@
  * - The `nrp` field is always a canonical round-trip of the original address
  */
 
-import { parseBridgeTarget } from "../../src/runtime/bridge.js";
+import { extractMonadFromPath, parseBridgeTarget } from "../../src/runtime/bridge.js";
 
 describe("parseBridgeTarget — cleaker v3 (__ptr.target) API", () => {
 
@@ -127,5 +127,56 @@ describe("parseBridgeTarget — cleaker v3 (__ptr.target) API", () => {
     // with something (not just a trailing slash that looks like a directory).
     const r = parseBridgeTarget("me://suis-macbook-air.local:read/");
     if (r) expect(r.nrp).toMatch(/_$/);
+  });
+});
+
+// ── extractMonadFromPath ──────────────────────────────────────────────────────
+
+describe("extractMonadFromPath — monad[frank] path syntax", () => {
+  it("extracts monadId and empty remainingPath from bare monad[frank]", () => {
+    const r = extractMonadFromPath("monad[frank]");
+    expect(r).not.toBeNull();
+    expect(r!.monadId).toBe("frank");
+    expect(r!.remainingPath).toBe("");
+  });
+
+  it("extracts monadId and remainingPath from monad[frank]/projects/x", () => {
+    const r = extractMonadFromPath("monad[frank]/projects/x");
+    expect(r).not.toBeNull();
+    expect(r!.monadId).toBe("frank");
+    expect(r!.remainingPath).toBe("projects/x");
+  });
+
+  it("normalizes monadId to lowercase", () => {
+    const r = extractMonadFromPath("monad[FRANK]");
+    expect(r!.monadId).toBe("frank");
+  });
+
+  it("returns null for normal paths", () => {
+    expect(extractMonadFromPath("profile/name")).toBeNull();
+    expect(extractMonadFromPath(".mesh/monads")).toBeNull();
+    expect(extractMonadFromPath("")).toBeNull();
+  });
+
+  it("returns null for malformed bracket syntax", () => {
+    expect(extractMonadFromPath("monad[]")).toBeNull();
+    expect(extractMonadFromPath("monad[frank")).toBeNull();
+  });
+});
+
+describe("parseBridgeTarget — monad[frank] in path", () => {
+  it("extracts monadId and monadScopePath from monad[frank]/projects/x", () => {
+    const r = parseBridgeTarget("me://suign.cleaker.me:read/monad[frank]/projects/x");
+    expect(r).not.toBeNull();
+    expect(r!.monadId).toBe("frank");
+    expect(r!.monadScopePath).toBe("projects/x");
+    expect(r!.namespace).toBe("suign.cleaker.me");
+  });
+
+  it("monadId is absent for normal paths (no monad[name] syntax)", () => {
+    const r = parseBridgeTarget("me://suis-macbook-air.local:read/profile");
+    expect(r).not.toBeNull();
+    expect(r!.monadId).toBeUndefined();
+    expect(r!.monadScopePath).toBeUndefined();
   });
 });

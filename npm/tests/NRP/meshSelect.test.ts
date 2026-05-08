@@ -44,7 +44,7 @@ import os from "os";
 import path from "path";
 import { resetKernelStateForTests } from "../../src/kernel/manager.js";
 import { writeMonadIndexEntry, type MonadIndexEntry } from "../../src/kernel/monadIndex.js";
-import { DEFAULT_STALE_MS, matchesMeshSelector, selectMeshClaimant } from "../../src/kernel/meshSelect.js";
+import { DEFAULT_STALE_MS, matchesMeshSelector, selectMeshClaimant, selectMeshClaimantByScope } from "../../src/kernel/meshSelect.js";
 
 // ── Test isolation ─────────────────────────────────────────────────────────────
 
@@ -542,5 +542,97 @@ describe("selectMeshClaimant — selectorConstraint", () => {
       selectorConstraint: null,
     });
     expect(r).not.toBeNull();
+  });
+});
+
+// ── 9. Scope chain — monad[frank] routing ─────────────────────────────────────
+
+describe("selectMeshClaimantByScope — scope chain fallback", () => {
+  it("returns null when no monad with the given name exists", async () => {
+    const r = await selectMeshClaimantByScope({
+      monadId: "frank",
+      namespace: "suign.cleaker.me",
+      selfEndpoint: SELF,
+      selfMonadId: SELF_ID,
+    });
+    expect(r).toBeNull();
+  });
+
+  it("finds frank claiming the exact compound namespace", async () => {
+    writeMonadIndexEntry(mesh({
+      monad_id: "frank-compound",
+      name: "frank",
+      namespace: "suign.cleaker.me",
+      claimed_namespaces: ["suign.cleaker.me"],
+      endpoint: "http://localhost:8282",
+    }));
+    const r = await selectMeshClaimantByScope({
+      monadId: "frank",
+      namespace: "suign.cleaker.me",
+      selfEndpoint: SELF,
+      selfMonadId: SELF_ID,
+    });
+    expect(r).not.toBeNull();
+    expect(r!.entry.monad_id).toBe("frank-compound");
+    expect(r!.reason).toBe("name-selector");
+  });
+
+  it("falls back to rootspace when frank is not in compound but is in rootspace", async () => {
+    writeMonadIndexEntry(mesh({
+      monad_id: "frank-rootspace",
+      name: "frank",
+      namespace: "cleaker.me",
+      claimed_namespaces: ["cleaker.me"],
+      endpoint: "http://localhost:8282",
+    }));
+    const r = await selectMeshClaimantByScope({
+      monadId: "frank",
+      namespace: "suign.cleaker.me",   // compound — frank not here
+      selfEndpoint: SELF,
+      selfMonadId: SELF_ID,
+    });
+    expect(r).not.toBeNull();
+    expect(r!.entry.monad_id).toBe("frank-rootspace");
+  });
+
+  it("prefers compound namespace over rootspace when both exist", async () => {
+    writeMonadIndexEntry(mesh({
+      monad_id: "frank-rootspace",
+      name: "frank",
+      namespace: "cleaker.me",
+      claimed_namespaces: ["cleaker.me"],
+      endpoint: "http://localhost:8282",
+    }));
+    writeMonadIndexEntry(mesh({
+      monad_id: "frank-compound",
+      name: "frank",
+      namespace: "suign.cleaker.me",
+      claimed_namespaces: ["suign.cleaker.me"],
+      endpoint: "http://localhost:8283",
+    }));
+    const r = await selectMeshClaimantByScope({
+      monadId: "frank",
+      namespace: "suign.cleaker.me",
+      selfEndpoint: SELF,
+      selfMonadId: SELF_ID,
+    });
+    expect(r!.entry.monad_id).toBe("frank-compound");
+  });
+
+  it("excludes self from scope chain results", async () => {
+    writeMonadIndexEntry(mesh({
+      monad_id: SELF_ID,
+      name: "frank",
+      namespace: "suign.cleaker.me",
+      claimed_namespaces: ["suign.cleaker.me"],
+      endpoint: "http://localhost:8282",
+    }));
+    const r = await selectMeshClaimantByScope({
+      monadId: "frank",
+      namespace: "suign.cleaker.me",
+      selfEndpoint: SELF,
+      selfMonadId: SELF_ID,
+    });
+    expect(r).toBeNull();
   });
 });

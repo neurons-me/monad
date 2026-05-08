@@ -15,7 +15,8 @@ import type {
 } from "./http/selfMapping.js";
 import { getKernelStateDir } from "./kernel/manager.js";
 import { setupPersistence } from "./kernel/persist.js";
-import { touchSelfMonadLastSeen } from "./kernel/monadIndex.js";
+import { readMonadIndexEntry, touchSelfMonadLastSeen } from "./kernel/monadIndex.js";
+import { announceToSurface } from "./http/meshAnnounce.js";
 
 /**
  * Options for starting a complete monad.ai HTTP daemon.
@@ -86,6 +87,9 @@ function printStartupBanner(bootstrap: MonadBootstrapResult, logger: MonadLogger
     logger.log(`  - Endpoint:       ${config.selfNodeConfig.endpoint}`);
     logger.log(`  - Config Path:    ${config.selfNodeConfig.configPath}`);
   }
+  logger.log("\n🌐 Mesh Surface");
+  logger.log("  - Announce in:    POST /.mesh/announce  (other monads register here)");
+  logger.log("  - Announce out:   MONAD_SURFACE_URL=" + (process.env.MONAD_SURFACE_URL || "(not set — local only)"));
   logger.log("\n🔎 Namespace Reads");
   logger.log("  - Resolve path:   GET  /<any/path>   e.g. /profile/displayName");
   logger.log("");
@@ -112,6 +116,27 @@ export async function startMonad(options: StartMonadOptions = {}): Promise<Start
   if (selfMonadId) {
     const heartbeat = setInterval(() => touchSelfMonadLastSeen(selfMonadId), 30_000);
     heartbeat.unref();
+  }
+
+  // Outgoing surface announce — registers this monad in a remote mesh surface.
+  // MONAD_SURFACE_URL=https://cleaker.me  (or sui-macbook.local, neurons.me, etc.)
+  // MONAD_ANNOUNCE_INTERVAL_MS (default 30000)
+  const surfaceUrl = process.env.MONAD_SURFACE_URL || "";
+  if (selfMonadId && surfaceUrl) {
+    const intervalMs = Math.max(10_000, parseInt(process.env.MONAD_ANNOUNCE_INTERVAL_MS || "30000", 10));
+
+    // Announce on startup (after server is listening), then on interval.
+    server.once("listening", () => {
+      const entry = readMonadIndexEntry(selfMonadId);
+      if (entry) {
+        announceToSurface(surfaceUrl, entry);
+        const announceInterval = setInterval(() => {
+          const current = readMonadIndexEntry(selfMonadId);
+          if (current) announceToSurface(surfaceUrl, current);
+        }, intervalMs);
+        announceInterval.unref();
+      }
+    });
   }
 
   return {

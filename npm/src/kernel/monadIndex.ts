@@ -18,6 +18,8 @@ export interface MonadIndexEntry {
   last_seen: number;
   version?: string;
   capabilities?: string[];
+  /** Where in the namespace tree this monad operates. Absent = treats as "/". */
+  scope_path?: string;
 }
 
 // Secret space path — encrypted at snapshot/persist time, plain in live memory.

@@ -14,6 +14,10 @@ export type BridgeTarget = {
   pathSlash: string;
   pathDot: string;
   nrp: string;
+  /** Extracted monad name from `monad[frank]` path syntax. */
+  monadId?: string | null;
+  /** Remaining path after `monad[frank]/` — the path to proxy to the selected monad. */
+  monadScopePath?: string | null;
 };
 
 export type NamespaceSelectorInfo = {
@@ -72,6 +76,18 @@ export function getNamespaceSelectorInfo(namespace: string): NamespaceSelectorIn
   return { base, selectorRaw, webTarget, hasDevice };
 }
 
+/**
+ * Detects `monad[frank]` at the start of a path segment and extracts the monad
+ * name plus any remaining path. Returns null when the pattern is absent.
+ */
+export function extractMonadFromPath(pathSlash: string): { monadId: string; remainingPath: string } | null {
+  const match = String(pathSlash || "").match(/^monad\[([^\]]+)\](?:\/(.*))?$/);
+  if (!match) return null;
+  const monadId = String(match[1] || "").trim().toLowerCase();
+  if (!monadId) return null;
+  return { monadId, remainingPath: String(match[2] || "").trim() };
+}
+
 export function parseBridgeTarget(rawInput: string): BridgeTarget | null {
   const raw = String(rawInput || "").trim();
   if (!raw) return null;
@@ -84,7 +100,15 @@ export function parseBridgeTarget(rawInput: string): BridgeTarget | null {
     const pathSlash = String(t.path || "").trim().replace(/^\/+/, "");
     const pathDot = pathSlash.split("/").map((p) => p.trim()).filter(Boolean).join(".");
     const nrp = `me://${namespace}:${selector}/${pathDot || "_"}`;
-    return { namespace, selector, pathSlash, pathDot, nrp };
+    const monadExtract = extractMonadFromPath(pathSlash);
+    return {
+      namespace,
+      selector,
+      pathSlash,
+      pathDot,
+      nrp,
+      ...(monadExtract ? { monadId: monadExtract.monadId, monadScopePath: monadExtract.remainingPath } : {}),
+    };
   } catch {
     return null;
   }

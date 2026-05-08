@@ -1,6 +1,7 @@
 import { parseSelectorGroups } from "../http/selfMapping.js";
+import { parseNamespaceIdentityParts } from "../namespace/identity.js";
 import { resolveAdaptiveWeights } from "./adaptiveWeights.js";
-import { findMonadByNameAsync, findMonadsForNamespaceAsync, type MonadIndexEntry } from "./monadIndex.js";
+import { findMonadByNameAsync, findMonadsForNamespaceAsync, listMonadIndexAsync, type MonadIndexEntry } from "./monadIndex.js";
 import { getPatchScorers } from "./patchBay.js";
 import { BUILT_IN_SCORERS, computeScoreDetailed, readClaimMeta, type ScoreBreakdown, type Scorer } from "./scoring.js";
 
@@ -99,6 +100,70 @@ function sampleSoftmax(allScored: { detailed: ScoreBreakdown }[], temperature: n
     if (rand <= 0) return i;
   }
   return 0;
+}
+
+/**
+ * Resolves the rootspace constant from a compound namespace.
+ *
+ * `suign.cleaker.me` → `cleaker.me`  (strip user prefix)
+ * `cleaker.me`       → `cleaker.me`  (already rootspace)
+ */
+function rootspaceOf(namespace: string): string {
+  const parts = parseNamespaceIdentityParts(namespace);
+  return parts.host || namespace;
+}
+
+/**
+ * Scope-chain selection for `monad[frank]` path syntax.
+ *
+ * Traversal order for monadId="frank" in namespace="suign.cleaker.me":
+ *   1. frank claiming exact namespace  (suign.cleaker.me)
+ *   2. frank claiming rootspace        (cleaker.me)
+ *   3. null → 404
+ *
+ * Backward-compatible: absent scope_path on old entries is treated as "/".
+ */
+export async function selectMeshClaimantByScope(opts: {
+  monadId: string;
+  namespace: string;
+  selfEndpoint: string;
+  selfMonadId: string;
+  stalenessMs?: number;
+  now?: number;
+}): Promise<MeshSelection | null> {
+  const { monadId, namespace, selfEndpoint, selfMonadId, stalenessMs = DEFAULT_STALE_MS, now = Date.now() } = opts;
+
+  const normSelf = selfEndpoint.replace(/\/+$/, "");
+  const normalizedName = monadId.trim().toLowerCase();
+
+  const all = await listMonadIndexAsync();
+  const candidates = all.filter(
+    (m) =>
+      m.endpoint.replace(/\/+$/, "") !== normSelf &&
+      (!selfMonadId || m.monad_id !== selfMonadId) &&
+      now - m.last_seen <= stalenessMs &&
+      ((m.name?.toLowerCase() === normalizedName) || m.monad_id.toLowerCase() === normalizedName),
+  );
+
+  if (candidates.length === 0) return null;
+
+  const rootspace = rootspaceOf(namespace);
+  const normalizedNs = namespace.trim().toLowerCase();
+  const normalizedRoot = rootspace.trim().toLowerCase();
+
+  function claimsNamespace(m: MonadIndexEntry, ns: string): boolean {
+    if (m.namespace.trim().toLowerCase() === ns) return true;
+    return (m.claimed_namespaces ?? []).some((c) => c.trim().toLowerCase() === ns);
+  }
+
+  // Fallback chain: compound namespace → rootspace → first available
+  const inCompound = candidates.filter((m) => claimsNamespace(m, normalizedNs));
+  const inRootspace = inCompound.length === 0 && normalizedRoot !== normalizedNs
+    ? candidates.filter((m) => claimsNamespace(m, normalizedRoot))
+    : [];
+  const winner = (inCompound[0] ?? inRootspace[0] ?? candidates[0])!;
+
+  return { entry: winner, reason: "name-selector" };
 }
 
 /**

@@ -17,13 +17,12 @@
 
 # monad
 ###### Serve `me://Everything.is.just.a.hash.of.a.knowledge.unit`
-**monad** - agent that serve, resolve, and execute `.me` expressions.
+.me.human ↔ .me.monad
 
 > [!NOTE]
 >
 > **A namespace is the semantic tree chained with truths.**
->
-> Semantic routing as primary infrastructure
+> A federated semantic compute runtime
 
 ------
 

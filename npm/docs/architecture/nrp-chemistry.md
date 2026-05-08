@@ -1,6 +1,7 @@
 # NRP Chemistry — Settled Architecture
 
 > Frozen 2026-05-07. Tag: `nrp-chemistry-v0.1`
+> Updated 2026-05-07: compound surface syntax settled — `surface[a+b]` not `me.compound()`
 
 ---
 
@@ -74,7 +75,7 @@ The bridge extracts `monadId = "frank"` and `monadScopePath = "projects/x"`,
 runs `selectMeshClaimantByScope`, then proxies to frank's endpoint at `/projects/x`
 (not at `/monad[frank]/projects/x`).
 
-### `[]` — Mesh Resolver
+### `surface[]` — Mesh Resolver
 
 ```
 cleaker.me[]          public mesh — all monads registered to this surface
@@ -92,6 +93,34 @@ Priority order for surface resolution:
 3. trusted mirrors
 4. public surface (cleaker.me)
 ```
+
+### `surface[a+b]` — Compound / Audience Surface
+
+```
+cleaker.me[ana+frank]             audience compound anchored to public rootspace
+sui-macbook.local[ana+frank]      same audience on a private LAN surface
+suign.cleaker.me[ana+frank]       compound on a user namespace
+```
+
+`surface[a+b]` is NRP syntax for a **multi-party audience namespace**. It lives entirely
+in the NRP / cleaker layer — not in `.me`. The bracket notation is consistent with:
+
+```
+surface[]             → mesh resolver (all monads)
+surface[frank]        → named monad (scope-chain routing) — in path, not surface
+surface[ana+frank]    → audience compound (multi-party shared namespace)
+```
+
+**Layer separation:**
+
+```
+.me                   → seed / kernel / who — pure, offline, no social chemistry
+cleaker / NRP         → surface projection, compound resolution, audience derivation
+monad.ai              → execution mesh, HTTP surface
+```
+
+`.me` is intentionally kept minimal. Audience chemistry belongs to the NRP layer
+because it is about *surfaces and resolution*, not about *who you are*.
 
 ---
 
@@ -131,20 +160,25 @@ Entries go stale after `DEFAULT_STALE_MS` (5 min) if heartbeat stops.
 
 ## Cryptographic Set-Chemistry on Audiences
 
-A single party derives a personal compound:
+A single party derives a personal compound via `.me`:
 ```
 me("frank", "secret") → compound_seed → { kernel, keypair, namespace }
 ```
 
-Multiple parties derive a shared audience namespace:
+Multiple parties derive a shared audience namespace via NRP surface syntax:
 ```
+surface[ana+frank]
+
 audienceSeed = keccak256("me.seed/audience:v1::" + sort([seed1, seed2]).join("::"))
 ```
 
+The `+` in `surface[ana+frank]` is NRP grammar, not a method on `.me`.
+`cleaker` resolves it by sorting the member seeds, hashing, and deriving the namespace.
+
 Properties:
-- `frank + ana` = `ana + frank` (commutative — sorted before hashing)
-- `frank + ana + luna` → different compound than `frank + ana`
-- Remove any party → namespace no longer resolvable
+- `ana+frank` = `frank+ana` (commutative — sorted before hashing)
+- `ana+frank+luna` → different namespace than `ana+frank`
+- Remove any party → namespace no longer derivable
 - No server. No registry. Exists only where the exact seed set is present.
 
 ### KDF Domain Separation (planned)
@@ -187,11 +221,14 @@ MONAD_SURFACE_URL=https://cleaker.me
 
 ### Audience-private
 ```
-audience[ana+suign].cleaker.me/monad[memory]
+cleaker.me[ana+suign]/monad[memory]
 → compound namespace only ana+suign can derive
 → memory monad serves only that audience
 → invisible to all others by construction
 ```
+
+Note: `surface[a+b]` is NRP grammar resolved by `cleaker`.
+The audience chemistry lives in the resolution layer, not in `.me`.
 
 ---
 
@@ -217,8 +254,12 @@ The mesh is the marketplace where they meet.
 | `monad[frank]` scope chain routing | ✅ | `monad/npm/src/runtime/bridge.ts` + `meshSelect.ts` |
 | `POST /.mesh/announce` incoming | ✅ | `monad/npm/src/http/meshAnnounce.ts` |
 | `MONAD_SURFACE_URL` outgoing announce | ✅ | `monad/npm/src/index.ts` |
+| `namespace:fallback` / `namespace:failed` events | ✅ | `cleaker/npm/src/binder.ts` |
 | KDF domain separation | 🔲 planned | monad × me identity unification |
 | `surface[]` mesh resolver in bridge | 🔲 planned | `bridge.ts` + `bridgeHandler.ts` |
-| Audience compound `me.compound(...others)` | 🔲 planned | `this.me/npm/src/me.ts` |
+| `surface[a+b]` compound resolver | 🔲 planned | `cleaker/npm/src/` (NRP layer, not `.me`) |
 
-**Test coverage: 270 tests / 24 files — all green.**
+**Note:** Audience compound syntax is `surface[a+b]` (NRP / cleaker layer), not `me.compound()`.
+`.me` stays minimal: seed → kernel. All surface chemistry belongs to cleaker / NRP.
+
+**Test coverage: 270+ tests / 24+ files — all green.**

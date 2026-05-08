@@ -75,6 +75,26 @@ Any app, any device, any language can talk to it.
 
 `.me` → `cleaker` → `monad.ai` → `NetGet` → `cleaker.me`
 
+## What the system is now
+
+### Not:
+- a chatbot framework,
+- a cloud AI platform,
+- or a blockchain protocol.
+
+### It is now:
+
+> a federated semantic compute runtime
+
+### with:
+- sovereign identity,
+- namespace chemistry,
+- contextual routing,
+- distributed monads,
+- live mesh resolution,
+- local-first continuity,
+- recursive AI agents.
+
 ------
 
 ## How it works:

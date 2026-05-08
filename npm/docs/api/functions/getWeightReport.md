@@ -8,7 +8,7 @@
 
 > **getWeightReport**(`namespace?`): [`WeightReport`](../type-aliases/WeightReport.md)
 
-Defined in: [kernel/adaptiveWeights.ts:258](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/adaptiveWeights.ts#L258)
+Defined in: [kernel/adaptiveWeights.ts:258](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/adaptiveWeights.ts#L258)
 
 Returns a full weight report: current values, defaults, per-scorer delta,
 update metadata, stability flag, and runtime health signals.

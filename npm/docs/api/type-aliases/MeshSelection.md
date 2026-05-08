@@ -8,7 +8,7 @@
 
 > **MeshSelection** = `object`
 
-Defined in: [kernel/meshSelect.ts:29](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/meshSelect.ts#L29)
+Defined in: [kernel/meshSelect.ts:30](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/meshSelect.ts#L30)
 
 Result of selecting a monad for a namespace.
 
@@ -23,7 +23,7 @@ scoring by asking for a specific monad.
 
 > `optional` **breakdown?**: [`ScoreBreakdown`](ScoreBreakdown.md)
 
-Defined in: [kernel/meshSelect.ts:34](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/meshSelect.ts#L34)
+Defined in: [kernel/meshSelect.ts:35](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/meshSelect.ts#L35)
 
 ***
 
@@ -31,7 +31,7 @@ Defined in: [kernel/meshSelect.ts:34](https://github.com/neurons-me/monad/blob/a
 
 > **entry**: [`MonadIndexEntry`](../interfaces/MonadIndexEntry.md)
 
-Defined in: [kernel/meshSelect.ts:30](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/meshSelect.ts#L30)
+Defined in: [kernel/meshSelect.ts:31](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/meshSelect.ts#L31)
 
 ***
 
@@ -39,7 +39,7 @@ Defined in: [kernel/meshSelect.ts:30](https://github.com/neurons-me/monad/blob/a
 
 > **reason**: `"name-selector"` \| `"mesh-claim"` \| `"exploration"`
 
-Defined in: [kernel/meshSelect.ts:32](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/meshSelect.ts#L32)
+Defined in: [kernel/meshSelect.ts:33](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/meshSelect.ts#L33)
 
 ***
 
@@ -47,7 +47,7 @@ Defined in: [kernel/meshSelect.ts:32](https://github.com/neurons-me/monad/blob/a
 
 > `optional` **runnerUp?**: [`MeshRunnerUp`](MeshRunnerUp.md)
 
-Defined in: [kernel/meshSelect.ts:35](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/meshSelect.ts#L35)
+Defined in: [kernel/meshSelect.ts:36](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/meshSelect.ts#L36)
 
 ***
 
@@ -55,4 +55,4 @@ Defined in: [kernel/meshSelect.ts:35](https://github.com/neurons-me/monad/blob/a
 
 > `optional` **score?**: `number`
 
-Defined in: [kernel/meshSelect.ts:33](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/meshSelect.ts#L33)
+Defined in: [kernel/meshSelect.ts:34](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/meshSelect.ts#L34)

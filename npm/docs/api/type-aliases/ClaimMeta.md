@@ -8,7 +8,7 @@
 
 > **ClaimMeta** = `Record`\<`string`, `unknown`\>
 
-Defined in: [kernel/scoring.ts:11](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/scoring.ts#L11)
+Defined in: [kernel/scoring.ts:11](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/scoring.ts#L11)
 
 Open claim metadata stored under `_.mesh.monads.<id>.claimed.<namespace>`.
 

@@ -8,7 +8,7 @@
 
 > **touchSelfMonadLastSeen**(`monadId`): `void`
 
-Defined in: [kernel/monadIndex.ts:125](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/monadIndex.ts#L125)
+Defined in: [kernel/monadIndex.ts:127](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/monadIndex.ts#L127)
 
 Updates the local heartbeat timestamp for this monad.
 

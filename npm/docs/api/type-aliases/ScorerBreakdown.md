@@ -8,7 +8,7 @@
 
 > **ScorerBreakdown** = `object`
 
-Defined in: [kernel/scoring.ts:168](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/scoring.ts#L168)
+Defined in: [kernel/scoring.ts:168](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/scoring.ts#L168)
 
 Per-scorer explanation emitted by [computeScoreDetailed](../functions/computeScoreDetailed.md).
 
@@ -18,7 +18,7 @@ Per-scorer explanation emitted by [computeScoreDetailed](../functions/computeSco
 
 > **contribution**: `number`
 
-Defined in: [kernel/scoring.ts:171](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/scoring.ts#L171)
+Defined in: [kernel/scoring.ts:171](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/scoring.ts#L171)
 
 ***
 
@@ -26,7 +26,7 @@ Defined in: [kernel/scoring.ts:171](https://github.com/neurons-me/monad/blob/afb
 
 > **value**: `number`
 
-Defined in: [kernel/scoring.ts:169](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/scoring.ts#L169)
+Defined in: [kernel/scoring.ts:169](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/scoring.ts#L169)
 
 ***
 
@@ -34,4 +34,4 @@ Defined in: [kernel/scoring.ts:169](https://github.com/neurons-me/monad/blob/afb
 
 > **weight**: `number`
 
-Defined in: [kernel/scoring.ts:170](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/scoring.ts#L170)
+Defined in: [kernel/scoring.ts:170](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/scoring.ts#L170)

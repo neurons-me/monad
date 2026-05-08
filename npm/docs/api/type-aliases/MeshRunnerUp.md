@@ -8,7 +8,7 @@
 
 > **MeshRunnerUp** = `object`
 
-Defined in: [kernel/meshSelect.ts:15](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/meshSelect.ts#L15)
+Defined in: [kernel/meshSelect.ts:16](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/meshSelect.ts#L16)
 
 The second-best claimant observed during a mesh selection pass.
 
@@ -21,7 +21,7 @@ margin without recomputing scores.
 
 > **breakdown**: [`ScoreBreakdown`](ScoreBreakdown.md)
 
-Defined in: [kernel/meshSelect.ts:18](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/meshSelect.ts#L18)
+Defined in: [kernel/meshSelect.ts:19](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/meshSelect.ts#L19)
 
 ***
 
@@ -29,7 +29,7 @@ Defined in: [kernel/meshSelect.ts:18](https://github.com/neurons-me/monad/blob/a
 
 > **entry**: [`MonadIndexEntry`](../interfaces/MonadIndexEntry.md)
 
-Defined in: [kernel/meshSelect.ts:16](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/meshSelect.ts#L16)
+Defined in: [kernel/meshSelect.ts:17](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/meshSelect.ts#L17)
 
 ***
 
@@ -37,4 +37,4 @@ Defined in: [kernel/meshSelect.ts:16](https://github.com/neurons-me/monad/blob/a
 
 > **score**: `number`
 
-Defined in: [kernel/meshSelect.ts:17](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/meshSelect.ts#L17)
+Defined in: [kernel/meshSelect.ts:18](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/meshSelect.ts#L18)

@@ -6,7 +6,7 @@
 
 # Interface: SelfSurfaceCapacity
 
-Defined in: [http/selfMapping.ts:26](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/http/selfMapping.ts#L26)
+Defined in: [http/selfMapping.ts:26](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/http/selfMapping.ts#L26)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [http/selfMapping.ts:26](https://github.com/neurons-me/monad/blob/af
 
 > **bandwidthMbps**: `number` \| `null`
 
-Defined in: [http/selfMapping.ts:30](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/http/selfMapping.ts#L30)
+Defined in: [http/selfMapping.ts:30](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/http/selfMapping.ts#L30)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [http/selfMapping.ts:30](https://github.com/neurons-me/monad/blob/af
 
 > **cpuCores**: `number` \| `null`
 
-Defined in: [http/selfMapping.ts:27](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/http/selfMapping.ts#L27)
+Defined in: [http/selfMapping.ts:27](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/http/selfMapping.ts#L27)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [http/selfMapping.ts:27](https://github.com/neurons-me/monad/blob/af
 
 > **ramGb**: `number` \| `null`
 
-Defined in: [http/selfMapping.ts:28](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/http/selfMapping.ts#L28)
+Defined in: [http/selfMapping.ts:28](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/http/selfMapping.ts#L28)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [http/selfMapping.ts:28](https://github.com/neurons-me/monad/blob/af
 
 > **storageGb**: `number` \| `null`
 
-Defined in: [http/selfMapping.ts:29](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/http/selfMapping.ts#L29)
+Defined in: [http/selfMapping.ts:29](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/http/selfMapping.ts#L29)

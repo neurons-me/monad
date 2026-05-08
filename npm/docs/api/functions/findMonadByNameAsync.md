@@ -8,7 +8,7 @@
 
 > **findMonadByNameAsync**(`nameOrId`): `Promise`\<[`MonadIndexEntry`](../interfaces/MonadIndexEntry.md) \| `undefined`\>
 
-Defined in: [kernel/monadIndex.ts:236](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/monadIndex.ts#L236)
+Defined in: [kernel/monadIndex.ts:238](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/monadIndex.ts#L238)
 
 Finds a monad by name/id across local kernel entries and CLI records.
 

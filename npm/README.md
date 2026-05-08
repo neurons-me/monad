@@ -1,298 +1,273 @@
 <picture>
   <source
     media="(prefers-color-scheme: dark)"
-   srcset="https://res.cloudinary.com/dkwnxf6gm/image/upload/v1778090977/monad.ai.profile-removebg-preview_np26yp.png"
+    srcset="https://res.cloudinary.com/dkwnxf6gm/image/upload/v1778090977/monad.ai.profile-removebg-preview_np26yp.png"
   />
   <img
     src="https://res.cloudinary.com/dkwnxf6gm/image/upload/v1762832023/me.profile-removebg-preview_1_bskwyz.png"
-    alt=".me Logo"
+    alt="monad.ai"
     width="203"
   />
 </picture>
 
-# monad.ai - npm 
+# monad.ai `2.2.0`
 
-`monad.ai` is a system for running **monads**: active execution agents that live inside a *namespace.*
+**Active execution agents inside semantic namespaces.**
 
-*namespace = semantic tree = meaning*
-
-# Getting Started
-
-**Install globally**:
+A monad is a daemon that runs a `.me` kernel, exposes it over HTTP, resolves namespace paths, and registers itself on a mesh surface so other monads and users can find it.
 
 ```bash
 npm install -g monad.ai
+monads                         # start the daemon on port 8161
 ```
 
-**Then run:**
+---
 
-```bash
-monads
+## What a monad does
+
+```
+.me kernel      → semantic tree, memory log, identity proof
+HTTP surface    → GET /path/name, POST / (write), /__bootstrap (health)
+cleaker         → anchors the kernel to a namespace (suign.cleaker.me)
+mesh            → announces self, accepts remote monad registrations
 ```
 
-**Or run without installing globally:**
+Every HTTP request carries a `Host` header. The monad resolves it into a namespace and routes the read or write into the correct kernel branch:
 
-```bash
-npx monad.ai
+```
+GET /profile/name
+Host: suign.cleaker.me
+→ me://suign.cleaker.me:read/profile/name
 ```
 
-**For local project usage:**
+---
+
+## URL model
+
+`monad.ai` separates **meaning** (namespace + path) from **execution** (which daemon answers):
+
+```
+me://<namespace>/<path>         canonical semantic address
+http://127.0.0.1:<port>/path    transport address for browser / curl / fetch
+```
+
+The HTTP surface is what you call. The `me://` address is what the namespace, mesh, logs, and routing layer use internally.
 
 ```bash
+curl http://127.0.0.1:8161/profile/name -H "Host: suign.cleaker.me"
+# → reads profile.name from the suign.cleaker.me kernel
+
+curl -X POST http://127.0.0.1:8161/ \
+  -H "Host: suign.cleaker.me" \
+  -H "Content-Type: application/json" \
+  -d '{"expression":"profile.name","value":"Sui"}'
+# → writes into the namespace memory log
+```
+
+---
+
+## monad[name] — scope-chain routing
+
+Targets can name a specific monad using bracket syntax:
+
+```
+me://suign.cleaker.me:read/monad[frank]/projects/x
+```
+
+The bridge extracts `monadId = "frank"` and resolves via fallback chain:
+
+```
+1. frank @ suign.cleaker.me   (compound — exact match)
+2. frank @ cleaker.me         (rootspace — fallback)
+3. 404
+```
+
+Same name resolves differently depending on namespace context. Mirrors JS prototype chain / CSS cascade / DNS resolution.
+
+The bridge strips the `monad[name]` prefix before proxying — frank's endpoint receives the request at `/projects/x`, not at `/monad[frank]/projects/x`.
+
+---
+
+## Mesh — announce and discovery
+
+### Outgoing: monad announces itself
+
+Set `MONAD_SURFACE_URL` to any surface and the monad announces itself on startup and every 30 seconds:
+
+```bash
+MONAD_SURFACE_URL=https://cleaker.me monads        # announce to public mesh
+MONAD_SURFACE_URL=http://sui-macbook.local:8161 monads  # announce to LAN mesh
+# (unset) = local-only, invisible to any remote surface
+```
+
+The announce interval is configurable:
+
+```bash
+MONAD_ANNOUNCE_INTERVAL_MS=60000 monads  # announce every 60s instead of 30s
+```
+
+### Incoming: `POST /.mesh/announce`
+
+Any monad can register on any surface:
+
+```json
+POST /.mesh/announce
+{
+  "monad_id": "monad:abc123",
+  "name": "frank",
+  "namespace": "suign.cleaker.me",
+  "endpoint": "http://raspberry.local:8161",
+  "claimed_namespaces": ["suign.cleaker.me"],
+  "tags": ["raspberry", "sensor"],
+  "scope_path": "/projects/music"
+}
+```
+
+Response:
+
+```json
+{ "ok": true, "registered": true, "namespace": "suign.cleaker.me", "monad_id": "monad:abc123" }
+```
+
+Surfaces throttle repeated announces: minimum 10 seconds between accepted registrations from the same `monad_id`. Entries go stale after 5 minutes without a heartbeat.
+
+### Query: `GET /.mesh/monads`
+
+Returns all registered monads on this surface. Used by the `surface[]` mesh resolver.
+
+---
+
+## Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `8161` | HTTP port |
+| `SEED` | — | Kernel seed (required for identity) |
+| `MONAD_SURFACE_URL` | — | Surface to announce self to |
+| `MONAD_ANNOUNCE_INTERVAL_MS` | `30000` | Heartbeat interval (min 10s) |
+| `MONAD_SELF_IDENTITY` | — | Explicit namespace override |
+| `CLEAKER_NAMESPACE_ROOT` | — | Namespace root override |
+| `HOSTNAME` / `COMPUTERNAME` | — | Auto-discovered for local surface |
+
+---
+
+## Identity & claims
+
+Before a namespace can receive writes, it must be claimed. A claim anchors a cryptographic identity — derived from `(who, secret)` via `this.me` — to the namespace:
+
+```bash
+POST /
+Host: suign.cleaker.me
+{ "operation": "claim", "secret": "...", "proof": { ... } }
+```
+
+Opening a claimed namespace returns the memory log for that identity. The caller replays it locally into their own `.me` kernel:
+
+```bash
+POST /
+Host: suign.cleaker.me
+{ "operation": "open", "secret": "...", "identityHash": "..." }
+→ returns memories[] replayable by .me
+```
+
+The daemon verifies the proof but never holds the seed. The seed never leaves the client.
+
+---
+
+## The kernel is the storage
+
+Every write becomes a memory event in an append-only, hash-chained log:
+
+```
+memoryHash → prevMemoryHash → path → operator → value → timestamp → namespace
+```
+
+The `/blocks` endpoint projects that log. No separate database. No migrations. On restart, the daemon hydrates from the DiskStore — nothing is lost.
+
+---
+
+## Surface hierarchy
+
+```
+Priority order for surface resolution:
+1. local processes first
+2. LAN / .local devices  (os.hostname() → suis-macbook-air.local)
+3. trusted mirrors
+4. public surface (cleaker.me)
+```
+
+Every monad auto-discovers its own local surface via `os.hostname()`. This is the same mechanism `cleaker` uses for fallback — no configuration needed, devices find each other naturally on the LAN.
+
+---
+
+## Deployment topologies
+
+### Local only (no mesh, invisible externally)
+```bash
+# MONAD_SURFACE_URL unset
+SEED="my-seed" monads
+# Reachable only from same machine at http://localhost:8161
+```
+
+### Personal LAN mesh
+```bash
+MONAD_SURFACE_URL=http://sui-macbook.local:8161 SEED="my-seed" monads
+# All LAN devices announce to the Mac; Mac serves as private mesh registry
+```
+
+### Community namespace (public mesh)
+```bash
+MONAD_SURFACE_URL=https://cleaker.me SEED="my-seed" monads
+# Monad appears in public directory
+# Namespace owner controls traffic rules, billing, access policies
+```
+
+---
+
+## Running locally
+
+```bash
+cd npm
+npm install
+npm run build
+SEED="your-seed" node dist/src/index.js
+```
+
+```bash
+# read
+curl http://localhost:8161/profile/name
+
+# write
+curl -X POST http://localhost:8161/ \
+  -H "Host: suign.cleaker.me" \
+  -H "Content-Type: application/json" \
+  -d '{"expression":"profile.name","value":"Sui"}'
+
+# health
+curl http://localhost:8161/__bootstrap
+```
+
+---
+
+## Install
+
+```bash
+# Global daemon
+npm install -g monad.ai
+
+# Project dependency
 npm install monad.ai
 ```
 
-# URL Model
+---
 
-`monad.ai` separates **meaning** from **execution**.
-
-A semantic URL points to a **namespace** and a path:
-
-***me://<namespace>/<path>***
-
-```bash
-GET /__surface
-host=127.0.0.1
-ns=host-name.local
-op=read
-nrp=me://host-name.local:read/__surface
-```
-
-#### **Where do I use this?**
-
-Use the **HTTP surface in the browser**, terminal, or app:
-
-```bash
-curl http://127.0.0.1:<port>/profile
-```
-
-The running **monad** receives that HTTP request and maps it into a canonical semantic address:
-
-```txt
-me://<namespace>:read/profile
-```
-
-So you usually do **not** run this directly:
-
-```bash
-curl me://host-name.local/profile
-```
-
-unless you have a `me://` protocol handler or gateway installed.
-
-Think of it like this:
-
-```txt
-Browser / curl / fetch:
-http://127.0.0.1:<port>/profile
-
-Semantic / NRP / logs / mesh:
-me://host-name.local:read/profile
-```
-
-`http://127.0.0.1:<port>` reaches the running monad surface.
-
-`me://...` is the canonical semantic address used by the namespace, mesh, logs, replay, and routing layer.
-
-**Example:**
+## The stack
 
 ```
-me://host-name.local/profile
+this.me    → sovereign kernel. derives identity from (who, secret) seed. works offline.
+cleaker    → resolver. projects .me into a namespace surface. handles fallback chain.
+monad.ai   → daemon. runs the kernel over HTTP. registers on the mesh.
 ```
 
-The port is not part of the semantic identity. Ports are only used by the *local HTTP transport layer* to reach a running **monad:**
-
-```
-me://host-name.local/profile
-```
-
-## **root-name:** 
-
-```
-host-name.local
-```
-
-## **/path :**      
-
-```
-/profile
-```
-
-It does **not** mean:
-
-```
-localhost:8161
-```
-
-The mesh chooses the best running monad that can serve that namespace.
-
-## Selectors [ ]
-
-By default, `monad.ai` chooses the best monad automatically.
-
-```md
-me://host-name.local/profile
-```
-
-You can optionally constrain execution with a selector:
-
-```
-me://host-name.local[lisa]/profile
-```
-
-This still points to the same semantic node:
-
-```
-host-name.local/profile
-```
-
-but **asks the** **mesh** to execute it through the `lisa` monad.
-
-Multiple eligible monads can be provided:
-
-```
-me://host-name.local[lisa,worker-a]/profile
-```
-
-An empty selector means “***use the mesh resolver***”:
-
-```
-me://username.cleaker.me[]/profile
-```
-
-**Execution Overrides** (*advanced/debug*):
-
-```txt
-me://host-name.local[lisa]/profile # force specific monad
-me://host-name.local[lisa,worker-a]/profile
-```
-
-**Internal Registry**:
-
-```
-me://host-name.local/.monad[]/ # monads registry
-me://host-name.local/.monad[lisa]/status
-```
-
-***monad.ai*** chooses the **best route** internally. A selector is for *diagnostics, replay, or advanced routing*...
-
-```txt
-me://username.cleaker.me[]/profile
-```
-
-That still targets the same semantic node: `username.cleaker.me/profile`.
-
-### Adaptive Mesh Routing
-
-```
-rootspace = semantic place
-namespace = address of that place
-path = branch inside that place
-monad = active surface serving it
-port = local transport detail
-me:// = canonical semantic/NRP form
-http:// = how browser/curl reaches the running surface
-selector = execution constraint, not meaning
-```
-
-The current **NRP** mesh is adaptive:
-- monads announce which namespaces they can serve
-- selectors constrain eligible execution routes
-- the scoring engine chooses the best claimant
-- outcomes feed back into adaptive weights
-- namespace-local weights gradually override the global prior as evidence accumulates
-
-Useful inspection endpoints:
-
-```bash
-curl http://localhost:8161/.mesh/monads
-curl "http://localhost:8161/.mesh/resolve?namespace=suis-macbook-air.local"
-curl http://localhost:8161/.mesh/weights
-curl "http://localhost:8161/.mesh/weights?namespace=suis-macbook-air.local"
-```
-
-Live learning monitor:
-
-```bash
-tsx scripts/watch-weights.ts
-tsx scripts/watch-weights.ts --namespace suis-macbook-air.local
-```
-
-# CLI Usage
-**Run in your terminal:**
-
-```bash
-monads
-```
-
-Opens the local ***monad control panel.*** It lists running **monads** by name and exposes:
-
-```bash
-Start a New Monad
-View All Monads
-Stop a Monad
-View Monad Logs
-View Monad Status
-```
-
-**Direct commands:**
-
-```bash
-monads start api
-monads start
-monads stop api
-monads status
-monads logs api
-monads logs api --tail
-```
-
-Each **monad** gets its own process name, port, state directory, claim directory,
-runtime tags, and logs under `~/.monad/<name>/`.
-
-Each **monad** also gets a local `cleaker(monad)` **keypair**. 
-- The ***private key*** stays in that *monad's local key file.* 
-- The ***public key*** derives `monad.id`, and `__surface` publishes a <u>signed proof</u> so the same **monad can be recognized** even if its port or endpoint changes.
-The **namespace/rootspace** is the <u>host or domain</u> context; the port only belongs to the endpoint. That means many **monads** can run on different ports while *serving the same rootspace.*
-
-Normal reads should use semantic paths:
-
-```txt
-me://suis-macbook-air.local/profile
-me://suis-macbook-air.local/photos/iphone
-```
-
-Advanced/debug reads may constrain execution:
-
-```txt
-me://suis-macbook-air.local[monadlisa]/profile
-me://suis-macbook-air.local[monadlisa,worker-a]/profile
-```
-
-**monads** registry and placement data are ordinary internal paths:
-
-```txt
-me://suis-macbook-air.local/.monad[]/
-me://suis-macbook-air.local/.monad[lisa]/status
-```
-
-Default resolution may use latest hash, quorum, stale-state detection,
-authority, and budget policy internally, but the caller gets one semantic answer.
-If no name is provided, the CLI creates one automatically. In the interactive
-control panel, namespace is derived from this machine's host rootspace. 
-If no `SEED` is provided, the CLI uses a local deterministic development seed for that **monad** name.
-`monads logs <name>` follows the live stdout/stderr stream, so incoming requests appear as they happen. Use `--tail` when you only want the latest snapshot.
-
-## Manual Server
-```bash
-SEED="mi-seed-local-dev" npm run dev
-```
-
-If you prefer to run from dist:
-
-```bash
-SEED="mi-seed-local-dev" node dist/server.js
-```
-
-# License
-**MIT**
-https://neurons.me
+> The namespace is not storage. The namespace is chemistry.
+> It is the surface where identities react and compounds form.

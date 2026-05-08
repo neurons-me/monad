@@ -8,7 +8,7 @@
 
 > **MonadApp** = `express.Express` & `object`
 
-Defined in: [app.ts:24](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/app.ts#L24)
+Defined in: [app.ts:25](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/app.ts#L25)
 
 ## Type Declaration
 

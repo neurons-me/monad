@@ -1,184 +1,152 @@
-# monad.ai
-###### Subtractive Synthesis
-**Current status:** monad.ai v2.1.1 includes the mesh-aware NRP work through
-Phase 6: namespace discovery, selector-aware routing, production scoring,
-decision introspection, decision logs, continuous reward, and low-margin
-exploration.
+# monad.ai `2.2.0`
 
-Start here for the current NRP implementation:
+> Active execution agents inside semantic namespaces.
+**Current status:** monad.ai v2.2.0 — NRP chemistry frozen at `nrp-chemistry-v0.1` (2026-05-07).
+
+Includes full NRP mesh stack:
+- Phase 1–8 complete: namespace discovery, selector routing, production scoring, decision introspection, decision logs, continuous reward, low-margin exploration, patch bay
+- Mesh announce: `POST /.mesh/announce` incoming + `MONAD_SURFACE_URL` outgoing heartbeat
+- Scope-chain routing: `monad[frank]` compound → rootspace → 404 fallback
+
+Start here for implementation details:
 - [NRP Implementation Status](./NRP/status.md)
 - [NRP Scoring Engine](./NRP/scoring.md)
 - [NRP Test Documentation](./NRP/testing.md)
+- [Architecture: NRP Chemistry](./architecture/nrp-chemistry.md)
 - [Generated API Reference](./api/README.md)
 
-- Resolves namespace paths from the `Host` header of incoming HTTP requests
-- Accepts writes as semantic memory events, appended to a hash-chained log
-- Serves reads as path resolutions over the kernel tree
-- Handles claim/open lifecycle for anchoring identities to namespaces
-  The storage is the kernel. There is no database, no parallel ledger, no second truth.
+---
+
+## What monad.ai does
+Every HTTP request carries a `Host` header. The monad resolves it into a namespace and routes into the correct kernel branch:
 
 ```
 GET /profile/name
-Host: jabellae.cleaker.me
-→ resolves profile.name within the jabellae.cleaker.me namespace
-
-POST /
-Host: jabellae.cleaker.me
-{ "expression": "profile.name", "value": "José" }
-→ writes profile.name into the namespace memory log
+Host: suign.cleaker.me
+→ me://suign.cleaker.me:read/profile/name
+→ reads profile.name from suign.cleaker.me kernel
 ```
 
-------
+```
+POST /
+Host: suign.cleaker.me
+{ "expression": "profile.name", "value": "Sui" }
+→ writes into namespace memory log (append-only, hash-chained)
+```
+
+The storage is the kernel. No database, no parallel ledger, no second truth.
+
+---
+
+## monad[name] — scope-chain routing
+
+```
+me://suign.cleaker.me:read/monad[frank]/projects/x
+```
+
+Resolves via fallback chain:
+
+```
+1. frank @ suign.cleaker.me   (compound — exact match)
+2. frank @ cleaker.me         (rootspace — fallback)
+3. 404
+```
+
+The bridge strips `monad[frank]` before proxying. Frank's endpoint receives `/projects/x`.
+
+---
+
+## Mesh — announce and discovery
+
+### Outgoing announce (MONAD_SURFACE_URL)
+
+```bash
+MONAD_SURFACE_URL=https://cleaker.me monads
+# POST /.mesh/announce to cleaker.me on startup + every 30s
+```
+
+### Incoming announce
+
+```json
+POST /.mesh/announce
+{
+  "monad_id": "monad:abc123",
+  "name": "frank",
+  "namespace": "suign.cleaker.me",
+  "endpoint": "http://raspberry.local:8161"
+}
+```
+
+Throttled at 10s minimum between accepted registrations from the same `monad_id`. Entries expire after 5 minutes without heartbeat.
+
+---
 
 ## How namespace resolution works
-The `Host` header of each request determines the namespace. The **monad.ai** does not need to be told which namespace it "is" — every request carries its own namespace context.
+
+The `Host` header determines the namespace. A monad needs no static config — every request carries its own namespace context.
 
 ```
-Host: cleaker.me → namespace: cleaker.me
-Host: jabellae.cleaker.me → namespace: jabellae.cleaker.me
-Host: mexicoencuesta.com → namespace: mexicoencuesta.com
+Host: cleaker.me          → namespace: cleaker.me
+Host: suign.cleaker.me    → namespace: suign.cleaker.me
+Host: mexicoencuesta.com  → namespace: mexicoencuesta.com
 ```
 
-This means a **monad.ai** can serve multiple namespaces, and any namespace is accessible as long as the `Host` header matches.
+One daemon can serve any number of namespaces. NetGet routes real domains to the monad port.
 
-**Netget** routes the real domain to the **monad** port:
-
-```
-https://cleaker.me  →  reverse proxy  →  localhost:8161
-```
-
-In local development, the daemon is accessible directly via hostname:
-
-```
-http://suis-macbook-air.local:8161/
-```
-
-------
+---
 
 ## The kernel is the storage
-`monad.ai` runs a [`.me`](https://github.com/neurons-me/.me) kernel backed by a `DiskStore`. Every write becomes a memory event in an append-only, hash-chained log:
+Every write is a memory event in an append-only, hash-chained log:
 
 ```
 memoryHash → prevMemoryHash → path → operator → value → timestamp → namespace
 ```
 
-The `/blocks` endpoint is a projection of that memory log — not a separate ledger.
-When the daemon restarts, it hydrates from the DiskStore. No data is lost. No migrations needed.
+The `/blocks` endpoint projects that log. On restart, the daemon hydrates from the DiskStore. No migrations needed.
 
-------
+---
 
 ## Identity and claims
+Before writes are accepted, the namespace must be claimed. A claim anchors the cryptographic identity derived by `this.me` to the namespace:
 
-Before a namespace can receive writes, it must be claimed. A claim anchors a cryptographic identity — derived from a seed via [`.me`](https://github.com/neurons-me/.me) — to a namespace:
-
-```
-POST /
-Host: jabellae.cleaker.me
-{ "operation": "claim", "secret": "...", "proof": { ... } }
+```bash
+POST /  { "operation": "claim", "secret": "...", "proof": { ... } }
+POST /  { "operation": "open",  "secret": "...", "identityHash": "..." }
 ```
 
-Opening a claimed namespace returns the memory log for that identity, which the caller can replay locally into their own `.me` kernel:
+The daemon verifies the proof. It never holds the seed. The seed never leaves the client.
 
-```
-POST /
-Host: jabellae.cleaker.me
-{ "operation": "open", "secret": "...", "identityHash": "..." }
-→ returns memories replayable by .me
-```
+---
 
-The claim is anchored to an `identityHash` produced by `.me`. The daemon verifies the proof but does not hold the seed. The seed never leaves the client.
+## Environment variables
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `8161` | HTTP port |
+| `SEED` | — | Kernel seed |
+| `MONAD_SURFACE_URL` | — | Surface to announce self to |
+| `MONAD_ANNOUNCE_INTERVAL_MS` | `30000` | Heartbeat interval (min 10s) |
+| `MONAD_SELF_IDENTITY` | — | Namespace override |
+| `CLEAKER_NAMESPACE_ROOT` | — | Namespace root override |
 
-------
-
-## The stack
-
-```
-.me        →  the semantic kernel. derives identity, holds the tree, produces proofs.
-monad.ai   →  the daemon. runs the kernel, exposes it over HTTP, resolves namespaces.
-cleaker    →  the binder. takes a .me instance and projects it into a namespace context.
-```
-
-The current mesh layer adds:
-
-```txt
-monad index      → fast structural discovery: who could answer?
-mesh selector    → execution constraint: which candidates qualify?
-scoring engine   → adaptive decision: who should answer?
-decision log     → correlated outcome: did that choice work?
-```
-
-`monad.ai` is one possible surface. You can run your own daemon on any hostname or domain. The namespace is not tied to this implementation.
-
-------
+---
 
 ## Running locally
 ```bash
-cd npm
-npm install
-npm run build
-SEED="your-seed" node dist/server.js
-```
+npm install && npm run build
+SEED="your-seed" node dist/src/index.js
 
-The daemon listens on port `8161` by default. Set `PORT` to change it.
-
-```bash
-# read from the root namespace
+curl http://localhost:8161/__bootstrap
 curl http://localhost:8161/profile/name
-
-# write to a namespace
-curl -X POST http://localhost:8161/ \
-  -H "Host: jabellae.localhost" \
-  -H "Content-Type: application/json" \
-  -d '{"expression":"profile.name","value":"José"}'
-
-# read it back
-curl -H "Host: jabellae.localhost" http://localhost:8161/profile/name
 ```
 
-------
+---
 
-## Protocol
-`monad.ai` implements the HTTP binding described in [Namespace Resolution Protocol v0.2.1](./Namespace-Protocol-Resolution.md).
-
-The canonical resource grammar is:
-
+## The stack
 ```
-me://namespace[selector]:operation/path
+this.me    → sovereign kernel. (who, secret) → seed → identity + tree.
+cleaker    → resolver. projects .me into a namespace surface.
+monad.ai   → daemon. runs the kernel, exposes HTTP, registers on mesh.
 ```
 
-The current HTTP binding maps this to:
-
-```
-GET  /<path>   Host: <namespace>   →  read
-POST /         Host: <namespace>   →  write | claim | open
-GET  /resolve?target=me://namespace:read/path → bridge through the mesh
-```
-
-Mesh discovery endpoints:
-
-```bash
-curl http://localhost:8161/.mesh/monads
-curl "http://localhost:8161/.mesh/resolve?namespace=suis-macbook-air.local"
-curl "http://localhost:8161/.mesh/resolve?monad=frank"
-```
-
-Decision observability:
-
-```bash
-MONAD_DECISION_LOG=~/.monad/decisions.jsonl npm run dev
-tsx scripts/analyze-decisions.ts ~/.monad/decisions.jsonl
-```
-
-------
-
-## What it is not
-- Not a central registry. There is no global list of namespaces.
-- Not an identity provider. Identity is derived by `.me` from the user's seed.
-- Not a replacement for a database. It is a semantic surface for live state and identity.
-- Not the only possible daemon. Anyone can run a compatible surface on any domain.
-
-------
-
-## License
-
-**MIT** — [neurons.me](https://neurons.me/)
+> The namespace is not storage. The namespace is chemistry.
+> It is the surface where identities react and compounds form.

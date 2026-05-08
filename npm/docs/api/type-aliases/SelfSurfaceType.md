@@ -8,4 +8,4 @@
 
 > **SelfSurfaceType** = `"desktop"` \| `"mobile"` \| `"server"` \| `"browser-tab"` \| `"node"`
 
-Defined in: [http/selfMapping.ts:22](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/http/selfMapping.ts#L22)
+Defined in: [http/selfMapping.ts:22](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/http/selfMapping.ts#L22)

@@ -8,7 +8,7 @@
 
 > **WeightReport** = `object`
 
-Defined in: [kernel/adaptiveWeights.ts:101](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/adaptiveWeights.ts#L101)
+Defined in: [kernel/adaptiveWeights.ts:101](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/adaptiveWeights.ts#L101)
 
 A point-in-time snapshot of learned scorer weights with change context.
 
@@ -20,7 +20,7 @@ Returned by [getWeightReport](../functions/getWeightReport.md) and exposed via `
 
 > **current**: `Record`\<`string`, `number`\>
 
-Defined in: [kernel/adaptiveWeights.ts:103](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/adaptiveWeights.ts#L103)
+Defined in: [kernel/adaptiveWeights.ts:103](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/adaptiveWeights.ts#L103)
 
 Current learned weights (same keys as [DEFAULT\_WEIGHTS](../variables/DEFAULT_WEIGHTS.md) plus any custom scorers).
 
@@ -30,7 +30,7 @@ Current learned weights (same keys as [DEFAULT\_WEIGHTS](../variables/DEFAULT_WE
 
 > **defaults**: `Record`\<`string`, `number`\>
 
-Defined in: [kernel/adaptiveWeights.ts:105](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/adaptiveWeights.ts#L105)
+Defined in: [kernel/adaptiveWeights.ts:105](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/adaptiveWeights.ts#L105)
 
 Baseline values the system started from (hard-coded defaults).
 
@@ -40,7 +40,7 @@ Baseline values the system started from (hard-coded defaults).
 
 > **delta**: `Record`\<`string`, `number`\>
 
-Defined in: [kernel/adaptiveWeights.ts:107](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/adaptiveWeights.ts#L107)
+Defined in: [kernel/adaptiveWeights.ts:107](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/adaptiveWeights.ts#L107)
 
 `current - defaults` per scorer; positive = reinforced, negative = penalized.
 
@@ -50,7 +50,7 @@ Defined in: [kernel/adaptiveWeights.ts:107](https://github.com/neurons-me/monad/
 
 > **health**: [`WeightHealth`](WeightHealth.md)
 
-Defined in: [kernel/adaptiveWeights.ts:121](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/adaptiveWeights.ts#L121)
+Defined in: [kernel/adaptiveWeights.ts:121](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/adaptiveWeights.ts#L121)
 
 Diagnostic health signals for the learning loop. See [WeightHealth](WeightHealth.md).
 
@@ -60,7 +60,7 @@ Diagnostic health signals for the learning loop. See [WeightHealth](WeightHealth
 
 > **lastUpdatedAt**: `number` \| `null`
 
-Defined in: [kernel/adaptiveWeights.ts:111](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/adaptiveWeights.ts#L111)
+Defined in: [kernel/adaptiveWeights.ts:111](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/adaptiveWeights.ts#L111)
 
 Unix millisecond timestamp of the most recent weight update, or null if never updated.
 
@@ -70,7 +70,7 @@ Unix millisecond timestamp of the most recent weight update, or null if never up
 
 > `optional` **namespace?**: `object`
 
-Defined in: [kernel/adaptiveWeights.ts:123](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/adaptiveWeights.ts#L123)
+Defined in: [kernel/adaptiveWeights.ts:123](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/adaptiveWeights.ts#L123)
 
 Namespace-local report when `getWeightReport(namespace)` is requested.
 
@@ -104,7 +104,7 @@ Namespace-local report when `getWeightReport(namespace)` is requested.
 
 > **stable**: `boolean`
 
-Defined in: [kernel/adaptiveWeights.ts:119](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/adaptiveWeights.ts#L119)
+Defined in: [kernel/adaptiveWeights.ts:119](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/adaptiveWeights.ts#L119)
 
 True when no delta exceeds 5% of its default weight.
 
@@ -118,6 +118,6 @@ problem — a homogeneous mesh naturally converges to defaults.
 
 > **updateCount**: `number`
 
-Defined in: [kernel/adaptiveWeights.ts:109](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/adaptiveWeights.ts#L109)
+Defined in: [kernel/adaptiveWeights.ts:109](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/adaptiveWeights.ts#L109)
 
 Total number of gradient steps applied since the daemon started (or since last reset).

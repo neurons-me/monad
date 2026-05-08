@@ -8,7 +8,7 @@
 
 > **selectMeshClaimant**(`opts`): `Promise`\<[`MeshSelection`](../type-aliases/MeshSelection.md) \| `null`\>
 
-Defined in: [kernel/meshSelect.ts:114](https://github.com/neurons-me/monad/blob/afb8a98bd7e97bb1630f11624b2f4c187b743f15/npm/src/kernel/meshSelect.ts#L114)
+Defined in: [kernel/meshSelect.ts:179](https://github.com/neurons-me/monad/blob/8aad2ec6c211743f89c04d42c7e6fc170dfba59d/npm/src/kernel/meshSelect.ts#L179)
 
 Selects the best mesh claimant for a namespace request.
 

@@ -200,6 +200,73 @@ describe("self mapping", () => {
     });
   });
 
+  it("derives a deterministic Ed25519 keypair from SEED — same seed = same monad identity", () => {
+    // WHAT: When SEED is set and no explicit keypair exists, loadSelfNodeConfig derives
+    //       the Ed25519 keypair via HKDF-SHA256(seed, info='monad.ai/ed25519/v1').
+    //       Same SEED on any machine → same keypair → same monadId → same mesh identity.
+    //
+    // This is KDF domain separation: compound_seed (from this.me) → Ed25519 keypair
+    // without compromise risk between domains.
+
+    const seed = "a".repeat(64); // 64 hex chars = 32 bytes
+    const cwd1 = fs.mkdtempSync(path.join(os.tmpdir(), "monad-kdf-a-"));
+    const cwd2 = fs.mkdtempSync(path.join(os.tmpdir(), "monad-kdf-b-"));
+
+    try {
+      const env1: NodeJS.ProcessEnv = { SEED: seed };
+      const result1 = loadSelfNodeConfig({ cwd: cwd1, env: env1, hostname: "host-a.local", port: 8161 });
+
+      const env2: NodeJS.ProcessEnv = { SEED: seed };
+      const result2 = loadSelfNodeConfig({ cwd: cwd2, env: env2, hostname: "host-b.local", port: 8161 });
+
+      expect(result1).not.toBeNull();
+      expect(result2).not.toBeNull();
+
+      // Same seed on two different machines → same keypair and same monadId
+      expect(env1.MONAD_PUBLIC_KEY).toBe(env2.MONAD_PUBLIC_KEY);
+      expect(env1.MONAD_ID).toBe(env2.MONAD_ID);
+
+      // monadId is deterministic and non-empty
+      expect(env1.MONAD_ID).toMatch(/^monad:[0-9a-f]{64}$/);
+    } finally {
+      fs.rmSync(cwd1, { recursive: true, force: true });
+      fs.rmSync(cwd2, { recursive: true, force: true });
+    }
+  });
+
+  it("produces different monad identities for different SEEDs", () => {
+    const cwd1 = fs.mkdtempSync(path.join(os.tmpdir(), "monad-kdf-c-"));
+    const cwd2 = fs.mkdtempSync(path.join(os.tmpdir(), "monad-kdf-d-"));
+
+    try {
+      const env1: NodeJS.ProcessEnv = { SEED: "a".repeat(64) };
+      const env2: NodeJS.ProcessEnv = { SEED: "b".repeat(64) };
+      loadSelfNodeConfig({ cwd: cwd1, env: env1, hostname: "host.local", port: 8161 });
+      loadSelfNodeConfig({ cwd: cwd2, env: env2, hostname: "host.local", port: 8161 });
+
+      expect(env1.MONAD_PUBLIC_KEY).not.toBe(env2.MONAD_PUBLIC_KEY);
+      expect(env1.MONAD_ID).not.toBe(env2.MONAD_ID);
+    } finally {
+      fs.rmSync(cwd1, { recursive: true, force: true });
+      fs.rmSync(cwd2, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back to random keypair when SEED is not set (backwards compatible)", () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "monad-kdf-e-"));
+
+    try {
+      const env: NodeJS.ProcessEnv = {}; // no SEED
+      loadSelfNodeConfig({ cwd, env, hostname: "host.local", port: 8161 });
+
+      // Still gets a valid monadId — just random, not deterministic
+      expect(env.MONAD_ID).toMatch(/^monad:[0-9a-f]{64}$/);
+      expect(env.MONAD_PUBLIC_KEY).toBeTruthy();
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("autogenerates and persists a daemon identity when none is configured", () => {
     // WHAT: loadSelfNodeConfig with no existing config file and no env vars.
     //       The function should:

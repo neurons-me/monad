@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { followMonadLogs, getMonadStatus, listMonadRecords, listRunningMonads, normalizeMonadName, readLogTail, readMonadRecord, startMonadProcess, stopMonadProcess, } from "./runtime.js";
+import { followMonadLogs, getMonadStatus, listMonadRecords, listRunningMonads, normalizeMonadName, readLogTail, readMonadRecord, startMonadProcess, startMonadProxy, stopMonadProcess, } from "./runtime.js";
 function printHelp() {
     console.log(`monads
 
@@ -14,6 +14,8 @@ Usage:
   monads status [name]       Show status for one Monad or all known Monads
   monads logs <name>         Stream Monad logs in real time
   monads logs <name> --tail  Show recent Monad logs without following
+  monads proxy               Start the .monad browser gateway (routes name.monad)
+  monads proxy --port <port> Start the gateway on a custom port (default: 8160)
 
 Options:
   --port <port>              Request a specific port
@@ -145,6 +147,10 @@ async function commandLogs(args) {
     await followMonadLogs(record, { signal: controller.signal });
     process.removeListener("SIGINT", stop);
 }
+async function commandProxy(args) {
+    const portValue = parseOptionValue(args, "--port");
+    await startMonadProxy({ port: portValue ? Number(portValue) : undefined });
+}
 async function ask(rl, question) {
     return (await rl.question(question)).trim();
 }
@@ -254,6 +260,8 @@ async function main() {
         await commandStatus(args);
     else if (command === "logs")
         await commandLogs(args);
+    else if (command === "proxy")
+        await commandProxy(args);
     else {
         printHelp();
         process.exitCode = 1;

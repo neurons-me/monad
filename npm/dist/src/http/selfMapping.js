@@ -37,6 +37,31 @@ function generateCleakerKeyPair() {
         privateKey: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
     };
 }
+// KDF domain separation: derive a deterministic Ed25519 keypair from a compound seed.
+// HKDF-SHA256(ikm=seed, salt='', info='monad.ai/ed25519/v1', length=32) → Ed25519 seed.
+// Same (who, secret) compound_seed → same monad identity everywhere, every time.
+function deriveEd25519KeyPairFromSeed(seed) {
+    const raw = String(seed || "").trim();
+    if (!raw)
+        return null;
+    try {
+        const ikm = /^[0-9a-fA-F]{64}$/.test(raw)
+            ? Buffer.from(raw, "hex")
+            : Buffer.from(raw, "utf8");
+        const ed25519Seed = Buffer.from(crypto.hkdfSync("sha256", ikm, Buffer.alloc(0), Buffer.from("monad.ai/ed25519/v1"), 32));
+        const pkcs8Prefix = Buffer.from("302e020100300506032b657004220420", "hex");
+        const pkcs8 = Buffer.concat([pkcs8Prefix, ed25519Seed]);
+        const privateKeyObj = crypto.createPrivateKey({ key: pkcs8, format: "der", type: "pkcs8" });
+        const publicKeyObj = crypto.createPublicKey(privateKeyObj);
+        return {
+            publicKey: publicKeyObj.export({ type: "spki", format: "pem" }).toString(),
+            privateKey: privateKeyObj.export({ type: "pkcs8", format: "pem" }).toString(),
+        };
+    }
+    catch {
+        return null;
+    }
+}
 function publicKeyFromPrivateKey(privateKey) {
     try {
         return crypto.createPublicKey(privateKey).export({ type: "spki", format: "pem" }).toString();
@@ -68,7 +93,10 @@ function ensureCleakerIdentityConfig(input) {
         publicKey = publicKeyFromPrivateKey(privateKey);
     }
     if (!publicKey || !privateKey) {
-        const generated = generateCleakerKeyPair();
+        const seedEnv = String(input.env.SEED || "").trim();
+        const generated = seedEnv
+            ? (deriveEd25519KeyPairFromSeed(seedEnv) ?? generateCleakerKeyPair())
+            : generateCleakerKeyPair();
         publicKey = generated.publicKey;
         privateKey = generated.privateKey;
     }

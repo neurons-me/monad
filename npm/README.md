@@ -19,6 +19,7 @@ A monad is a daemon that runs a `.me` kernel, exposes it over HTTP, resolves nam
 ```bash
 npm install -g monad.ai
 monads                         # start the daemon on port 8161
+monads proxy                   # start browser gateway on port 8160 (routes name.monad)
 ```
 
 ---
@@ -261,12 +262,43 @@ npm install monad.ai
 
 ---
 
+## KDF deterministic identity
+
+When `SEED` is set, monad derives its Ed25519 keypair deterministically via HKDF:
+
+```
+HKDF-SHA256(compound_seed, salt='', info='monad.ai/ed25519/v1', length=32) → Ed25519 seed
+```
+
+Same `(who, secret)` → same monad identity everywhere, every time. No key files to sync across machines.
+
+```bash
+SEED="your-seed" monads   # deterministic identity
+monads                    # random keypair (backwards compatible)
+```
+
+---
+
+## Browser gateway
+
+```bash
+monads proxy               # start on port 8160 (default)
+monads proxy --port 9000   # custom port
+```
+
+Configure browser to use PAC file: `http://127.0.0.1:8160/proxy.pac`
+
+Then open `frank.monad`, `local.monad`, or `localhost:8161` in the browser — all route to the correct running monad.
+
+---
+
 ## The stack
 
 ```
 this.me    → sovereign kernel. derives identity from (who, secret) seed. works offline.
 cleaker    → resolver. projects .me into a namespace surface. handles fallback chain.
 monad.ai   → daemon. runs the kernel over HTTP. registers on the mesh.
+netget     → gateway. routes physical requests to monad endpoints.
 ```
 
 > The namespace is not storage. The namespace is chemistry.

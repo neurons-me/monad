@@ -7,6 +7,7 @@ import { createLedgerHandlers } from "./handlers/ledgerHandler.js";
 import { commitHandler, syncEventsHandler } from "./handlers/syncHandler.js";
 import { createClaimsRouter } from "./http/claims.js";
 import { createDisclosureMiddleware } from "./http/disclosure.js";
+import { createMeshAnnounceRouter } from "./http/meshAnnounce.js";
 import { createMeshMonadsRouter } from "./http/meshMonads.js";
 import { createMeshResolveRouter } from "./http/meshResolve.js";
 import { createMeshWeightsRouter } from "./http/meshWeights.js";
@@ -116,6 +117,7 @@ export async function createMonadApp(options = {}) {
     app.get("/@*", ledger.atPath);
     app.post("/api/v1/commit", commitHandler);
     app.get("/api/v1/sync", syncEventsHandler);
+    app.use(createMeshAnnounceRouter());
     app.use(createMeshMonadsRouter());
     app.use(createMeshResolveRouter());
     app.use(createMeshWeightsRouter());

@@ -49,4 +49,8 @@ export declare function getMonadStatus(record: MonadRecord): Promise<MonadRuntim
 export declare function startMonadProcess(options?: StartMonadCliOptions): Promise<MonadRuntimeStatus>;
 export declare function stopMonadProcess(name: string): Promise<MonadRuntimeStatus>;
 export declare function readLogTail(record: MonadRecord, stream?: "stdout" | "stderr", lines?: number): Promise<string>;
+export interface StartMonadProxyOptions {
+    port?: number;
+}
+export declare function startMonadProxy(options?: StartMonadProxyOptions): Promise<void>;
 export declare function followMonadLogs(record: MonadRecord, options?: FollowMonadLogsOptions): Promise<void>;

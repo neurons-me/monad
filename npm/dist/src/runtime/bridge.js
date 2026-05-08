@@ -57,6 +57,19 @@ export function getNamespaceSelectorInfo(namespace) {
     const hasDevice = !!(deviceValue || hostValue);
     return { base, selectorRaw, webTarget, hasDevice };
 }
+/**
+ * Detects `monad[frank]` at the start of a path segment and extracts the monad
+ * name plus any remaining path. Returns null when the pattern is absent.
+ */
+export function extractMonadFromPath(pathSlash) {
+    const match = String(pathSlash || "").match(/^monad\[([^\]]+)\](?:\/(.*))?$/);
+    if (!match)
+        return null;
+    const monadId = String(match[1] || "").trim().toLowerCase();
+    if (!monadId)
+        return null;
+    return { monadId, remainingPath: String(match[2] || "").trim() };
+}
 export function parseBridgeTarget(rawInput) {
     const raw = String(rawInput || "").trim();
     if (!raw)
@@ -71,7 +84,15 @@ export function parseBridgeTarget(rawInput) {
         const pathSlash = String(t.path || "").trim().replace(/^\/+/, "");
         const pathDot = pathSlash.split("/").map((p) => p.trim()).filter(Boolean).join(".");
         const nrp = `me://${namespace}:${selector}/${pathDot || "_"}`;
-        return { namespace, selector, pathSlash, pathDot, nrp };
+        const monadExtract = extractMonadFromPath(pathSlash);
+        return {
+            namespace,
+            selector,
+            pathSlash,
+            pathDot,
+            nrp,
+            ...(monadExtract ? { monadId: monadExtract.monadId, monadScopePath: monadExtract.remainingPath } : {}),
+        };
     }
     catch {
         return null;

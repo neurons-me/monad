@@ -3,7 +3,7 @@ import { buildMeTargetNrp } from "../http/meTarget.js";
 import { resolveObserverRelation, resolveTransportHost } from "../http/namespace.js";
 import { resolveSelfDispatch } from "../http/selfMapping.js";
 import { correlateOutcome, recordDecision } from "../kernel/decisionLog.js";
-import { selectMeshClaimant } from "../kernel/meshSelect.js";
+import { selectMeshClaimant, selectMeshClaimantByScope } from "../kernel/meshSelect.js";
 import { recordForwardResult } from "../kernel/scoring.js";
 import { buildBridgeTarget, getNamespaceSelectorInfo, parseBridgeTarget, } from "../runtime/bridge.js";
 export function createBridgeHandler(config) {
@@ -104,16 +104,26 @@ export function createBridgeHandler(config) {
             const selfEndpoint = `http://localhost:${config.port}`;
             const explorationRate = parseFloat(process.env.MONAD_EXPLORATION_RATE ?? "0");
             const fetchStart = Date.now();
-            const selection = await selectMeshClaimant({
-                monadSelector,
-                namespace: parsed.namespace,
-                selfEndpoint,
-                selfMonadId,
-                selectorConstraint: meshSelectorConstraint,
-                stalenessMs: staleMs,
-                now: fetchStart,
-                explorationRate,
-            });
+            // monad[frank] path syntax: scope-chain lookup (frank @ compound → rootspace → 404).
+            const selection = parsed.monadId
+                ? await selectMeshClaimantByScope({
+                    monadId: parsed.monadId,
+                    namespace: parsed.namespace,
+                    selfEndpoint,
+                    selfMonadId,
+                    stalenessMs: staleMs,
+                    now: fetchStart,
+                })
+                : await selectMeshClaimant({
+                    monadSelector,
+                    namespace: parsed.namespace,
+                    selfEndpoint,
+                    selfMonadId,
+                    selectorConstraint: meshSelectorConstraint,
+                    stalenessMs: staleMs,
+                    now: fetchStart,
+                    explorationRate,
+                });
             if (!selection && meshSelectorConstraint) {
                 return res.status(503).json({
                     ok: false,
@@ -177,7 +187,9 @@ export function createBridgeHandler(config) {
                     logEntry.fragile = true;
                 console.log("[scoring]", JSON.stringify(logEntry));
             }
-            const url = new URL(`/${parsed.pathSlash}`, origin);
+            // When routing via monad[frank], forward to the remaining path only (strip monad[frank]/ prefix).
+            const forwardPath = parsed.monadId ? (parsed.monadScopePath ?? "") : parsed.pathSlash;
+            const url = new URL(`/${forwardPath}`, origin);
             for (const [key, value] of Object.entries(req.query || {})) {
                 if (key === "target" || key === "monad")
                     continue;

@@ -6,6 +6,10 @@ export type BridgeTarget = {
     pathSlash: string;
     pathDot: string;
     nrp: string;
+    /** Extracted monad name from `monad[frank]` path syntax. */
+    monadId?: string | null;
+    /** Remaining path after `monad[frank]/` — the path to proxy to the selected monad. */
+    monadScopePath?: string | null;
 };
 export type NamespaceSelectorInfo = {
     base: string;
@@ -20,6 +24,14 @@ export declare function extractNamespaceSelector(namespace: string): {
 export declare function findSelectorValue(selectorRaw: string, selectorType: string): string | null;
 export declare function normalizeWebUrl(value: string): string | null;
 export declare function getNamespaceSelectorInfo(namespace: string): NamespaceSelectorInfo;
+/**
+ * Detects `monad[frank]` at the start of a path segment and extracts the monad
+ * name plus any remaining path. Returns null when the pattern is absent.
+ */
+export declare function extractMonadFromPath(pathSlash: string): {
+    monadId: string;
+    remainingPath: string;
+} | null;
 export declare function parseBridgeTarget(rawInput: string): BridgeTarget | null;
 export declare function buildBridgeTarget(resolved: BridgeTarget | null, requestHost: string, relation: ObserverRelation, rawFallback?: string): {
     namespace: {

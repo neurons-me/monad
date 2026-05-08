@@ -416,6 +416,139 @@ function watchLogFile(input) {
     void tick();
     return timer;
 }
+function buildPacFile(proxyPort) {
+    return `function FindProxyForURL(url, host) {
+  if (dnsDomainIs(host, ".monad") || host === "local.monad") {
+    return "PROXY 127.0.0.1:${proxyPort}";
+  }
+  return "DIRECT";
+}`;
+}
+function buildStatusHtml(monads, proxyPort) {
+    const rows = monads.length === 0
+        ? `<tr><td colspan="4" style="color:#888;text-align:center">No monads running. Start one: <code>monads start &lt;name&gt;</code></td></tr>`
+        : monads
+            .map((s) => `<tr>
+              <td><a href="http://${s.record.name}.monad" target="_blank">${s.record.name}.monad</a></td>
+              <td><a href="${s.record.endpoint}" target="_blank">${s.record.endpoint}</a></td>
+              <td style="font-size:0.9em;color:#555">${s.record.namespace}</td>
+              <td style="color:#2a2">online</td>
+            </tr>`)
+            .join("");
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Monads</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; color: #111; }
+  h1 { font-size: 1.4rem; margin-bottom: 1rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 6px 10px; background: #f4f4f4; font-size: 0.85rem; }
+  td { padding: 6px 10px; border-top: 1px solid #eee; font-size: 0.9rem; }
+  a { color: #0070f3; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .note { margin-top: 1.5rem; font-size: 0.85rem; color: #555; background: #fafafa; padding: 0.8rem 1rem; border-radius: 6px; }
+  code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 0.9em; }
+</style>
+</head>
+<body>
+<h1>Monads</h1>
+<table>
+<thead><tr><th>URL</th><th>Endpoint</th><th>Namespace</th><th>Status</th></tr></thead>
+<tbody>${rows}</tbody>
+</table>
+<div class="note">
+  <strong>local.monad</strong> → first running monad<br>
+  <strong>name.monad</strong> → monad by name<br><br>
+  PAC file: <code>http://127.0.0.1:${proxyPort}/proxy.pac</code>
+</div>
+</body>
+</html>`;
+}
+export async function startMonadProxy(options = {}) {
+    const proxyPort = options.port ?? 8160;
+    const server = http.createServer(async (req, res) => {
+        const hostRaw = String(req.headers.host || "").toLowerCase();
+        const host = hostRaw.split(":")[0] ?? "";
+        const url = req.url || "/";
+        if (host === "127.0.0.1" || host === "localhost") {
+            if (url === "/proxy.pac") {
+                res.writeHead(200, { "Content-Type": "application/x-ns-proxy-autoconfig" });
+                res.end(buildPacFile(proxyPort));
+                return;
+            }
+            const running = await listRunningMonads();
+            res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+            res.end(buildStatusHtml(running, proxyPort));
+            return;
+        }
+        const monadMatch = host.match(/^(.+)\.monad$/);
+        if (!monadMatch) {
+            res.writeHead(400, { "Content-Type": "text/plain" });
+            res.end("Expected a *.monad host.");
+            return;
+        }
+        const name = monadMatch[1];
+        let targetPort = null;
+        if (name === "local") {
+            const running = await listRunningMonads();
+            targetPort = running[0]?.record.port ?? null;
+        }
+        else if (name) {
+            const record = await readMonadRecord(name);
+            if (record && pidAlive(record.pid))
+                targetPort = record.port;
+        }
+        if (!targetPort) {
+            res.writeHead(404, { "Content-Type": "text/html; charset=utf-8" });
+            res.end(`<h2>Monad not found: ${name}</h2>` +
+                `<p>Is <strong>${name}</strong> running? Try: <code>monads start ${name}</code></p>` +
+                `<p><a href="http://127.0.0.1:${proxyPort}/">Dashboard</a></p>`);
+            return;
+        }
+        const proxyReq = http.request({
+            hostname: "127.0.0.1",
+            port: targetPort,
+            path: url,
+            method: req.method,
+            headers: { ...req.headers, host: `127.0.0.1:${targetPort}` },
+        }, (proxyRes) => {
+            res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
+            proxyRes.pipe(res, { end: true });
+        });
+        proxyReq.on("error", (err) => {
+            if (!res.headersSent)
+                res.writeHead(502, { "Content-Type": "text/plain" });
+            res.end(`Gateway error: ${err.message}`);
+        });
+        req.pipe(proxyReq, { end: true });
+    });
+    server.on("error", (err) => {
+        if (err.code === "EADDRINUSE") {
+            process.stderr.write(`Port ${proxyPort} is already in use. Try: monads proxy --port 8161\n`);
+        }
+        else {
+            process.stderr.write(`Proxy error: ${err.message}\n`);
+        }
+        process.exit(1);
+    });
+    await new Promise((resolve) => {
+        server.listen(proxyPort, "127.0.0.1", () => {
+            process.stdout.write(`\nMonad gateway running at http://127.0.0.1:${proxyPort}/\n` +
+                `\nBrowser setup (one time):\n` +
+                `  Safari / Chrome / Firefox proxy settings → Automatic proxy configuration:\n` +
+                `  URL: http://127.0.0.1:${proxyPort}/proxy.pac\n` +
+                `\nThen open:\n` +
+                `  http://local.monad       → first running monad\n` +
+                `  http://name.monad        → monad by name\n` +
+                `\nPress Ctrl+C to stop.\n`);
+        });
+        const stop = () => server.close(() => resolve());
+        process.once("SIGINT", stop);
+        process.once("SIGTERM", stop);
+    });
+}
 export async function followMonadLogs(record, options = {}) {
     const lines = options.lines || 80;
     const intervalMs = options.intervalMs || 250;

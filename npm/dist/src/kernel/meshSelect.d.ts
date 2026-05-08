@@ -35,6 +35,24 @@ export type MeshSelection = {
  */
 export declare function matchesMeshSelector(entry: MonadIndexEntry, selectorRaw: string | null): boolean;
 /**
+ * Scope-chain selection for `monad[frank]` path syntax.
+ *
+ * Traversal order for monadId="frank" in namespace="suign.cleaker.me":
+ *   1. frank claiming exact namespace  (suign.cleaker.me)
+ *   2. frank claiming rootspace        (cleaker.me)
+ *   3. null → 404
+ *
+ * Backward-compatible: absent scope_path on old entries is treated as "/".
+ */
+export declare function selectMeshClaimantByScope(opts: {
+    monadId: string;
+    namespace: string;
+    selfEndpoint: string;
+    selfMonadId: string;
+    stalenessMs?: number;
+    now?: number;
+}): Promise<MeshSelection | null>;
+/**
  * Selects the best mesh claimant for a namespace request.
  *
  * Selection proceeds in this order:

@@ -10,6 +10,7 @@ import {
   readLogTail,
   readMonadRecord,
   startMonadProcess,
+  startMonadProxy,
   stopMonadProcess,
   type MonadRuntimeStatus,
 } from "./runtime.js";
@@ -26,6 +27,8 @@ Usage:
   monads status [name]       Show status for one Monad or all known Monads
   monads logs <name>         Stream Monad logs in real time
   monads logs <name> --tail  Show recent Monad logs without following
+  monads proxy               Start the .monad browser gateway (routes name.monad)
+  monads proxy --port <port> Start the gateway on a custom port (default: 8160)
 
 Options:
   --port <port>              Request a specific port
@@ -164,6 +167,11 @@ async function commandLogs(args: string[]): Promise<void> {
   process.removeListener("SIGINT", stop);
 }
 
+async function commandProxy(args: string[]): Promise<void> {
+  const portValue = parseOptionValue(args, "--port");
+  await startMonadProxy({ port: portValue ? Number(portValue) : undefined });
+}
+
 async function ask(rl: Interface, question: string): Promise<string> {
   return (await rl.question(question)).trim();
 }
@@ -269,6 +277,7 @@ async function main(): Promise<void> {
   else if (command === "restart") await commandRestart(args);
   else if (command === "status") await commandStatus(args);
   else if (command === "logs") await commandLogs(args);
+  else if (command === "proxy") await commandProxy(args);
   else {
     printHelp();
     process.exitCode = 1;

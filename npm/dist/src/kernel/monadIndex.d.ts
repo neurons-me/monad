@@ -14,6 +14,8 @@ export interface MonadIndexEntry {
     last_seen: number;
     version?: string;
     capabilities?: string[];
+    /** Where in the namespace tree this monad operates. Absent = treats as "/". */
+    scope_path?: string;
 }
 /**
  * Writes or replaces a monad index entry in the local `.me` kernel.

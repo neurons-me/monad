@@ -20,8 +20,6 @@
 .me.human ↔ .me.monad
 
 > [!NOTE]
->
-> **A namespace is the semantic tree chained with truths.**
 > A federated semantic compute runtime
 
 ------

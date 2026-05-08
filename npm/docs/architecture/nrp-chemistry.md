@@ -1,7 +1,7 @@
 # NRP Chemistry — Settled Architecture
 
 > Frozen 2026-05-07. Tag: `nrp-chemistry-v0.1`
-> Updated 2026-05-07: compound surface syntax settled — `surface[a+b]` not `me.compound()`
+> Updated 2026-05-07: compound surface syntax + Groups primitive settled
 
 ---
 
@@ -44,7 +44,21 @@ neurons.me              independent rootspace
 The namespace is not storage. The namespace is chemistry.
 It is the surface where identities react and compounds form.
 
-Two namespaces:
+**Layer separation (canonical):**
+
+```
+.me           → knowledge graph. sovereign, offline, individual.
+               Expresses relational/existential conditions. Works without any surface.
+cleaker       → projection. binds .me to a surface context.
+NRP grammar   → the language of contexts. surfaces, audiences, groups.
+monad.ai      → execution. runs the graph over HTTP, registers on the mesh.
+```
+
+`.me` is for expressing a relational existential condition — a knowledge graph.
+The namespace is the *sentence* where that graph speaks and reacts with others.
+You don't write a book in one expression.
+
+Two surface types:
 - **Rootspace**: `cleaker.me` — no prefix, open, verifiable via DNS
 - **Compound**: `suign.cleaker.me` — user prefix + rootspace constant
 
@@ -121,6 +135,59 @@ monad.ai              → execution mesh, HTTP surface
 
 `.me` is intentionally kept minimal. Audience chemistry belongs to the NRP layer
 because it is about *surfaces and resolution*, not about *who you are*.
+
+### `group:name` — Stable Group Surface
+
+```
+group:neuroverse
+cleaker.me[group:neuroverse]
+suign.cleaker.me[group:team]
+sui-macbook.local[group:family]
+```
+
+A group is a **stable namespace with dynamic membership**. The namespace never changes
+when members enter or leave. The group has its own kernel — a `.me` graph that holds:
+
+```
+members[]          current member list
+invites[]          pending invitations
+revocations[]      removed members
+admins[]           who can change membership
+membership proofs  cryptographic signatures confirming membership
+```
+
+Once the group namespace is open, all paths inside it are normal NRP paths:
+
+```
+cleaker.me[group:neuroverse]/vision/roadmap
+cleaker.me[group:neuroverse]/monad[frank]/status
+cleaker.me[group:neuroverse]/members
+cleaker.me[group:neuroverse]/monad[memory]
+```
+
+---
+
+## Audiences vs Groups — The Full Distinction
+
+| | Audience `surface[a+b]` | Group `group:name` |
+|---|---|---|
+| Namespace stability | Destructive — changes if membership changes | Stable — never changes |
+| Membership | Exactly the set of seeds, cryptographically bound | Dynamic — enter and leave freely |
+| Derivation | `keccak256(sorted seeds)` — no server | Claim-based — group has its own kernel |
+| Scale | 2–5 people (trust is mathematical) | Unlimited (trust is credential-based) |
+| Use case | Shared secrets, private channels, encrypted bilateral | Teams, communities, projects, circles |
+| Scoping rule | Always defines the full namespace root | Always defines the full namespace root |
+
+**Rule:** both `surface[a+b]` and `group:name` always define the **entire namespace**.
+They are never embedded in the middle of a path. Everything after `]` is a path inside the context.
+
+```
+✅  cleaker.me[group:neuroverse]/projects/ai
+✅  cleaker.me[ana+frank]/memories
+❌  cleaker.me/projects[group:ai]   ← invalid — group must be at namespace root level
+```
+
+This keeps the parser simple and the semantics consistent with `monad[frank]` and `surface[]`.
 
 ---
 
@@ -257,9 +324,12 @@ The mesh is the marketplace where they meet.
 | `namespace:fallback` / `namespace:failed` events | ✅ | `cleaker/npm/src/binder.ts` |
 | KDF domain separation | 🔲 planned | monad × me identity unification |
 | `surface[]` mesh resolver in bridge | 🔲 planned | `bridge.ts` + `bridgeHandler.ts` |
-| `surface[a+b]` compound resolver | 🔲 planned | `cleaker/npm/src/` (NRP layer, not `.me`) |
+| `surface[a+b]` audience compound resolver | 🔲 planned | `cleaker/npm/src/` (NRP layer, not `.me`) |
+| `group:name` stable group namespace | 🔲 planned | `cleaker/npm/src/` + monad kernel for group |
 
-**Note:** Audience compound syntax is `surface[a+b]` (NRP / cleaker layer), not `me.compound()`.
-`.me` stays minimal: seed → kernel. All surface chemistry belongs to cleaker / NRP.
+**Layer contract (permanent):**
+- `.me` = sovereign knowledge graph. Offline, individual, relational. No social chemistry.
+- `cleaker / NRP` = grammar of contexts. Surfaces, audiences (`surface[a+b]`), groups (`group:name`).
+- `monad.ai` = execution and mesh.
 
 **Test coverage: 270+ tests / 24+ files — all green.**

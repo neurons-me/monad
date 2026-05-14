@@ -1,3 +1,27 @@
+title: monad
+description: Federated semantic compute runtime.
+url: https://neurons-me.github.io
+baseurl: "/monad"
+
+remote_theme: neurons-me/neurons-me
+
+plugins:
+  - jekyll-remote-theme
+
 markdown: kramdown
 kramdown:
   input: GFM
+  parse_block_html: true
+  hard_wrap: false
+
+me_theme:
+  brand: monad
+  nav:
+    - label: Home
+      url: https://neurons-me.github.io/
+    - label: All.This
+      url: https://neurons-me.github.io/all.this/
+    - label: NPM
+      url: https://www.npmjs.com/package/monad.ai
+    - label: TypeDocs
+      relative_url: /npm/typedocs/

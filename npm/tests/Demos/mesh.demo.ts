@@ -249,30 +249,39 @@ async function main() {
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
   // alice serves her own namespace directly
+  let t0 = Date.now();
   const aliceName = await request(alice).get("/profile/name").set("Host", "alice.local");
+  const msAliceDirect = Date.now() - t0;
   ok(`alice.local/profile.name = "J. Abella"`,
     aliceName.body.target?.value === "J. Abella", aliceName.body.target?.value);
-  console.log(`   nrp:   ${aliceName.body.target?.nrp}`);
-  console.log(`   value: ${JSON.stringify(aliceName.body.target?.value)}\n`);
+  console.log(`   nrp:     ${aliceName.body.target?.nrp}`);
+  console.log(`   value:   ${JSON.stringify(aliceName.body.target?.value)}`);
+  console.log(`   latency: ${msAliceDirect}ms\n`);
 
   // alice branch read
+  t0 = Date.now();
   const aliceProfile = await request(alice).get("/profile").set("Host", "alice.local");
+  const msAliceBranch = Date.now() - t0;
   const ap = aliceProfile.body.target?.value;
   ok("alice.local/profile (branch) = { name, age, city }",
     ap?.name === "J. Abella" && ap?.age === 28 && ap?.city === "Veracruz", ap);
-  console.log("   value:", JSON.stringify(ap), "\n");
+  console.log("   value:   ", JSON.stringify(ap));
+  console.log(`   latency: ${msAliceBranch}ms\n`);
 
   // bob serves his own namespace from his own server
   // (use supertest with a URL string so Host header is forwarded correctly)
+  t0 = Date.now();
   const bobDirectBody = (
     await request(`http://127.0.0.1:${portPrimary}`)
       .get("/profile/name")
       .set("Host", "bob.local")
   ).body;
+  const msBobDirect = Date.now() - t0;
   ok(`bob.local/profile.name = "Bob Smith" (direct to bob-primary)`,
     bobDirectBody.value === "Bob Smith", bobDirectBody.value);
-  console.log(`   nrp:   ${bobDirectBody.target?.nrp}`);
-  console.log(`   value: ${JSON.stringify(bobDirectBody.value)}\n`);
+  console.log(`   nrp:     ${bobDirectBody.target?.nrp}`);
+  console.log(`   value:   ${JSON.stringify(bobDirectBody.value)}`);
+  console.log(`   latency: ${msBobDirect}ms\n`);
 
   // ════════════════════════════════════════════════════════════════════════
   //  ACT 2 — The mesh: who alice knows about
@@ -311,9 +320,11 @@ async function main() {
 
   console.log("   alice.local → bridge → me://bob.local:read/profile.name\n");
 
+  t0 = Date.now();
   const bridgeRes = await request(alice)
     .get("/resolve?target=me://bob.local:read/profile.name")
     .set("Host", "alice.local");
+  const msBridge = Date.now() - t0;
 
   const mesh = bridgeRes.body._mesh;
   ok("bridge routed to a bob server",
@@ -335,6 +346,7 @@ async function main() {
   console.log(`     score:    ${mesh?.score?.toFixed(4)}`);
   console.log(`     reason:   ${mesh?.reason}`);
   console.log(`     hops:     ${mesh?.hops}`);
+  console.log(`     latency:  ${msBridge}ms  (alice → bridge → bob → alice)`);
   console.log(`\n   ${winnerName} won (more recent last_seen → higher recency score)`);
   console.log(`   ${loserName} was the runner-up\n`);
 
@@ -349,15 +361,18 @@ async function main() {
 
   console.log("   alice → bridge → me://bob.local:read/profile\n");
 
+  t0 = Date.now();
   const bridgeBranch = await request(alice)
     .get("/resolve?target=me://bob.local:read/profile")
     .set("Host", "alice.local");
+  const msBridgeBranch = Date.now() - t0;
 
   const bobProfile = bridgeBranch.body.value;
   ok("branch value.name = \"Bob Smith\"",  bobProfile?.name === "Bob Smith",  bobProfile);
   ok("branch value.age  = 34",             bobProfile?.age  === 34,            bobProfile);
   ok("branch value.city = \"Guadalajara\"",bobProfile?.city === "Guadalajara", bobProfile);
-  console.log("   value:", JSON.stringify(bobProfile));
+  console.log("   value:   ", JSON.stringify(bobProfile));
+  console.log(`   latency: ${msBridgeBranch}ms  (bridge + branch assembly)`);
   console.log(`   _mesh.origin: ${bridgeBranch.body._mesh?.origin}\n`);
 
   // ════════════════════════════════════════════════════════════════════════
@@ -377,12 +392,20 @@ async function main() {
 
   // Make 8 more bridge requests to accumulate learning signal
   process.stdout.write("   Making 8 bridge requests to generate learning signal ...");
+  const latencies: number[] = [];
   for (let i = 0; i < 8; i++) {
+    const tReq = Date.now();
     await request(alice)
       .get("/resolve?target=me://bob.local:read/status")
       .set("Host", "alice.local");
+    latencies.push(Date.now() - tReq);
   }
+  const msP50 = latencies.slice().sort((a, b) => a - b)[Math.floor(latencies.length * 0.5)]!;
+  const msAvg = Math.round(latencies.reduce((s, v) => s + v, 0) / latencies.length);
+  const msMax = Math.max(...latencies);
   console.log(" done\n");
+  console.log(`   bridge latencies (8 reqs): ${latencies.join("ms, ")}ms`);
+  console.log(`   avg=${msAvg}ms  p50=${msP50}ms  max=${msMax}ms\n`);
 
   // Weights after
   const weightsAfter = await request(alice).get("/.mesh/weights");
@@ -415,6 +438,24 @@ async function main() {
       + `latency=${wNs.latency?.toFixed(5) ?? "?"}`);
     console.log(`   (blended = global × (1-maturity) + namespace-local × maturity)\n`);
   }
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  LATENCY SUMMARY
+  // ════════════════════════════════════════════════════════════════════════
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log("── Latency summary");
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+  console.log("   operation                            ms");
+  console.log("   ─────────────────────────────────────────");
+  console.log(`   alice direct leaf read               ${String(msAliceDirect).padStart(4)}ms`);
+  console.log(`   alice direct branch read             ${String(msAliceBranch).padStart(4)}ms`);
+  console.log(`   bob direct leaf read (no bridge)     ${String(msBobDirect).padStart(4)}ms`);
+  console.log(`   bridge leaf  (alice→bob, 1 hop)      ${String(msBridge).padStart(4)}ms`);
+  console.log(`   bridge branch (alice→bob, 1 hop)     ${String(msBridgeBranch).padStart(4)}ms`);
+  console.log(`   bridge p50   (8-req steady state)    ${String(msP50).padStart(4)}ms`);
+  console.log(`   bridge avg   (8-req steady state)    ${String(msAvg).padStart(4)}ms`);
+  console.log(`   bridge max   (8-req steady state)    ${String(msMax).padStart(4)}ms`);
+  console.log();
 
   // ── Cleanup ──────────────────────────────────────────────────────────────
   resetKernelStateForTests();

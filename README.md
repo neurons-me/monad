@@ -16,10 +16,8 @@
 </picture>
 
 # monad
-###### Serve `me://Everything.is.just.a.hash.of.a.knowledge.unit`
+### Serve `me://Everything.is.just.a.hash.of.a.knowledge.unit`
 .me.human ↔ .me.monad
-
-> [!NOTE]
 > A federated semantic compute runtime
 
 ------
@@ -32,6 +30,7 @@ cd monad/
 ```
 
 ##### Select your language:
+
 | Language    | Source                        | Status           | Documentation                                             |
 | ----------- | ----------------------------- | ---------------- | --------------------------------------------------------- |
 | **Node.js** | `cd monad/npm && npm install` | **Stable 2.1.1** | [node.js Docs ⟡](https://neurons-me.github.io/monad/npm/) |

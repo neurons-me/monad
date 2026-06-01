@@ -1,5 +1,6 @@
 import os from "os";
 import path from "path";
+import { existsSync } from "fs";
 import { rebuildProjectedNamespaceClaims } from "./claim/records.js";
 import { ensureRootSemanticBootstrap } from "./claim/semanticBootstrap.js";
 import { getKernel, getKernelStateDir } from "./kernel/manager.js";
@@ -79,6 +80,15 @@ function resolvePath(cwd: string, value: string | undefined, fallback: string) {
   return path.resolve(cwd, value || fallback);
 }
 
+/** Returns the first candidate path that exists on disk, else the last one. */
+function resolveFirstExisting(cwd: string, ...candidates: string[]): string {
+  for (const c of candidates) {
+    const resolved = path.resolve(cwd, c);
+    if (existsSync(resolved)) return c;
+  }
+  return candidates[candidates.length - 1];
+}
+
 function writeEnv(env: NodeJS.ProcessEnv, key: string, value: unknown): void {
   if (value === undefined || value === null || value === "") return;
   env[key] = String(value);
@@ -145,11 +155,20 @@ export function resolveMonadRuntimeConfig(options: MonadOptions = {}): MonadRunt
     nodeHostname,
     nodeDisplayName: `${nodeHostname}:${port}`,
     fetchProxyTimeoutMs,
-    mePkgDistDir: resolvePath(cwd, env.ME_PKG_DIST_DIR, "../../../this/.me/npm/dist"),
-    cleakerPkgDistDir: resolvePath(cwd, env.CLEAKER_PKG_DIST_DIR, "../../cleaker/npm/dist"),
-    guiPkgDistDir: resolvePath(cwd, env.GUI_PKG_DIST_DIR, "../../../packages/GUI/npm/dist"),
-    reactUmdDir: resolvePath(cwd, env.LOCAL_REACT_UMD_DIR, "../../../packages/GUI/npm/node_modules/react/umd"),
-    reactDomUmdDir: resolvePath(cwd, env.LOCAL_REACTDOM_UMD_DIR, "../../../packages/GUI/npm/node_modules/react-dom/umd"),
+    // Resolve GUI/React asset dirs. Priority:
+    //   1. Explicit env override
+    //   2. node_modules (works standalone after npm install)
+    //   3. Monorepo sibling path (works in all.this dev environment)
+    mePkgDistDir: resolvePath(cwd, env.ME_PKG_DIST_DIR,
+      resolveFirstExisting(cwd, "node_modules/this.me/dist", "../../../this/.me/npm/dist")),
+    cleakerPkgDistDir: resolvePath(cwd, env.CLEAKER_PKG_DIST_DIR,
+      resolveFirstExisting(cwd, "node_modules/cleaker/dist", "../../cleaker/npm/dist")),
+    guiPkgDistDir: resolvePath(cwd, env.GUI_PKG_DIST_DIR,
+      resolveFirstExisting(cwd, "node_modules/this.gui/dist", "../../../packages/GUI/npm/dist")),
+    reactUmdDir: resolvePath(cwd, env.LOCAL_REACT_UMD_DIR,
+      resolveFirstExisting(cwd, "node_modules/react/umd", "../../../packages/GUI/npm/node_modules/react/umd")),
+    reactDomUmdDir: resolvePath(cwd, env.LOCAL_REACTDOM_UMD_DIR,
+      resolveFirstExisting(cwd, "node_modules/react-dom/umd", "../../../packages/GUI/npm/node_modules/react-dom/umd")),
     routesPath: resolvePath(cwd, env.MONAD_ROUTES_PATH, "../routes.js"),
     indexPath: resolvePath(cwd, env.MONAD_INDEX_PATH, "../index.html"),
     selfNodeConfig,

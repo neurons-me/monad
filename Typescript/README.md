@@ -12,6 +12,8 @@
 
 # monad.ai `2.2.0`
 
+[![npm](https://img.shields.io/npm/v/monad.ai)](https://www.npmjs.com/package/monad.ai) [![docs](https://img.shields.io/badge/docs-neurons--me.github.io-blue)](https://neurons-me.github.io/monad/docs/)
+
 **Active execution agents inside semantic namespaces.**
 
 A monad is a daemon that runs a `.me` kernel, exposes it over HTTP, resolves namespace paths, and registers itself on a mesh surface so other monads and users can find it.

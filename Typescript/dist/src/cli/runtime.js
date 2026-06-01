@@ -22,14 +22,15 @@ export function normalizeMonadName(input) {
     return normalized || `monad-${Date.now().toString(36)}`;
 }
 function resolveDefaultRootspace() {
-    const raw = normalizeNamespaceConstant(process.env.MONAD_ROOTSPACE ||
+    // Use hostname as-is. On a local Mac os.hostname() returns suis-macbook-air.local
+    // (mDNS). On a server it returns the bare hostname (e.g. netget) or FQDN.
+    // Do NOT append .local — that is a valid mDNS suffix only on local networks,
+    // not appropriate for public servers. Set ME_NAMESPACE or --namespace explicitly.
+    return normalizeNamespaceConstant(process.env.MONAD_ROOTSPACE ||
         process.env.ME_NAMESPACE ||
         process.env.MONAD_SELF_IDENTITY ||
         process.env.MONAD_SELF_HOSTNAME ||
         os.hostname()) || "monad.local";
-    // Bare hostnames (no dot) get .local suffix so the namespace is always
-    // a proper domain-like string and matches mDNS resolution.
-    return raw.includes('.') ? raw : `${raw}.local`;
 }
 export function getMonadRuntimeDir(name) {
     return path.join(getMonadsHome(), normalizeMonadName(name));

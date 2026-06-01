@@ -63,14 +63,25 @@ export function htmlShell(options = {}) {
   <body>
     <div id="app"></div>
     <script type="module">
-      const loadScript = (src) => new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = src;
-        script.async = false;
-        script.onload = resolve;
-        script.onerror = () => reject(new Error('Failed to load ' + src));
-        document.head.appendChild(script);
-      });
+      const loadScript = async (src) => {
+        // HEAD-check local paths first so we don't append a 404 script tag
+        if (src.startsWith('/')) {
+          try {
+            const r = await fetch(src, { method: 'HEAD' });
+            if (!r.ok) throw new Error('HEAD ' + r.status);
+          } catch {
+            throw new Error('Not available: ' + src);
+          }
+        }
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = src;
+          script.async = false;
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Failed to load ' + src));
+          document.head.appendChild(script);
+        });
+      };
 
       const loadFirst = async (...sources) => {
         let lastError = null;

@@ -1,6 +1,7 @@
 import { openRequestHandler } from "../http/claims.js";
 import { claimNamespace, getClaim, openNamespace } from "../claim/records.js";
 import { getMemoriesForNamespace, isNamespaceWriteAuthorized, recordMemory } from "../claim/replay.js";
+import { saveSnapshot } from "../kernel/manager.js";
 import { createEnvelope, createErrorEnvelope } from "../http/envelope.js";
 import { normalizeHttpRequestToMeTarget } from "../http/meTarget.js";
 import { resolveNamespace } from "../http/namespace.js";
@@ -174,6 +175,8 @@ export const rootCommandHandler = async (req, res) => {
     if (!entry) {
         return res.status(400).json(createErrorEnvelope(target, { error: "INVALID_MEMORY_INPUT" }));
     }
+    // Persist immediately so writes survive monad restarts.
+    saveSnapshot();
     console.log("🧠 New Memory Event:");
     console.log(JSON.stringify(entry, null, 2));
     const writeTarget = buildNormalizedTarget(req, namespace, "write", "");

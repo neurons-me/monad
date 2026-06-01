@@ -4,10 +4,10 @@ export function seedClaimNamespaceSemantics(input) {
     const timestamp = Number(input.timestamp || Date.now());
     const namespace = String(input.namespace || "").trim().toLowerCase();
     const seeds = [
-        { path: "profile.username", data: String(input.username || "").trim().toLowerCase() },
-        { path: "profile.name", data: String(input.name || "").trim() },
-        { path: "profile.email", data: String(input.email || "").trim().toLowerCase() },
-        { path: "profile.phone", data: String(input.phone || "").trim() },
+        { path: "me.username", data: String(input.username || "").trim().toLowerCase() },
+        { path: "me.name", data: String(input.name || "").trim() },
+        { path: "me.email.primary", data: String(input.email || "").trim().toLowerCase() },
+        { path: "me.phone.primary", data: String(input.phone || "").trim() },
         { path: "auth.claimed_at", data: timestamp },
         ...buildClaimSemanticSeeds({
             namespace,

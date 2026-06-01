@@ -19,15 +19,30 @@ export function wantsHtml(req) {
 }
 export function htmlShell(options = {}) {
     const providerBoot = options.providerBoot || null;
-    // Title = the namespace being served.
-    // The domain (cleaker.me, neurons.me, etc.) is just addressing — the namespace is the truth.
-    // Locally: suis-macbook-air.local. Publicly: whatever domain resolves here.
     const namespaceTitle = providerBoot?.namespace || "namespace";
+    // Dev mode: serve a Vite-compatible shell that loads ES modules with HMR.
+    const viteDevUrl = process.env.MONAD_GUI_DEV_URL?.replace(/\/+$/, "");
+    if (viteDevUrl) {
+        const devHtml = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="icon" type="image/png" href="/gui/favicon.png" />
+    <title>${namespaceTitle}</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/gui/@vite/client"></script>
+    <script type="module" src="/gui/src/dev-entry.tsx"></script>
+  </body>
+</html>`;
+        return providerBoot ? injectNamespaceProviderShell(devHtml, providerBoot) : devHtml;
+    }
     const indexPath = getMonadIndexPath();
     try {
         if (fs.existsSync(indexPath)) {
             let html = fs.readFileSync(indexPath, "utf8");
-            // Replace any hardcoded title with the actual serving namespace
             html = html.replace(/<title>[^<]*<\/title>/, `<title>${namespaceTitle}</title>`);
             return providerBoot ? injectNamespaceProviderShell(html, providerBoot) : html;
         }
@@ -42,7 +57,7 @@ export function htmlShell(options = {}) {
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <script src="/vendor/react/react.production.min.js"></script>
     <script src="/vendor/react-dom/react-dom.production.min.js"></script>
-    <link rel="icon" href="/gui/favicon.ico" />
+    <link rel="icon" type="image/png" href="/gui/favicon.png" />
     <link rel="stylesheet" href="/gui/styles.css" />
     <title>${namespaceTitle}</title>
   </head>

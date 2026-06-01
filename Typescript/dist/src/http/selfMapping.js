@@ -93,10 +93,14 @@ function ensureCleakerIdentityConfig(input) {
         publicKey = publicKeyFromPrivateKey(privateKey);
     }
     if (!publicKey || !privateKey) {
-        const seedEnv = String(input.env.SEED || "").trim();
-        const generated = seedEnv
-            ? (deriveEd25519KeyPairFromSeed(seedEnv) ?? generateCleakerKeyPair())
-            : generateCleakerKeyPair();
+        // Always generate a fresh surface keypair — never derive from NAMESPACE_SEED.
+        // Deriving from SEED would make two monads sharing the same namespace seed
+        // collide as the same surface identity, which violates the separation:
+        //   NAMESPACE_SEED  = authority over the semantic namespace
+        //   MONAD_PRIVATE_KEY = identity of this specific runtime surface
+        // The generated keypair is persisted to self.keys.json on first run so it
+        // survives restarts without needing SEED to recreate it.
+        const generated = generateCleakerKeyPair();
         publicKey = generated.publicKey;
         privateKey = generated.privateKey;
     }

@@ -295,6 +295,26 @@ export function readSemanticValueForNamespace(namespaceInput: string, pathInput:
   return kernelRead(namespaceInput, pathInput);
 }
 
+export function isPathNearSecretScope(namespaceInput: string, pathInput: string): boolean {
+  const kernel = getKernel();
+  const localSecrets: Record<string, string> = (kernel as any).localSecrets ?? {};
+  if (Object.keys(localSecrets).length === 0) return false;
+
+  const kpath = kernelPathFor(namespaceInput.trim().toLowerCase(), pathInput);
+  const parts = kpath.split(".");
+
+  // Check if any ancestor of kpath (or kpath itself) is a declared secret scope
+  for (let i = 1; i <= parts.length; i++) {
+    const prefix = parts.slice(0, i).join(".");
+    if (localSecrets[prefix] !== undefined) return true;
+  }
+  // Also check if kpath is a parent of any declared secret scope
+  for (const scopeKey of Object.keys(localSecrets)) {
+    if (scopeKey.startsWith(kpath + ".") || scopeKey === kpath) return true;
+  }
+  return false;
+}
+
 export function listSemanticMemoriesByRootNamespace(
   rootNamespaceInput: string,
   options: { limit?: number; includeSystem?: boolean } = {},

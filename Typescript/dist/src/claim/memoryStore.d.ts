@@ -65,6 +65,7 @@ export declare function buildSemanticBranchTreeForNamespace(namespaceInput: stri
 }): Record<string, unknown>;
 export declare function readSemanticBranchForNamespace(namespaceInput: string, pathInput: string): unknown;
 export declare function readSemanticValueForNamespace(namespaceInput: string, pathInput: string): unknown;
+export declare function isPathNearSecretScope(namespaceInput: string, pathInput: string): boolean;
 export declare function listSemanticMemoriesByRootNamespace(rootNamespaceInput: string, options?: {
     limit?: number;
     includeSystem?: boolean;

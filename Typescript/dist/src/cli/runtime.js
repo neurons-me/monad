@@ -22,11 +22,14 @@ export function normalizeMonadName(input) {
     return normalized || `monad-${Date.now().toString(36)}`;
 }
 function resolveDefaultRootspace() {
-    return normalizeNamespaceConstant(process.env.MONAD_ROOTSPACE ||
+    const raw = normalizeNamespaceConstant(process.env.MONAD_ROOTSPACE ||
         process.env.ME_NAMESPACE ||
         process.env.MONAD_SELF_IDENTITY ||
         process.env.MONAD_SELF_HOSTNAME ||
         os.hostname()) || "monad.local";
+    // Bare hostnames (no dot) get .local suffix so the namespace is always
+    // a proper domain-like string and matches mDNS resolution.
+    return raw.includes('.') ? raw : `${raw}.local`;
 }
 export function getMonadRuntimeDir(name) {
     return path.join(getMonadsHome(), normalizeMonadName(name));
@@ -325,7 +328,11 @@ export async function startMonadProcess(options = {}) {
     const env = {
         ...process.env,
         PORT: String(port),
-        SEED: options.seed || process.env.SEED || process.env.ME_SEED || `monad-local:${name}`,
+        // The namespace IS the seed. Same namespace → same SEED → same kernel state.
+        // Multiple monads serving the same namespace share the same SEED so they
+        // can read each other's kernel state. The instance name (haiku, iphone…)
+        // belongs in MONAD_NAME, never in the namespace authority key.
+        SEED: options.seed || process.env.SEED || process.env.ME_SEED || namespace,
         ME_NAMESPACE: namespace,
         ME_STATE_DIR: stateDir,
         MONAD_CLAIM_DIR: claimDir,
@@ -528,7 +535,10 @@ function watchLogFile(input) {
 }
 function buildPacFile(proxyPort) {
     return `function FindProxyForURL(url, host) {
-  if (dnsDomainIs(host, ".monad") || host === "local.monad") {
+  // .monad  → monad instances by name (haiku.monad, iphone.monad, …)
+  // .netget → netget admin/control plane by hostname (suis-macbook-air.netget, …)
+  if (dnsDomainIs(host, ".monad") || host === "local.monad" ||
+      dnsDomainIs(host, ".netget") || host === "local.netget") {
     return "PROXY 127.0.0.1:${proxyPort}";
   }
   return "DIRECT";

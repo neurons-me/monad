@@ -1,5 +1,12 @@
 import type express from "express";
 export type DisclosureStatus = "ok" | "error" | "pending";
+export type DisclosureContent = "public" | "opened" | "closed";
+export type NRPDisclosureEnvelope = {
+    ok: true;
+    path: string;
+    disclosure: DisclosureContent;
+    value: unknown | null;
+};
 export interface DisclosureOrigin {
     monad_id: string;
     namespace: string;

@@ -73,6 +73,14 @@ export function createLedgerHandlers(config) {
         const limit = Math.max(1, Math.min(5000, Number(req.query?.limit ?? 5000)));
         const identityHash = String(req.query?.identityHash || "").trim();
         const result = readBlocks(chainNs, identityHash, limit);
+        // When the path has a sub-path after @user (e.g. /@jabellae/name), fall through
+        // to the semantic path resolver. Blockchain blocks live at /@user only.
+        const rawPath = String(req.path || "");
+        const segments = rawPath.replace(/^\/+/, "").split("/").filter(Boolean);
+        const hasSubPath = segments.length > 1; // more than just "@user"
+        if (hasSubPath && result.length === 0) {
+            return createPathResolverHandler()(req, res);
+        }
         return res.json(createEnvelope(target, { namespace: chainNs, lens, blocks: result, count: result.length }));
     };
     const catchAll = (req, res) => {

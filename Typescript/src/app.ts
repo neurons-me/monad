@@ -108,7 +108,32 @@ export async function createMonadApp(options: MonadOptions = {}): Promise<MonadA
   app.use(express.json());
 
   const noCache = createNoCacheStaticOptions();
-  app.use("/gui", express.static(config.guiPkgDistDir, noCache));
+
+  // Dev mode: proxy /gui/* to Vite dev server for HMR + ES modules.
+  // Set MONAD_GUI_DEV_URL=http://localhost:5173 and run `npm run dev` in packages/GUI/npm.
+  const viteDevUrl = process.env.MONAD_GUI_DEV_URL?.replace(/\/+$/, "");
+  if (viteDevUrl) {
+    app.use("/gui", async (req, res) => {
+      const target = `${viteDevUrl}/gui${req.url}`;
+      try {
+        const upstream = await fetch(target, {
+          method: req.method,
+          headers: Object.fromEntries(
+            Object.entries(req.headers).filter(([, v]) => v != null) as [string, string][]
+          ),
+        });
+        res.status(upstream.status);
+        upstream.headers.forEach((v, k) => res.setHeader(k, v));
+        res.setHeader("Cache-Control", "no-store");
+        const buf = await upstream.arrayBuffer();
+        res.end(Buffer.from(buf));
+      } catch {
+        res.status(502).send("Vite dev server unreachable. Is it running?");
+      }
+    });
+  } else {
+    app.use("/gui", express.static(config.guiPkgDistDir, noCache));
+  }
   app.use("/me", express.static(config.mePkgDistDir, noCache));
   app.use("/cleaker", express.static(config.cleakerPkgDistDir, noCache));
   app.use("/vendor/react", express.static(config.reactUmdDir, noCache));

@@ -4,6 +4,20 @@ import type express from "express";
 
 export type DisclosureStatus = "ok" | "error" | "pending";
 
+// NRP Section 6 — content classification on the wire.
+// "public"  = path exists and is not in any secret scope
+// "opened"  = path is in a secret scope and caller presented valid key material
+// "closed"  = stealth root / wrong key / absent near secret / ambiguous — all indistinguishable to observer
+export type DisclosureContent = "public" | "opened" | "closed";
+
+// Canonical NRP disclosure envelope (Section 6)
+export type NRPDisclosureEnvelope = {
+  ok: true;
+  path: string;
+  disclosure: DisclosureContent;
+  value: unknown | null;
+};
+
 export interface DisclosureOrigin {
   monad_id: string;
   namespace: string;

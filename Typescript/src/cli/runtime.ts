@@ -426,11 +426,11 @@ export async function startMonadProcess(options: StartMonadCliOptions = {}): Pro
   const env = {
     ...process.env,
     PORT: String(port),
-    // Fallback seed is anchored to the namespace, not the monad instance name.
-    // Two monads serving the same namespace must share the same SEED so they
+    // The namespace IS the seed. Same namespace → same SEED → same kernel state.
+    // Multiple monads serving the same namespace share the same SEED so they
     // can read each other's kernel state. The instance name (haiku, iphone…)
     // belongs in MONAD_NAME, never in the namespace authority key.
-    SEED: options.seed || process.env.SEED || process.env.ME_SEED || `monad-local:${namespace}`,
+    SEED: options.seed || process.env.SEED || process.env.ME_SEED || namespace,
     ME_NAMESPACE: namespace,
     ME_STATE_DIR: stateDir,
     MONAD_CLAIM_DIR: claimDir,

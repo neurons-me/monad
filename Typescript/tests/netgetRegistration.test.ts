@@ -88,6 +88,26 @@ describe("netgetRegistration", () => {
       ]);
       expect(payload!.metadata.identity_hash).toBe(meIdentityHash("netget-registration-owner-seed"));
       expect(payload!.metadata.identityHash).toBe(payload!.metadata.identity_hash);
+      expect(payload!.metadata.claimedNamespaces).toEqual(["files.local"]);
+    });
+
+    it("includes public host aliases in claimed namespaces", () => {
+      const bootstrap = fakeBootstrap();
+      bootstrap.config.env.MONAD_ALIASES = "netget.site, www.netget.site";
+      const payload = buildNetGetMonadRegistrationPayload({
+        bootstrap,
+        id: "monad:test",
+        startedAt: "2026-05-26T00:00:00.000Z",
+        heartbeatMs: 3_000,
+      });
+
+      expect(payload!.metadata.aliases).toEqual(["netget.site", "www.netget.site"]);
+      expect(payload!.metadata.claimedNamespaces).toEqual([
+        "files.local",
+        "netget.site",
+        "www.netget.site",
+      ]);
+      expect(payload!.metadata.claimed_namespaces).toEqual(payload!.metadata.claimedNamespaces);
     });
 
     it("returns null when port is 0 (invalid bootstrap)", () => {

@@ -31,6 +31,12 @@ function normalizeToken(value) {
 function unique(values) {
     return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean))).sort();
 }
+function listFromEnv(value) {
+    return String(value || "")
+        .split(/[,\s]+/g)
+        .map((item) => normalizeToken(item))
+        .filter(Boolean);
+}
 function numberFromEnv(name, fallback) {
     const value = Number(process.env[name]);
     return Number.isFinite(value) && value > 0 ? value : fallback;
@@ -119,6 +125,19 @@ export function buildNetGetMonadRegistrationPayload(input) {
     const url = `http://${host}:${port}`;
     const now = new Date().toISOString();
     const identityHash = resolveMeIdentityHash(env.SEED || env.ME_SEED);
+    const aliases = unique([
+        ...listFromEnv(env.MONAD_ALIASES),
+        ...listFromEnv(env.MONAD_PUBLIC_HOSTS),
+        normalizeToken(env.MONAD_PUBLIC_HOST),
+        normalizeToken(env.NETGET_PUBLIC_HOST),
+        normalizeToken(env.PUBLIC_HOST),
+        normalizeToken(env.PUBLIC_DOMAIN),
+    ]);
+    const claimedNamespaces = unique([
+        self?.identity,
+        config.localNamespaceRoot,
+        ...aliases,
+    ]);
     const capabilities = unique([
         "surface",
         "gui",
@@ -157,6 +176,9 @@ export function buildNetGetMonadRegistrationPayload(input) {
             endpoint: url,
             directEndpoint: self?.endpoint,
             controlEndpoint: url,
+            aliases,
+            claimedNamespaces,
+            claimed_namespaces: claimedNamespaces,
             defaultPath: "/",
             capabilities,
         },

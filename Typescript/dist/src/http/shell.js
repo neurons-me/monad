@@ -55,15 +55,49 @@ export function htmlShell(options = {}) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <script src="/vendor/react/react.production.min.js"></script>
-    <script src="/vendor/react-dom/react-dom.production.min.js"></script>
     <link rel="icon" type="image/png" href="/gui/favicon.png" />
     <link rel="stylesheet" href="/gui/styles.css" />
+    <link rel="stylesheet" href="https://unpkg.com/this.gui@2.1.8/dist/styles.css" />
     <title>${namespaceTitle}</title>
   </head>
   <body>
     <div id="app"></div>
     <script type="module">
+      const loadScript = (src) => new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = false;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error('Failed to load ' + src));
+        document.head.appendChild(script);
+      });
+
+      const loadFirst = async (...sources) => {
+        let lastError = null;
+        for (const src of sources) {
+          try {
+            await loadScript(src);
+            return src;
+          } catch (error) {
+            lastError = error;
+          }
+        }
+        throw lastError || new Error('No script sources provided');
+      };
+
+      const importFirst = async (...sources) => {
+        let lastError = null;
+        for (const src of sources) {
+          try {
+            await import(src);
+            return src;
+          } catch (error) {
+            lastError = error;
+          }
+        }
+        throw lastError || new Error('No module sources provided');
+      };
+
       if (!globalThis.process) {
         globalThis.process = { env: { NODE_ENV: 'production' } };
       } else if (!globalThis.process.env) {
@@ -71,11 +105,22 @@ export function htmlShell(options = {}) {
       } else if (!('NODE_ENV' in globalThis.process.env)) {
         globalThis.process.env.NODE_ENV = 'production';
       }
+      await loadFirst(
+        '/vendor/react/react.production.min.js',
+        'https://unpkg.com/react@18.3.1/umd/react.production.min.js'
+      );
+      await loadFirst(
+        '/vendor/react-dom/react-dom.production.min.js',
+        'https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js'
+      );
       const React = globalThis.React;
       const ReactDOM = globalThis.ReactDOM;
       if (!React) throw new Error('React global is missing. Failed to load react.production.min.js');
       if (!ReactDOM) throw new Error('ReactDOM global is missing. Failed to load react-dom.production.min.js');
-      await import('/gui/this.gui.umd.js');
+      await importFirst(
+        '/gui/this.gui.umd.js',
+        'https://unpkg.com/this.gui@2.1.8/dist/this.gui.umd.js'
+      );
       const GUI = globalThis.ThisGUI || globalThis.thisGUI || globalThis.GUI || globalThis['this.gui'];
       const providerBoot = globalThis.__MONAD_NAMESPACE_PROVIDER_BOOT__ || null;
       let provider = null;

@@ -18,11 +18,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       # Install VitePress from repo root — avoids npm/package.json which contains
       # workspace:* deps that npm cannot resolve (workspace: is pnpm-only syntax).

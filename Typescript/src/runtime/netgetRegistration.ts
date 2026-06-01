@@ -43,7 +43,9 @@ export type NetGetRegistrationPayload = {
   portStatus: "active";
 };
 
-const DEFAULT_NETGET_LOCAL = "http://local.netget";
+// Use 127.0.0.1 as default so monad registration works on any server
+// without requiring local.netget to resolve. local.netget remains valid via NETGET_LOCAL.
+const DEFAULT_NETGET_LOCAL = "http://127.0.0.1";
 const LOCAL_NETGET_HOSTS = new Set(["local.netget", "localhost", "127.0.0.1", "[::1]", "::1"]);
 
 function normalizeNetGetEndpoint(value?: string): string | null {

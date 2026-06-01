@@ -97,13 +97,16 @@ export function normalizeMonadName(input?: string): string {
 }
 
 function resolveDefaultRootspace(): string {
-  return normalizeNamespaceConstant(
+  const raw = normalizeNamespaceConstant(
     process.env.MONAD_ROOTSPACE ||
       process.env.ME_NAMESPACE ||
       process.env.MONAD_SELF_IDENTITY ||
       process.env.MONAD_SELF_HOSTNAME ||
       os.hostname(),
   ) || "monad.local";
+  // Bare hostnames (no dot) get .local suffix so the namespace is always
+  // a proper domain-like string and matches mDNS resolution.
+  return raw.includes('.') ? raw : `${raw}.local`;
 }
 
 export function getMonadRuntimeDir(name: string): string {

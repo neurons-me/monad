@@ -123,7 +123,9 @@ function controlActionErrorStatus(error: any): number {
 
 export function createMonadsControlRouter(): express.Router {
   const router = express.Router();
-  router.use(localControlGuard);
+  // Guard applies only to /__monads control plane routes.
+  // Public namespace/data routes must pass through freely.
+  router.use('/__monads', localControlGuard);
 
   router.get("/__monads", async (_req, res) => {
     const statuses = await listStatuses();

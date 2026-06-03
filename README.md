@@ -16,9 +16,49 @@
 </picture>
 
 # monad
+> *A federated semantic compute runtime.*
+
+A monad is a running instance of the neurons.me stack — a daemon that holds a `.me` kernel, exposes it over HTTP, resolves namespace paths, and registers itself on the mesh so other monads and users can find it.
+
+---
+
+## What is neurons.me?
+
+**[neurons.me](https://neurons.me)** is a sovereign semantic compute stack. It lets any person or machine own a cryptographic identity, bind it to a namespace, run it as an HTTP daemon, and render it as a user interface — without depending on any central service.
+
+| Layer | Package | Role |
+|---|---|---|
+| **Kernel** | [`this.me`](https://neurons-me.github.io/.me/) | Schema-free reactive memory. Derives identity from a seed. |
+| **Identity** | [`cleaker`](https://neurons-me.github.io/Cleaker/) | Namespace resolver. Projects `.me` into a surface. |
+| **Runtime** | [`monad`](https://neurons-me.github.io/monad/) | HTTP daemon. Exposes a namespace over HTTP. Runs the mesh. |
+| **Gateway** | [`netget`](https://neurons-me.github.io/netget/) | Routes incoming requests to the correct monad. |
+| **Interface** | [`this.gui`](https://neurons-me.github.io/GUI/) | React component library. Renders the semantic surface. |
+
+## This package: `monad`
+
+`monad` is the **HTTP runtime** of the neurons.me stack. It is the process that runs on a machine, holds a live `.me` kernel, and makes it reachable over the network via the `me://` URI scheme.
+
+Each monad instance:
+- Owns one `.me` kernel (seeded from an environment variable `SEED`)
+- Registers itself on the mesh so other nodes can discover it
+- Resolves `me://` paths as HTTP requests with a typed disclosure envelope (`public` / `closed`)
+- Participates in the Namespace Resolution Protocol (NRP) for cross-monad routing
+- Scores and selects peers via adaptive mesh weights (NRP Phase 8)
+
+```bash
+npm install -g monad.ai
+export SEED="your-64-hex-seed"
+monad start
+# → HTTP daemon running on port 8161
+# → registered as me://your.namespace on the mesh
+```
+
+**Depends on:** `this.me` (kernel), `cleaker` (namespace validation), `netget` (for gateway registration).
+**Consumed by:** `this.gui` (connects to monad surfaces to read and write semantic paths).
+
+---
+
 ### `me://Everything.is.just.a.hash.of.a.knowledge.unit`
-.me.human ↔ .me.monad
-> A federated semantic compute runtime
 
 ------
 

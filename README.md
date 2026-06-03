@@ -36,13 +36,13 @@ cd monad/
 |     | Source                        | Status           | Documentation                                             |
 | ----------- | ----------------------------- | ---------------- | --------------------------------------------------------- |
 | **Typescript** | `cd Typescript && npm install` | **Stable 2.1.1** | [TypeDocs ⟡](https://neurons-me.github.io/monad/Typescript/) |
-| **Python**  | ` - `               | Not Available    | [Python Docs](https://neurons-me.github.io/monad/pip/)       |
-| **Rust**    | ` - `             | Not Available    | [Rust Docs](https://neurons-me.github.io/monad/crate/)   |
+| **Python**  | ` - `               | Not Available    | [Python Docs](https://neurons-me.github.io/monad/Python/)       |
+| **Rust**    | ` - `             | Not Available    | [Rust Docs](https://neurons-me.github.io/monad/Rust/)   |
 
-**Example in npm:**
+**Example:**
 
 ```bash
-cd npm
+cd Typescript
 npm install
 npm run test
 ```
@@ -144,7 +144,7 @@ There are three things working together:
 ------
 
 ## Where to go from here:
-- **Want to run it?** → [npm/README.md](https://neurons-me.github.io/monad/npm)
+- **Want to run it?** → [Typescript docs](https://neurons-me.github.io/monad/Typescript/)
 - **Want to understand the protocol?** → [NRP - Namespace Resolution Protocol](https://claude.ai/docs/en/Namespace Resolution Protocol.md)
 - **Want to build an app on top of this?** → [this.me on npm](https://npmjs.com/package/this.me)
 - **Want to understand the big picture?** → [neurons.me](https://neurons.me/)

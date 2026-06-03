@@ -8,9 +8,9 @@ Everything is addressed semantically. The port is just an implementation detail 
 ##### Select your language:
 | Language    | Source                        | Status           | Documentation                                             |
 | ----------- | ----------------------------- | ---------------- | --------------------------------------------------------- |
-| **Node.js** | `cd monad/npm && npm install` | **Stable 2.1.1** | [node.js Docs ⟡](https://neurons-me.github.io/monad/npm/) |
-| **Python**  | `cd monad/pip/`               | Not Available    | [pip Docs](https://neurons-me.github.io/monad/pip/)       |
-| **Rust**    | `cd monad/crate/`             | Not Available    | [crate Docs](https://neurons-me.github.io/monad/crate)    |
+| **Node.js** | `cd monad/Typescript && npm install` | **Stable 2.1.1** | [node.js Docs ⟡](https://neurons-me.github.io/monad/Typescript/typedocs/) |
+| **Python**  | `cd monad/Python/`               | Not Available    | [Python Docs](https://neurons-me.github.io/monad/Python/)       |
+| **Rust**    | `cd monad/Rust/`             | Not Available    | [Rust Docs](https://neurons-me.github.io/monad/Rust)    |
 
 ## neurons.me ecosystem:
 There are three things working together:

@@ -316,16 +316,16 @@ The mesh is the marketplace where they meet.
 
 | Primitive | Status | Location |
 |---|---|---|
-| `me(who, secret)` compound seed | ✅ | `this.me/npm/src/me.ts` |
-| `cleaker(me)` default to cleaker.me | ✅ | `cleaker/npm/src/binder.ts` |
-| `monad[frank]` scope chain routing | ✅ | `monad/npm/src/runtime/bridge.ts` + `meshSelect.ts` |
-| `POST /.mesh/announce` incoming | ✅ | `monad/npm/src/http/meshAnnounce.ts` |
-| `MONAD_SURFACE_URL` outgoing announce | ✅ | `monad/npm/src/index.ts` |
-| `namespace:fallback` / `namespace:failed` events | ✅ | `cleaker/npm/src/binder.ts` |
+| `me(who, secret)` compound seed | ✅ | `this.me/Typescript/src/me.ts` |
+| `cleaker(me)` default to cleaker.me | ✅ | `cleaker/Typescript/src/binder.ts` |
+| `monad[frank]` scope chain routing | ✅ | `monad/Typescript/src/runtime/bridge.ts` + `meshSelect.ts` |
+| `POST /.mesh/announce` incoming | ✅ | `monad/Typescript/src/http/meshAnnounce.ts` |
+| `MONAD_SURFACE_URL` outgoing announce | ✅ | `monad/Typescript/src/index.ts` |
+| `namespace:fallback` / `namespace:failed` events | ✅ | `cleaker/Typescript/src/binder.ts` |
 | KDF domain separation | 🔲 planned | monad × me identity unification |
 | `surface[]` mesh resolver in bridge | 🔲 planned | `bridge.ts` + `bridgeHandler.ts` |
-| `surface[a+b]` audience compound resolver | 🔲 planned | `cleaker/npm/src/` (NRP layer, not `.me`) |
-| `group:name` stable group namespace | 🔲 planned | `cleaker/npm/src/` + monad kernel for group |
+| `surface[a+b]` audience compound resolver | 🔲 planned | `cleaker/Typescript/src/` (NRP layer, not `.me`) |
+| `group:name` stable group namespace | 🔲 planned | `cleaker/Typescript/src/` + monad kernel for group |
 
 **Layer contract (permanent):**
 - `.me` = sovereign knowledge graph. Offline, individual, relational. No social chemistry.

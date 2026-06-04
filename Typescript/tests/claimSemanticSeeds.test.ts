@@ -102,7 +102,7 @@ describe("claim semantic seeds", () => {
 
     // Step 3: Verify all seeded values are readable
     expect(readSemanticValueForNamespace(namespace, "keys.username")).toBe(username);
-    expect(readSemanticValueForNamespace(namespace, "profile.name")).toBe("Polls Studio Seed User");
+    expect(readSemanticValueForNamespace(namespace, "me.name")).toBe("Polls Studio Seed User");
     expect(readSemanticValueForNamespace(namespace, "keys.password_hash")).toBeTruthy(); // exists + non-empty
     expect(readSemanticValueForNamespace(namespace, "keys.namespace")).toBe(namespace);
 

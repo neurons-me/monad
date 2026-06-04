@@ -7,7 +7,7 @@
  *
  * But writes can arrive in different formats:
  *   - Raw API write: { operation: "write", expression: "profile.name", value: "Ana" }
- *   - Semantic seed: { path: "profile.name", operator: "=", value: "Seed User" }
+ *   - Semantic seed: { path: "me.name", operator: "=", value: "Seed User" }
  *
  * The replay system normalizes ALL writes into a canonical memory format:
  *   { path, operator, expression, value }
@@ -82,7 +82,7 @@ describe("canonical replay memories", () => {
     expect(memories).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          path: "profile.name",   // the semantic key
+          path: "profile.name",   // the semantic key — raw writes store as-is
           operator: null,         // raw write → no operator (null, not "=")
           expression: "Ana",      // the value expression
           value: "Ana",           // the resolved concrete value
@@ -136,7 +136,7 @@ describe("canonical replay memories", () => {
       expect.arrayContaining([
         // The user's display name was seeded with operator "=" (set)
         expect.objectContaining({
-          path: "profile.name",
+          path: "me.name",
           operator: "=",
           value: "Seed User",
         }),

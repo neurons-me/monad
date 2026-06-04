@@ -200,15 +200,16 @@ describe("self mapping", () => {
     });
   });
 
-  it("derives a deterministic Ed25519 keypair from SEED — same seed = same monad identity", () => {
-    // WHAT: When SEED is set and no explicit keypair exists, loadSelfNodeConfig derives
-    //       the Ed25519 keypair via HKDF-SHA256(seed, info='monad.ai/ed25519/v1').
-    //       Same SEED on any machine → same keypair → same monadId → same mesh identity.
-    //
-    // This is KDF domain separation: compound_seed (from this.me) → Ed25519 keypair
-    // without compromise risk between domains.
+  it("generates a unique surface keypair per monad instance — not derived from SEED", () => {
+    // WHAT: Each monad instance generates its own unique Ed25519 keypair regardless of SEED.
+    // WHY:  SEED is the namespace authority (semantic identity). MONAD_PRIVATE_KEY is the
+    //       surface identity (which physical instance handles requests). These must be separate:
+    //       two monads sharing the same SEED (same namespace) must have different surface keys
+    //       so the mesh can distinguish them.
+    // PREV: An earlier design derived the keypair from SEED via HKDF — that caused two monads
+    //       with the same namespace seed to be indistinguishable on the mesh.
 
-    const seed = "a".repeat(64); // 64 hex chars = 32 bytes
+    const seed = "a".repeat(64);
     const cwd1 = fs.mkdtempSync(path.join(os.tmpdir(), "monad-kdf-a-"));
     const cwd2 = fs.mkdtempSync(path.join(os.tmpdir(), "monad-kdf-b-"));
 
@@ -222,12 +223,13 @@ describe("self mapping", () => {
       expect(result1).not.toBeNull();
       expect(result2).not.toBeNull();
 
-      // Same seed on two different machines → same keypair and same monadId
-      expect(env1.MONAD_PUBLIC_KEY).toBe(env2.MONAD_PUBLIC_KEY);
-      expect(env1.MONAD_ID).toBe(env2.MONAD_ID);
+      // Same SEED → different surface keypairs (each instance is unique on the mesh)
+      expect(env1.MONAD_PUBLIC_KEY).not.toBe(env2.MONAD_PUBLIC_KEY);
+      expect(env1.MONAD_ID).not.toBe(env2.MONAD_ID);
 
-      // monadId is deterministic and non-empty
+      // Each monadId is still a valid hash
       expect(env1.MONAD_ID).toMatch(/^monad:[0-9a-f]{64}$/);
+      expect(env2.MONAD_ID).toMatch(/^monad:[0-9a-f]{64}$/);
     } finally {
       fs.rmSync(cwd1, { recursive: true, force: true });
       fs.rmSync(cwd2, { recursive: true, force: true });

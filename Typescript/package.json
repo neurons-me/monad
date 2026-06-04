@@ -18,7 +18,7 @@
     }
   },
   "scripts": {
-    "prebuild": "npm run test:netget",
+    "prebuild": "vitest run",
     "dev": "tsx watch server.ts",
     "build": "tsc && node --input-type=commonjs -e \"require('fs').writeFileSync('dist/package.json', JSON.stringify({ type: 'module' }, null, 2) + '\\n')\"",
     "start": "tsx server.ts",

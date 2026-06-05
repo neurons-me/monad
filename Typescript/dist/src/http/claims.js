@@ -30,10 +30,17 @@ function parseNamespaceIdentity(namespace) {
 }
 export function readOpenedClaimProfile(namespace) {
     const identity = parseNamespaceIdentity(namespace);
-    const username = normalizeUsername(readSemanticValueForNamespace(namespace, "profile.username") || identity.username || "");
-    const name = normalizeName(readSemanticValueForNamespace(namespace, "profile.name"));
-    const email = normalizeEmail(readSemanticValueForNamespace(namespace, "profile.email"));
-    const phone = normalizePhone(readSemanticValueForNamespace(namespace, "profile.phone"));
+    // Read from me.* (current canonical paths). Fall back to profile.* for kernels
+    // that predate the me.* migration, then fall back to namespace identity.
+    const username = normalizeUsername(readSemanticValueForNamespace(namespace, "me.username") ||
+        readSemanticValueForNamespace(namespace, "profile.username") ||
+        identity.username || "");
+    const name = normalizeName(readSemanticValueForNamespace(namespace, "me.name") ||
+        readSemanticValueForNamespace(namespace, "profile.name"));
+    const email = normalizeEmail(readSemanticValueForNamespace(namespace, "me.email.primary") ||
+        readSemanticValueForNamespace(namespace, "profile.email"));
+    const phone = normalizePhone(readSemanticValueForNamespace(namespace, "me.phone.primary") ||
+        readSemanticValueForNamespace(namespace, "profile.phone"));
     const claimedAt = Number(readSemanticValueForNamespace(namespace, "auth.claimed_at") || 0);
     return {
         profile: {

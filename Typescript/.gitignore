@@ -1,2 +1,9 @@
 node_modules/
+dist/
+dist-types/
+.turbo/
 env/*.keys.json
+*.local
+.env*
+.DS_Store
+*.log

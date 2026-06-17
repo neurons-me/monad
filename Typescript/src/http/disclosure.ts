@@ -5,10 +5,13 @@ import type express from "express";
 export type DisclosureStatus = "ok" | "error" | "pending";
 
 // NRP Section 6 — content classification on the wire.
-// "public"  = path exists and is not in any secret scope
-// "opened"  = path is in a secret scope and caller presented valid key material
-// "closed"  = stealth root / wrong key / absent near secret / ambiguous — all indistinguishable to observer
-export type DisclosureContent = "public" | "opened" | "closed";
+// "public"    = path exists and is not in any secret scope
+// "opened"    = path is in a secret scope and caller presented valid key material
+// "closed"    = stealth root / wrong key / absent near secret / ambiguous — all indistinguishable to observer
+// "contested" = Phase 10 Total Monad Synthesis: multiple monads responded with valid but diverging values
+//               and no quorum was reached. value is null. sources are exposed in _synthesis for audit.
+//               Distinct from "closed": the path exists and was answered — the answers just conflict.
+export type DisclosureContent = "public" | "opened" | "closed" | "contested";
 
 // Canonical NRP disclosure envelope (Section 6)
 export type NRPDisclosureEnvelope = {

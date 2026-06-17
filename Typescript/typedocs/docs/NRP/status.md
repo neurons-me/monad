@@ -1,13 +1,15 @@
 # NRP Implementation Status
 
-`monad.ai` v2.1.1 — current local implementation status
+`monad.ai` v2.2.0 — current local implementation status
 
 ---
 
 ## What Is Implemented
 
 The current NRP work is no longer only an HTTP resolver. It is a mesh-aware
-runtime path:
+runtime path with optional Total Monad Synthesis (`MONAD_SYNTHESIS_ENABLED=1`):
+
+**Single-forward (default, Phase 1–9):**
 
 1. **Parse** `me://namespace:read/path`
 2. **Discover** monads that claim the namespace
@@ -17,18 +19,26 @@ runtime path:
 6. **Learn** from the request outcome
 7. **Explain** and optionally log the decision
 
-This is the current operational loop:
+**Synthesis path (Phase 10, opt-in):**
+
+1. **Parse** `me://namespace:read/path`
+2. **Discover** and **score** all eligible claimants
+3. **Select top-N** candidates (`MONAD_SYNTHESIS_MAX_CANDIDATES`, default 3)
+4. **Forward in parallel** to all N candidates
+5. **Synthesize**: quorum → `public`, no quorum → `contested`, all fail → `closed`
+6. **Log** synthesis decision with divergence metadata and reward signal
+7. **Expose** `_synthesis` on the wire for audit
 
 ```txt
 request
   → parseBridgeTarget
-  → findMonadsForNamespaceAsync
-  → matchesMeshSelector
-  → computeScoreDetailed
-  → fetch selected monad
-  → recordForwardResult
-  → correlateOutcome
-  → analyze-decisions
+  → MONAD_SYNTHESIS_ENABLED?
+      no  → selectMeshClaimant → forward → correlateOutcome
+      yes → selectMeshClaimants (top-N)
+          → forwardAll (parallel)
+          → synthesize()
+          → correlateSynthesisOutcome
+          → _synthesis in response
 ```
 
 ---
@@ -47,7 +57,8 @@ request
 | Phase 6 | done | Continuous reward and epsilon-greedy exploration for fragile choices |
 | Phase 7 | done | Global adaptive weights and live `/.mesh/weights` observability |
 | Phase 8 | done | Patch bay: controlled feature composition with learned weights |
-| Phase 9 | done | Namespace-local weights with maturity blending and global background learning |
+| Phase 9  | done | Namespace-local weights with maturity blending and global background learning |
+| Phase 10 | done | Total Monad Synthesis: multi-candidate parallel forward, quorum/contested/closed, synthesis decision log |
 
 ---
 
@@ -61,9 +72,10 @@ request
 | `GET /.mesh/monads` | List locally known and CLI-known monads |
 | `GET /.mesh/resolve?namespace=...` | Discover monads claiming a namespace |
 | `GET /.mesh/resolve?monad=frank` | Discover a monad by name/id |
+| `GET /.mesh/resolve/multi?namespace=...` | Scored candidate list for synthesis (Phase 10 observability) |
 | `GET /.mesh/weights` | Inspect global adaptive scorer weights |
 | `GET /.mesh/weights?namespace=...` | Inspect namespace-local weights and blended request weights |
-| `GET /resolve?target=me://ns:read/path` | Bridge a canonical NRP target |
+| `GET /resolve?target=me://ns:read/path` | Bridge a canonical NRP target (single or synthesis depending on flag) |
 
 ---
 
@@ -147,9 +159,13 @@ trends still propagate.
 | `MONAD_SCORE_SAMPLE_RATE` | `0` | Randomly log a fraction of scoring decisions |
 | `MONAD_SCORE_MARGIN_THRESHOLD` | `0.05` | Always log fragile low-margin decisions |
 | `MONAD_EXPLORATION_RATE` | `0` | Route some fragile decisions to runner-up |
-| `MONAD_DECISION_LOG` | unset | JSONL path for correlated decision outcomes |
+| `MONAD_DECISION_LOG` | unset | JSONL path for correlated decision outcomes (single + synthesis) |
 | `MONAD_LEARNING_QUALITY_WEIGHT` | `0.7` | Quality/latency split in reward |
 | `MONAD_DEBUG_WEIGHTS` | unset | Log adaptive weight changes after every forward |
+| `MONAD_SYNTHESIS_ENABLED` | `0` | Enable Phase 10 Total Monad Synthesis path (`1` to activate) |
+| `MONAD_SYNTHESIS_MAX_CANDIDATES` | `3` | Max claimants queried in parallel during synthesis |
+| `MONAD_SYNTHESIS_QUORUM_THRESHOLD` | `0.5` | Fraction required for quorum (strict majority — tie = contested) |
+| `MONAD_SYNTHESIS_MIN_RELATIVE_SCORE` | `0.8` | Min score relative to winner to qualify as synthesis candidate |
 
 ---
 
@@ -158,8 +174,8 @@ trends still propagate.
 Current regression suite:
 
 ```txt
-19 test files
-154 tests
+31 test files
+391 tests
 ```
 
 Primary commands:
@@ -189,3 +205,5 @@ These remain design targets, not production guarantees:
 - auto-tuning of weights from reward history
 - durable decision log beyond JSONL
 - challenge/nonce validation for stronger monad proof freshness
+- synthesis policy selection via `me://` path metadata (namespace-declared quorum rules)
+- `contested` response UI surface (currently wire-only, no GUI component)

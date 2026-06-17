@@ -83,6 +83,38 @@ export function matchesMeshSelector(entry: MonadIndexEntry, selectorRaw: string 
 
 // Margin below this value qualifies a decision for epsilon-greedy exploration.
 const EXPLORATION_MARGIN_THRESHOLD = 0.05;
+
+/**
+ * Shared scoring pipeline used by both selectMeshClaimant (single winner) and
+ * selectMeshClaimants (top-N, Phase 10).
+ *
+ * Scores every claimant, merges adaptive + patch-bay + caller-supplied scorers,
+ * and returns the list sorted descending by total score.
+ *
+ * @internal — exported for meshSelectMulti.ts; not part of the public API.
+ */
+export async function scoreCandidates(
+  claimants: MonadIndexEntry[],
+  namespace: string,
+  now: number,
+  extraScorers: Scorer[],
+): Promise<Array<{ entry: MonadIndexEntry; detailed: ScoreBreakdown }>> {
+  const adaptiveWeights = resolveAdaptiveWeights(namespace);
+  const ctx = { namespace, requestedAt: now, adaptiveWeights };
+
+  const patchScorers = getPatchScorers(BUILT_IN_SCORERS);
+  const allExtraScorers = [...patchScorers, ...extraScorers];
+
+  return claimants
+    .map((m) => {
+      const meta = readClaimMeta(m.monad_id, namespace);
+      return { entry: m, detailed: computeScoreDetailed(m, meta, ctx, allExtraScorers) };
+    })
+    .sort((a, b) => {
+      const d = b.detailed.total - a.detailed.total;
+      return d !== 0 ? d : a.entry.monad_id.localeCompare(b.entry.monad_id);
+    });
+}
 // Softmax temperature for exploration sampling: lower = more peaked (winner likely),
 // higher = more uniform. Fixed at a value that gives ~40% exploration probability
 // at margin=0.01 and ~10% at margin=0.05.
@@ -219,27 +251,9 @@ export async function selectMeshClaimant(opts: {
 
   if (claimants.length === 0) return null;
 
-  // Inject one pre-blended adaptive weight object for this request.
-  // This keeps the hot path at one blend per request, not per claimant.
-  const adaptiveWeights = resolveAdaptiveWeights(namespace);
-  const ctx = { namespace, requestedAt: now, adaptiveWeights };
-
-  // Merge patch bay scorers (Phase 8) with caller-supplied extras.
-  // Patch scorers resolve against built-ins only — patch-of-patch not yet supported.
-  const patchScorers = getPatchScorers(BUILT_IN_SCORERS);
-  const allExtraScorers = [...patchScorers, ...extraScorers];
-
-  // Score all claimants and sort descending. O(N) scoring + O(N log N) sort.
-  // N is typically 2–5 in a real mesh, so the sort cost is negligible.
-  const allScored = claimants
-    .map((m) => {
-      const meta = readClaimMeta(m.monad_id, namespace);
-      return { entry: m, detailed: computeScoreDetailed(m, meta, ctx, allExtraScorers) };
-    })
-    .sort((a, b) => {
-      const d = b.detailed.total - a.detailed.total;
-      return d !== 0 ? d : a.entry.monad_id.localeCompare(b.entry.monad_id);
-    });
+  // Score all claimants via shared pipeline (adaptive weights + patch-bay + extras).
+  // O(N) scoring + O(N log N) sort. N is typically 2–5 in a real mesh.
+  const allScored = await scoreCandidates(claimants, namespace, now, extraScorers);
 
   const best = allScored[0]!;
   const second = allScored[1] ?? null;

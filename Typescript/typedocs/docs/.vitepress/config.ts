@@ -6,7 +6,7 @@ export default defineConfig({
   title: 'monad.ai',
   description: 'Serves namespace me:// protocol — the identity runtime for the neurons.me stack.',
   base,
-  outDir: '../typedocs',
+  outDir: '..',
   appearance: 'force-dark',
   head: [
     ['meta', { name: 'author', content: 'neurons.me' }],

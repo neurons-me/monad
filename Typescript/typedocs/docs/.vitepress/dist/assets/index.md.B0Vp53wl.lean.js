@@ -1,0 +1,1 @@
+import{_ as a,o as e,c as n,ae as i}from"./chunks/framework.C7qU-Vik.js";const k=JSON.parse('{"title":"monad.ai","description":"","frontmatter":{},"headers":[],"relativePath":"index.md","filePath":"index.md"}'),t={name:"index.md"};function o(l,s,p,h,r,c){return e(),n("div",null,[...s[0]||(s[0]=[i("",55)])])}const u=a(t,[["render",o]]);export{k as __pageData,u as default};

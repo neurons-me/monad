@@ -3,6 +3,10 @@ layout: readme
 title: Notes — monad
 ---
 
+[← Back to monad Docs](https://neurons-me.github.io/monad/docs/)
+
+---
+
 ### **Namespace**:
 Canonical resource grammar:
 `me://namespace[selector]/path`
@@ -133,3 +137,7 @@ Common cases, then, are simple statements about the sets:
 
 This algebra enables rigorous, composable modeling of trust, replication, and control in distributed, encrypted systems.
 ---
+
+---
+
+[← Back to monad Docs](https://neurons-me.github.io/monad/docs/)

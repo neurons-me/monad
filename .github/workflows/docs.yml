@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "Typescript/docs/**"
+      - "Typescript/typedocs/**"
       - "Typescript/src/**"
       - "Typescript/typedoc.json"
       - ".github/workflows/docs.yml"
@@ -26,12 +26,14 @@ jobs:
 
       # Install VitePress from repo root — avoids npm/package.json which contains
       # workspace:* deps that npm cannot resolve (workspace: is pnpm-only syntax).
-      # TypeDoc API markdown (docs/api/) is committed, so no typedoc run needed.
+      # TypeDoc API HTML (typedocs/api/) is committed, so no typedoc run needed.
       - name: Install VitePress
         run: npm install --no-save vitepress
 
+      # Source .md and built .html live side by side in Typescript/typedocs/ —
+      # outDir: '.' + emptyOutDir: false in .vitepress/config.ts builds in place.
       - name: Build VitePress
-        run: npx vitepress build Typescript/docs
+        run: npx vitepress build Typescript/typedocs
         env:
           VITEPRESS_BASE: /monad/Typescript/typedocs/
 

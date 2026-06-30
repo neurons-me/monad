@@ -7,3 +7,5 @@ env/*.keys.json
 .env*
 .DS_Store
 *.log
+typedocs/.vitepress/cache
+typedocs/.vitepress/dist

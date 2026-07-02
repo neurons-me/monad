@@ -1,5 +1,5 @@
 ---
-layout: doc
+layout: readme
 title: Monad — Subtractive Synthesis
 ---
 

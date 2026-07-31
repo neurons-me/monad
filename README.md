@@ -18,6 +18,8 @@
 # monad
 > *A federated semantic compute runtime.*
 
+The passing state which involves and represents a multiplicity in the unity… is what is called perception (distintion).
+
 A monad is a running instance of the neurons.me stack — a daemon that holds a `.me` kernel, exposes it over HTTP, resolves namespace paths, and registers itself on the mesh so other monads and users can find it.
 
 ### `me://Everything.is.just.a.hash.of.a.knowledge.unit`

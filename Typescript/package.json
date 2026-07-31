@@ -36,13 +36,15 @@
     "docs:publish": "npm run docs:api && npm run docs:build"
   },
   "dependencies": {
+    "@types/ws": "^8.18.1",
     "cleaker": "^3.2.1",
     "cors": "^2.8.5",
     "express": "^4.21.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "this.gui": "^2.1.8",
-    "this.me": "^3.9.1"
+    "this.me": "^3.9.1",
+    "ws": "^8.21.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

@@ -38,7 +38,8 @@ export default defineConfig({
           { text: 'Initiating Monads', link: '/Initiating-Monads' },
           { text: 'Subtractive Synthesis', link: '/Subtractive-Synthesis' },
           { text: 'Monad vs Cleaker', link: '/Monad-&&-Cleaker(me)' },
-          { text: 'Namespace Protocol', link: '/Namespace-Protocol-Resolution' },
+          { text: 'Namespace Protocol', link: '/NRP-v0.3.0' },
+          { text: 'NRP v0.2.1 Archive', link: '/NRP-v0.2.1' },
         ],
       },
       {

@@ -9,13 +9,14 @@ title: monad.ai — Docs
 **Current status:** monad.ai v2.2.0 — NRP chemistry frozen at `nrp-chemistry-v0.1` (2026-05-08).
 
 Includes full NRP mesh stack:
-- Phase 1–8 complete: namespace discovery, selector routing, production scoring, decision introspection, decision logs, continuous reward, low-margin exploration, patch bay
+- Phase 1–10 complete: namespace discovery, selector routing, production scoring, decision introspection, decision logs, continuous reward, low-margin exploration, patch bay, namespace-local weights, and Total Monad Synthesis
 - KDF domain separation: `SEED` env var → deterministic Ed25519 keypair via HKDF — same `(who, secret)` = same monad identity everywhere
 - `monads proxy` browser gateway: PAC file on port 8160, routes `name.monad` to running monads without DNS changes
 - Mesh announce: `POST /.mesh/announce` incoming + `MONAD_SURFACE_URL` outgoing heartbeat
 - Scope-chain routing: `monad[frank]` compound → rootspace → 404 fallback
 
 Start here for implementation details:
+- [Namespace Resolution Protocol v0.3.0](./NRP-v0.3.0.md)
 - [Mesh Implementation Status](./Mesh/status.md)
 - [Mesh Scoring Engine](./Mesh/scoring.md)
 - [Mesh Test Documentation](./Mesh/testing.md)

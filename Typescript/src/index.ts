@@ -18,6 +18,7 @@ import { setupPersistence } from "./kernel/persist.js";
 import { readMonadIndexEntry, touchSelfMonadLastSeen } from "./kernel/monadIndex.js";
 import { announceToSurface } from "./http/meshAnnounce.js";
 import { startNetGetMonadRegistration, type MonadNetGetRegistration } from "./runtime/netgetRegistration.js";
+import { attachNrpWebSocketServer } from "./http/nrpHandler.js";
 
 /**
  * Options for starting a complete monad.ai HTTP daemon.
@@ -118,6 +119,8 @@ export async function startMonad(options: StartMonadOptions = {}): Promise<Start
       logger.log(`  - NetGet registry: ${netgetRegistration.endpoint}`);
     }
   });
+
+  attachNrpWebSocketServer(server);
 
   server.once("close", () => {
     void netgetRegistration?.stop();

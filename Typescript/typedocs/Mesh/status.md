@@ -9,6 +9,11 @@
 The current NRP work is no longer only an HTTP resolver. It is a mesh-aware
 runtime path with optional Total Monad Synthesis (`MONAD_SYNTHESIS_ENABLED=1`):
 
+**Source-of-truth note:** this page is an implementation status report. The
+normative protocol contract is [NRP v0.3.0](../NRP-v0.3.0.md). The previous
+formal spec, [NRP v0.2.1](../NRP-v0.2.1.md), is archived and only covers the
+mesh draft through Phase 6.
+
 **Single-forward (default, Phase 1–9):**
 
 1. **Parse** `me://namespace:read/path`
@@ -207,3 +212,4 @@ These remain design targets, not production guarantees:
 - challenge/nonce validation for stronger monad proof freshness
 - synthesis policy selection via `me://` path metadata (namespace-declared quorum rules)
 - `contested` response UI surface (currently wire-only, no GUI component)
+- migration from Cleaker's compatibility `parseTarget` bridge parser to the modern `parseNamespaceExpression()` grammar

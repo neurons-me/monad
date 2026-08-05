@@ -5,16 +5,12 @@ title: monad — Rust
 
 # monad · Rust 🦀
 
-> **Status: In development**
+> **Not ready yet.** The working implementation is in
+> [monad · Typescript](../Typescript/) — start there.
 
-The Rust implementation of `monad` is currently in development.
-
-## Install
-
-```bash
-cargo add monad-ai
-```
+Status: in development. `cargo add monad-ai` is the reserved package name for
+when this lands; there is no functional code here yet.
 
 ---
 
-→ Back to [monad](../)
+→ [monad · Typescript (working implementation)](../Typescript/) · [back to monad](../)

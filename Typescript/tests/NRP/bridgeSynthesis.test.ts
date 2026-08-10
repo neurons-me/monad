@@ -173,6 +173,35 @@ describe("bridge synthesis — feature flag", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("single-forward path extracts value from a real nested envelope (target.value), not just flat mocks", async () => {
+    // Real shape returned by createEnvelope() (http/envelope.ts): value is
+    // nested under target.value, not top-level. Regression test for the bug
+    // where `{ ...payload, target: bridgeTarget }` silently discarded this
+    // nested value by overwriting payload.target before value was read.
+    seedNodes(3);
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ ok: true, target: { value: "Alice" }, disclosure: "public" }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const res = await request(makeApp())
+      .get("/resolve")
+      .query({ target: target() });
+
+    expect(res.status).toBe(200);
+    expect(res.body.value).toBe("Alice");
+    expect(res.body.disclosure).toBe("public");
+    // target in the response is this request's own bridgeTarget metadata,
+    // not the upstream's raw target object — it must not carry `value`.
+    expect(res.body.target.namespace.me).toBe(NS);
+    expect(res.body.target.value).toBeUndefined();
+    expect(res.body._mesh.monad_id).toBe("node-0");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("flag on + quorum queries multiple monads and returns one public value", async () => {
     process.env.MONAD_SYNTHESIS_ENABLED = "1";
     process.env.MONAD_SYNTHESIS_MAX_CANDIDATES = "3";

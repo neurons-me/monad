@@ -603,9 +603,23 @@ export function createBridgeHandler(config: BridgeHandlerConfig): express.Reques
       const contentType = String(response.headers.get("content-type") || "");
       if (contentType.includes("application/json")) {
         const payload = await response.json();
+        // payload.target (when present) is the UPSTREAM monad's own target
+        // metadata, carrying the real value nested at target.value (see
+        // envelope.ts's nestResponseFields). Spreading payload and then
+        // overwriting target with bridgeTarget (this request's own target
+        // metadata — the established contract, matching the synthesis
+        // branch above) would silently discard that nested value. Extract
+        // it first via extractPayloadValue, same helper forwardCandidate()
+        // uses, so both bridge paths agree on how to read an upstream envelope.
         const patched =
           payload && typeof payload === "object"
-            ? { ...payload, target: bridgeTarget, ...(selectorDispatch ? { dispatch: selectorDispatch } : {}), ...meshMeta }
+            ? {
+                ...payload,
+                target: bridgeTarget,
+                value: extractPayloadValue(payload),
+                ...(selectorDispatch ? { dispatch: selectorDispatch } : {}),
+                ...meshMeta,
+              }
             : { ok: response.ok, operation: "read", target: bridgeTarget, value: payload, ...(selectorDispatch ? { dispatch: selectorDispatch } : {}), ...meshMeta };
         return res.status(response.status).json(patched);
       }

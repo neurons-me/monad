@@ -1,4 +1,4 @@
-import parseTarget from "cleaker";
+import { parseNrpTarget } from "cleaker";
 import type express from "express";
 import { buildMeTargetNrp } from "../http/meTarget.js";
 import {
@@ -92,12 +92,11 @@ export function parseBridgeTarget(rawInput: string): BridgeTarget | null {
   const raw = String(rawInput || "").trim();
   if (!raw) return null;
   try {
-    const parsed = parseTarget(raw.startsWith("me://") ? raw : `me://${raw}`, { allowShorthandRead: true });
-    const t = (parsed as any).__ptr?.target ?? parsed;
-    const namespace = normalizeNamespaceIdentity(t.namespace?.fqdn ?? t.namespace ?? "");
+    const parsed = parseNrpTarget(raw);
+    const namespace = normalizeNamespaceIdentity(parsed.fqdn ?? "");
     if (!namespace) return null;
-    const selector = String(t.operation || t.intent?.selector || "read").trim() || "read";
-    const pathSlash = String(t.path || "").trim().replace(/^\/+/, "");
+    const selector = String(parsed.operation || "read").trim() || "read";
+    const pathSlash = String(parsed.path || "").trim().replace(/^\/+/, "");
     const pathDot = pathSlash.split("/").map((p) => p.trim()).filter(Boolean).join(".");
     const nrp = `me://${namespace}:${selector}/${pathDot || "_"}`;
     const monadExtract = extractMonadFromPath(pathSlash);

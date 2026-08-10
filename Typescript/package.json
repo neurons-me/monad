@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "@types/ws": "^8.18.1",
-    "cleaker": "^3.2.1",
+    "cleaker": "workspace:*",
     "cors": "^2.8.5",
     "express": "^4.21.1",
     "react": "^18.3.1",

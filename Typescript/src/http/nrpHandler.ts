@@ -3,8 +3,19 @@ import type { Server } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { randomUUID } from "node:crypto";
 import { getKernel } from "../kernel/manager.js";
+import type { DisclosureContent } from "./disclosure.js";
 
-type NRPDisclosure = "public" | "closed" | "stealth" | "contested";
+// Internal classification only — never sent on the wire. "stealth" means the
+// kernel would not confirm existence of the path (A0/A2 axioms); per NRP
+// Section 6 that's indistinguishable from "closed" to an observer, so
+// toWireDisclosure() collapses it before anything reaches the client, the
+// same way pathResolver.ts's toDisclosureContent() does for HTTP.
+type InternalClassification = "public" | "stealth" | "closed";
+
+function toWireDisclosure(classification: InternalClassification): DisclosureContent {
+  if (classification === "public") return "public";
+  return "closed";
+}
 
 type MsgNrpOpen = {
   type: "nrp.open";
@@ -23,7 +34,7 @@ type MsgResolved = {
     audience?: string[];
     capabilities?: string[];
     surface?: string;
-    disclosure: NRPDisclosure;
+    disclosure: DisclosureContent;
   };
   timestamp: number;
 };
@@ -37,7 +48,7 @@ function send(ws: WebSocket, msg: MsgResolved | MsgError | MsgPong): void {
   }
 }
 
-function resolveDisclosure(namespace: string): NRPDisclosure {
+function classifyNamespace(namespace: string): InternalClassification {
   try {
     const kernel = getKernel();
     // Walk the namespace path and check disclosure using the kernel's
@@ -80,7 +91,7 @@ function handleNrpOpen(ws: WebSocket, req: IncomingMessage, msg: MsgNrpOpen): vo
     namespace = canonical;
   }
 
-  const disclosure = resolveDisclosure(namespace);
+  const disclosure = toWireDisclosure(classifyNamespace(namespace));
   const endpoints  = deriveEndpoints(namespace, req);
 
   const resolved: MsgResolved = {

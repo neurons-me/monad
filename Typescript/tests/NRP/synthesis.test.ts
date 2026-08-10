@@ -27,6 +27,9 @@ import { synthesize, DEFAULT_SYNTHESIS_POLICY, type SynthesisSource, type Synthe
 
 let idCounter = 0;
 
+// Every existing test in this file predates disclosure and assumes "these are
+// real, meaningful values" — that's exactly what disclosure="public" means.
+// Tests exercising disclosure itself override it explicitly.
 function source(overrides: Partial<SynthesisSource> & { value: unknown }): SynthesisSource {
   const id = `monad-${++idCounter}`;
   return {
@@ -35,6 +38,7 @@ function source(overrides: Partial<SynthesisSource> & { value: unknown }): Synth
     score: 0.9,
     breakdown: { total: 0.9, recency: 0.9, resonance: 0, latency: 0, scorers: {} } as any,
     ok: true,
+    disclosure: "public",
     latencyMs: 10,
     ...overrides,
   };
@@ -317,5 +321,106 @@ describe("synthesize — divergence metadata", () => {
     const after = Date.now();
     expect(result.synthesizedAt).toBeGreaterThanOrEqual(before);
     expect(result.synthesizedAt).toBeLessThanOrEqual(after);
+  });
+});
+
+// ── 8. Disclosure — per-source eligibility ───────────────────────────────────
+//
+// A source can be ok=true (the transport succeeded) while still having
+// nothing to contribute: NRP Section 6 says a "closed" response is 200 with
+// value=null. Before disclosure existed on SynthesisSource, that null could
+// get silently counted as a value every other closed source "agreed" with —
+// a false quorum on nothing. These tests pin the fix.
+
+describe("synthesize — disclosure eligibility", () => {
+  it("all sources closed → disclosure=closed, not contested (this is absence, not disagreement)", () => {
+    const sources = [
+      source({ value: null, disclosure: "closed" }),
+      source({ value: null, disclosure: "closed" }),
+      source({ value: null, disclosure: "closed" }),
+    ];
+    const result = synthesize(sources);
+    expect(result.disclosure).toBe("closed");
+    expect(result.ok).toBe(false);
+    expect(result.value).toBeNull();
+  });
+
+  it("public sources disagreeing → contested (unchanged from Case C)", () => {
+    const sources = [
+      source({ value: "a", disclosure: "public", score: 0.9 }),
+      source({ value: "b", disclosure: "public", score: 0.8 }),
+      source({ value: "c", disclosure: "public", score: 0.7 }),
+    ];
+    const result = synthesize(sources);
+    expect(result.disclosure).toBe("contested");
+    expect(result.value).toBeNull();
+  });
+
+  it("closed + public does not form a false quorum on null", () => {
+    // Before the fix: 2 closed sources both had value=null, which formed a
+    // majority group of 2 against the 1 public source — a false "public"
+    // consensus that the value IS null, when really 2 sources just had
+    // nothing to say. With disclosure filtering, only the 1 public source is
+    // eligible, and it wins on its own.
+    const sources = [
+      source({ value: null, disclosure: "closed", score: 0.95 }),
+      source({ value: null, disclosure: "closed", score: 0.90 }),
+      source({ value: "real-value", disclosure: "public", score: 0.50 }),
+    ];
+    const result = synthesize(sources, policy({ quorumThreshold: 0.5 }));
+    expect(result.disclosure).toBe("public");
+    expect(result.value).toBe("real-value");
+    expect(result.quorum.totalCount).toBe(1); // only the public source counts
+  });
+
+  it("closed sources still appear in result.sources for audit", () => {
+    const sources = [
+      source({ value: "real-value", disclosure: "public" }),
+      source({ value: null, disclosure: "closed" }),
+    ];
+    const result = synthesize(sources);
+    expect(result.sources).toHaveLength(2);
+    expect(result.sources.some((s) => s.disclosure === "closed")).toBe(true);
+  });
+
+  it("opened sources are value-eligible, same as public", () => {
+    const sources = [
+      source({ value: "secret-shared", disclosure: "opened", score: 0.9 }),
+      source({ value: "secret-shared", disclosure: "opened", score: 0.8 }),
+    ];
+    const result = synthesize(sources);
+    expect(result.disclosure).toBe("opened");
+    expect(result.value).toBe("secret-shared");
+  });
+
+  it("mixed public/opened quorum preserves the chosen source's disclosure", () => {
+    const sources = [
+      source({ value: "shared", disclosure: "opened", score: 0.9 }),
+      source({ value: "shared", disclosure: "public", score: 0.8 }),
+    ];
+    const result = synthesize(sources);
+    expect(result.disclosure).toBe("opened");
+    expect(result.value).toBe("shared");
+  });
+
+  it("a source's own disclosure='contested' is excluded from quorum, same as closed", () => {
+    const sources = [
+      source({ value: null, disclosure: "contested" }),
+      source({ value: "real-value", disclosure: "public" }),
+    ];
+    const result = synthesize(sources);
+    expect(result.disclosure).toBe("public");
+    expect(result.value).toBe("real-value");
+    expect(result.quorum.totalCount).toBe(1);
+  });
+
+  it("closed source with ok=false is excluded before disclosure filtering even runs", () => {
+    const sources = [
+      source({ value: null, ok: false, disclosure: "closed" }),
+      source({ value: "real-value", disclosure: "public" }),
+    ];
+    const result = synthesize(sources);
+    expect(result.disclosure).toBe("public");
+    expect(result.value).toBe("real-value");
   });
 });

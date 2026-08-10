@@ -9,6 +9,7 @@
  */
 
 import type { ScoreBreakdown } from "./scoring.js";
+import type { DisclosureContent } from "../http/disclosure.js";
 
 // ---------------------------------------------------------------------------
 // Source
@@ -31,6 +32,16 @@ export type SynthesisSource = {
   value: unknown;
   ok: boolean;
   latencyMs: number;
+  /**
+   * The NRP disclosure this source reported for its own response (NRP Section 6).
+   * Only "public"/"opened" sources are eligible to participate in value quorum —
+   * a "closed" source responded successfully (ok=true) but its value is null by
+   * NRP contract, and must not be silently counted as agreeing with other null
+   * or matching values. "contested" here means the source itself couldn't settle
+   * on a value (rare at the single-source level, but excluded from quorum for
+   * the same reason).
+   */
+  disclosure: DisclosureContent;
 };
 
 // ---------------------------------------------------------------------------
@@ -118,7 +129,8 @@ export type SynthesisPolicy = {
  * The output of a synthesis pass.
  *
  * `disclosure` follows the NRP contract:
- * - `"public"`:    quorum met, value available
+ * - `"public"`:    quorum met, public value available
+ * - `"opened"`:    quorum met, value was opened by valid key material
  * - `"closed"`:    all sources failed / nothing responded
  * - `"contested"`: sources responded but could not reach quorum
  *
@@ -128,7 +140,7 @@ export type SynthesisPolicy = {
 export type SynthesisResult = {
   ok: boolean;
   value: unknown | null;
-  disclosure: "public" | "closed" | "contested";
+  disclosure: "public" | "opened" | "closed" | "contested";
   sources: SynthesisSource[];
   quorum: SynthesisQuorum;
   divergence: SynthesisDivergence;
@@ -224,17 +236,24 @@ export function getDefaultSynthesisPolicy(): SynthesisPolicy {
  * Algorithm:
  *   1. Filter to responding sources (ok=true).
  *   2. If none respond → { ok:false, disclosure:"closed" }.
- *   3. Sort by score descending; winner = [0].
+ *   2b. Filter to value-eligible sources (disclosure="public"|"opened"). A
+ *       source that itself disclosed "closed" answered successfully but its
+ *       value is null by NRP contract — it must not count toward agreement.
+ *       If none are value-eligible → { ok:false, disclosure:"closed" }, same
+ *       as step 2 (no usable value signal at all, not disagreement).
+ *   3. Sort value-eligible sources by score descending; winner = [0].
  *   4. Group by policy.valuesAgree() — find the largest agreement group.
  *   5. Case A: quorum met AND winner is in majority group
- *              → value from winner, disclosure="public", strategy="quorum"
+ *              → value from winner, disclosure=winner.disclosure, strategy="quorum"
  *      Case B: quorum met AND winner is NOT in majority group
  *              → value from highest-scored member of majority group,
- *                disclosure="public", strategy="highest-scored"
+ *                disclosure=majorityWinner.disclosure, strategy="highest-scored"
  *      Case C: no quorum
  *              → value=null, disclosure="contested", strategy="contested"
- *   6. Compute divergence metadata (maxDelta for numbers, diffKeys for objects).
- *   7. Return SynthesisResult.
+ *   6. Compute divergence metadata (maxDelta for numbers, diffKeys for objects)
+ *      over value-eligible sources only.
+ *   7. Return SynthesisResult. `sources` always contains the full original
+ *      list (including closed/failed) for audit.
  */
 export function synthesize(
   sources: SynthesisSource[],
@@ -242,10 +261,10 @@ export function synthesize(
 ): SynthesisResult {
   const synthesizedAt = Date.now();
 
-  // Step 1 — filter to responding sources
+  // Step 1 — filter to responding sources (transport succeeded)
   const responding = sources.filter((s) => s.ok);
 
-  // Step 2 — nothing responded
+  // Step 2 — nothing responded at all
   if (responding.length === 0) {
     return {
       ok: false,
@@ -259,8 +278,28 @@ export function synthesize(
     };
   }
 
-  // Step 3 — sort by score descending, winner first
-  const sorted = [...responding].sort((a, b) => {
+  // Step 2b — responding, but none are value-eligible. A source that answered
+  // with disclosure="closed" (or "contested") has value=null by NRP contract —
+  // that null must never be treated as a value the source is knowingly agreeing
+  // on. Distinct from Step 2: this is disclosure state, not disagreement, so it
+  // must not surface as "contested" (which implies sources shared values that
+  // conflicted).
+  const valueEligible = responding.filter((s) => s.disclosure === "public" || s.disclosure === "opened");
+  if (valueEligible.length === 0) {
+    return {
+      ok: false,
+      value: null,
+      disclosure: "closed",
+      sources,
+      quorum: { threshold: policy.quorumThreshold, met: false, agreeCount: 0, totalCount: 0 },
+      divergence: { strategy: "contested", sourceCount: responding.length, agreeCount: 0 },
+      synthesizedAt,
+      policy: policy.name,
+    };
+  }
+
+  // Step 3 — sort value-eligible sources by score descending, winner first
+  const sorted = [...valueEligible].sort((a, b) => {
     const d = b.score - a.score;
     return d !== 0 ? d : a.monad_id.localeCompare(b.monad_id);
   });
@@ -295,7 +334,7 @@ export function synthesize(
   //   otherwise       → strict majority: agreeCount > totalCount * threshold
   //                     (NOT >=, so 1/2 is contested, not public)
   const agreeCount = largestGroup.members.length;
-  const totalCount = responding.length;
+  const totalCount = valueEligible.length;
   const quorumMet =
     totalCount > 0 &&
     (policy.quorumThreshold <= 0
@@ -313,13 +352,13 @@ export function synthesize(
     if (winnerInMajority) {
       // Case A: winner agrees with majority — trust the winner
       value = winner.value;
-      disclosure = "public";
+      disclosure = winner.disclosure;
       strategy = "quorum";
     } else {
       // Case B: winner disagrees with majority — defer to majority, pick highest scorer within it
       const majorityWinner = largestGroup.members.sort((a, b) => b.score - a.score)[0]!;
       value = majorityWinner.value;
-      disclosure = "public";
+      disclosure = majorityWinner.disclosure;
       strategy = "highest-scored";
     }
   } else {
@@ -330,7 +369,7 @@ export function synthesize(
   }
 
   // Step 6 — divergence metadata
-  const divergence = computeDivergence(responding, strategy, agreeCount);
+  const divergence = computeDivergence(valueEligible, strategy, agreeCount);
 
   return {
     ok: quorumMet,

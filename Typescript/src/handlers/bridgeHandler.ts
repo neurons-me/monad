@@ -1,5 +1,6 @@
 import type express from "express";
 import { createEnvelope, createErrorEnvelope } from "../http/envelope.js";
+import type { DisclosureContent } from "../http/disclosure.js";
 import { buildMeTargetNrp } from "../http/meTarget.js";
 import { resolveObserverRelation, resolveTransportHost } from "../http/namespace.js";
 import { resolveSelfDispatch, type SelfNodeConfig } from "../http/selfMapping.js";
@@ -81,11 +82,47 @@ function buildForwardInit(
   };
 }
 
+// Envelope-aware: createEnvelope() (http/envelope.ts) nests `value` under
+// `target.value` (nestKeys = ["namespace", "path", "value"]) for real NRP
+// responses (e.g. pathResolver.ts). Older/simpler mocks may still put `value`
+// at the top level, so that's checked first for backward compatibility.
+// Falls back to the raw payload only when neither shape matches.
 function extractPayloadValue(payload: unknown): unknown {
-  if (payload && typeof payload === "object" && "value" in payload) {
-    return (payload as Record<string, unknown>).value;
+  if (!payload || typeof payload !== "object") return payload;
+  const record = payload as Record<string, unknown>;
+  if ("value" in record) return record.value;
+  const target = record.target;
+  if (target && typeof target === "object" && "value" in (target as Record<string, unknown>)) {
+    return (target as Record<string, unknown>).value;
   }
   return payload;
+}
+
+const DISCLOSURE_VALUES = new Set(["public", "opened", "closed", "contested"]);
+
+function coerceDisclosure(raw: unknown): DisclosureContent | null {
+  if (typeof raw === "string" && DISCLOSURE_VALUES.has(raw)) {
+    return raw as DisclosureContent;
+  }
+  if (raw && typeof raw === "object") {
+    const nested = raw as Record<string, unknown>;
+    return coerceDisclosure(nested.level ?? nested.status ?? nested.kind);
+  }
+  return null;
+}
+
+// Reads the NRP disclosure this source reported for itself (top-level
+// `payload.disclosure` — createEnvelope() does not nest it, unlike `value`).
+// Falls back to inferring from response success when the field is absent
+// (e.g. a non-NRP endpoint): ok → assume "public", otherwise "closed" — the
+// conservative default, so a malformed/failed response can never be silently
+// treated as agreeing with real public values.
+function extractPayloadDisclosure(payload: unknown, fallbackOk: boolean): DisclosureContent {
+  if (payload && typeof payload === "object") {
+    const found = coerceDisclosure((payload as Record<string, unknown>).disclosure);
+    if (found) return found;
+  }
+  return fallbackOk ? "public" : "closed";
 }
 
 function safeNumber(raw: string | undefined, fallback: number): number {
@@ -122,6 +159,7 @@ async function forwardCandidate(
       typeof payload !== "object" ||
       !("ok" in payload) ||
       (payload as Record<string, unknown>).ok !== false;
+    const sourceOk = response.ok && payloadOk;
 
     return {
       monad_id: candidate.entry.monad_id,
@@ -129,8 +167,9 @@ async function forwardCandidate(
       endpoint: origin,
       score: candidate.score,
       breakdown: candidate.breakdown,
-      value: response.ok && payloadOk ? extractPayloadValue(payload) : null,
-      ok: response.ok && payloadOk,
+      value: sourceOk ? extractPayloadValue(payload) : null,
+      ok: sourceOk,
+      disclosure: extractPayloadDisclosure(payload, sourceOk),
       latencyMs,
       status: response.status,
       contentType,
@@ -145,6 +184,7 @@ async function forwardCandidate(
       breakdown: candidate.breakdown,
       value: null,
       ok: false,
+      disclosure: "closed",
       latencyMs: Date.now() - startedAt,
       status: 0,
       contentType: "",
@@ -164,7 +204,7 @@ function chooseSynthesisSource(
     return d !== 0 ? d : a.monad_id.localeCompare(b.monad_id);
   });
 
-  if (result.disclosure === "public") {
+  if (result.disclosure === "public" || result.disclosure === "opened") {
     const match = scored.find((s) => s.ok && policy.valuesAgree(s.value, result.value));
     if (match) return match;
   }
@@ -206,6 +246,7 @@ function publicSynthesisSource(source: SynthesisSource) {
     ok: source.ok,
     latencyMs: source.latencyMs,
     value: source.value,
+    disclosure: source.disclosure,
   };
 }
 

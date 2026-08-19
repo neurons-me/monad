@@ -385,6 +385,15 @@ A previously described `nrp_handle.lua` handler is not part of the current
 local implementation. Documentation or gateway code that mentions it describes
 an older unimplemented design, not the current binding.
 
+A second, path-based binding exists alongside hostname binding:
+`/apps/:name` (public/canonical) and `/monads/:name` (internal/infra, same
+handler) reverse-proxy by registered app/monad name rather than by hostname,
+stripping the prefix before forwarding so the target monad sees clean
+root-relative paths. This is how a namespace-per-app can be reached without
+that app owning a hostname of its own. See
+[Apps Over Netget](https://neurons-me.github.io/netget/Typescript/typedocs/AppsOverNetget.html) (in the
+`netget` package) for the full rationale and a worked example.
+
 ---
 
 ## 10. Parser Binding Notes
@@ -400,13 +409,54 @@ current HTTP binding, not the abstract NRP grammar.
 
 ---
 
-## 11. Open Questions
+## 11. WebSocket Binding (`/nrp`)
+
+Every `monad.ai` process exposes a WebSocket endpoint at `/nrp`, attached to
+the same HTTP server (and therefore the same port, and the same
+name-registered mesh address) it already serves HTTP from — no separate
+registration. Messages are JSON, one object per frame:
+
+| `type` | Direction | Purpose |
+|---|---|---|
+| `nrp.open` | client → server | Open a channel: `{expression, canonical, ast, client, timestamp}`. Namespace comes from the message itself, not a Host header — a WS upgrade has no per-message Host to re-resolve from. |
+| `resolved` | server → client | Reply to `nrp.open`: `{channelId, payload: {endpoints, disclosure, capabilities}}`. |
+| `read` | client → server | `{channelId, namespace, path, timestamp}` — one-shot read on an already-open channel. |
+| `subscribe` | client → server | Same shape as `read`, plus registers the connection for live updates on that path. |
+| `unsubscribe` | client → server | Stops live updates for a previously-subscribed path. |
+| `data` | server → client | Reply to `read`/`subscribe`: `{channelId, payload: {path, value, disclosure}}`. |
+| `stream` | server → client | Pushed for a `subscribe`d path whenever it changes: same payload shape as `data`. |
+| `ping` / `pong` | either | Keepalive. |
+
+Disclosure on this binding is intentionally narrower than the full NRP
+model (§4): only `public`/`closed` are ever emitted (`opened` requires key
+material not yet wired to this path; `contested` doesn't apply to a
+single-monad read) — matching the current HTTP binding's own disclosure
+behavior (§8), not a separate policy.
+
+**Live-update mechanism**: a write on the HTTP binding (`POST /`) notifies
+an in-process registry (`kernel/pathNotify.ts`) keyed by exact path or
+dotted-prefix match, which is what triggers `stream` pushes to subscribed
+connections. This registry is **single-process, in-memory only** — it does
+not fan out across multiple monad instances or machines. A `subscribe` on
+one monad only ever hears about writes that land on that same process.
+
+Client reference implementation: `this.gui/runtime`'s `createWsMeRuntime()`
+(see [Apps Over Netget](https://neurons-me.github.io/netget/Typescript/typedocs/AppsOverNetget.html)
+for the full client-to-gateway-to-monad picture, including how this binding
+is reached through netget's `/apps/:name` proxy without the monad owning a
+dedicated hostname).
+
+---
+
+## 12. Open Questions
 
 1. Relay protocol for monads behind NAT or firewalls.
 2. Revocation of lost or compromised monads without a central authority.
 3. Cross-machine distributed monad index synchronization beyond local/CLI state.
 4. Namespace-declared synthesis policy.
 5. UI treatment for `contested` responses.
+6. Cross-monad/cross-machine fan-out for the WebSocket binding's live-update
+   registry (§11) — today's `pathNotify` is single-process only.
 6. Migration from compatibility bridge parsing to the modern Cleaker namespace parser.
 
 ---

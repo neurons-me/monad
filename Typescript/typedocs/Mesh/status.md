@@ -95,7 +95,7 @@ triggered on every `POST /` write) landed 2026-08-18. Full message contract:
 client: `this.gui/runtime`'s `createWsMeRuntime()`. Verified end-to-end
 (external write over HTTP → live push to two independent WebSocket clients,
 no polling) — see
-[Apps Over Netget](../../../../netget/Typescript/docs/AppsOverNetget.md) in
+[Apps Over Netget](https://neurons-me.github.io/netget/Typescript/typedocs/AppsOverNetget.html) in
 the `netget` package for the full worked example, including how this is
 reached through netget without the monad owning its own hostname.
 

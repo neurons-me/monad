@@ -391,7 +391,7 @@ handler) reverse-proxy by registered app/monad name rather than by hostname,
 stripping the prefix before forwarding so the target monad sees clean
 root-relative paths. This is how a namespace-per-app can be reached without
 that app owning a hostname of its own. See
-[Apps Over Netget](../../../netget/Typescript/docs/AppsOverNetget.md) (in the
+[Apps Over Netget](https://neurons-me.github.io/netget/Typescript/typedocs/AppsOverNetget.html) (in the
 `netget` package) for the full rationale and a worked example.
 
 ---
@@ -441,7 +441,7 @@ not fan out across multiple monad instances or machines. A `subscribe` on
 one monad only ever hears about writes that land on that same process.
 
 Client reference implementation: `this.gui/runtime`'s `createWsMeRuntime()`
-(see [Apps Over Netget](../../../netget/Typescript/docs/AppsOverNetget.md)
+(see [Apps Over Netget](https://neurons-me.github.io/netget/Typescript/typedocs/AppsOverNetget.html)
 for the full client-to-gateway-to-monad picture, including how this binding
 is reached through netget's `/apps/:name` proxy without the monad owning a
 dedicated hostname).

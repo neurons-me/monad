@@ -3,6 +3,7 @@ import { claimRequestHandler, openRequestHandler } from "../http/claims.js";
 import { claimNamespace, getClaim, openNamespace } from "../claim/records.js";
 import { getMemoriesForNamespace, isNamespaceWriteAuthorized, recordMemory } from "../claim/replay.js";
 import { saveSnapshot } from "../kernel/manager.js";
+import { notify as notifyPathChanged } from "../kernel/pathNotify.js";
 import { createEnvelope, createErrorEnvelope } from "../http/envelope.js";
 import { normalizeHttpRequestToMeTarget } from "../http/meTarget.js";
 import { resolveNamespace } from "../http/namespace.js";
@@ -213,6 +214,14 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
 
   // Persist immediately so writes survive monad restarts.
   saveSnapshot();
+
+  // Push a live update to any /nrp WebSocket connections subscribed to this
+  // path or one of its ancestors/descendants (see kernel/pathNotify.ts and
+  // http/nrpHandler.ts's 'subscribe' handling). entry.path is the exact
+  // dotted path recordMemory() parsed out of this write's expression/value.
+  if (entry?.path) {
+    notifyPathChanged(namespace, entry.path);
+  }
 
   console.log("🧠 New Memory Event:");
   console.log(JSON.stringify(entry, null, 2));

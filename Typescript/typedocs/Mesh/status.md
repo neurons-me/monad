@@ -84,6 +84,23 @@ request
 
 ---
 
+## Current WebSocket Surface
+
+`GET /nrp` (upgrade) — live channel, same port as the HTTP surface above, no
+separate registration. `nrp.open`/`resolved` (namespace resolution) shipped
+first; `read`/`subscribe`/`unsubscribe`/`data`/`stream` (one-shot reads and
+live value subscriptions, backed by a new in-process `pathNotify` registry
+triggered on every `POST /` write) landed 2026-08-18. Full message contract:
+[NRP v0.3.0 §11](../NRP-v0.3.0.md#11-websocket-binding-nrp). Reference
+client: `this.gui/runtime`'s `createWsMeRuntime()`. Verified end-to-end
+(external write over HTTP → live push to two independent WebSocket clients,
+no polling) — see
+[Apps Over Netget](../../../../netget/Typescript/docs/AppsOverNetget.md) in
+the `netget` package for the full worked example, including how this is
+reached through netget without the monad owning its own hostname.
+
+---
+
 ## Current Selection Model
 
 The selector is not part of the semantic path. It constrains execution.
@@ -179,8 +196,8 @@ trends still propagate.
 Current regression suite:
 
 ```txt
-31 test files
-391 tests
+33 test files
+405 tests
 ```
 
 Primary commands:
@@ -213,3 +230,5 @@ These remain design targets, not production guarantees:
 - synthesis policy selection via `me://` path metadata (namespace-declared quorum rules)
 - `contested` response UI surface (currently wire-only, no GUI component)
 - migration from Cleaker's compatibility `parseTarget` bridge parser to the modern `parseNamespaceExpression()` grammar
+- cross-monad/cross-machine fan-out for `/nrp` live-update subscriptions — today's `pathNotify` registry is single-process, in-memory only
+- WebSocket write path — `/nrp` subscriptions are read/live-update only; writes still go over the HTTP binding

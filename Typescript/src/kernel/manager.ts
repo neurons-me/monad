@@ -1,4 +1,5 @@
 import ME from "this.me";
+import { parseNamespaceExpression } from "cleaker";
 import os from "os";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from "fs";
 import { resolve } from "path";
@@ -72,14 +73,19 @@ export function getRootNamespace(): string {
 }
 
 export function namespaceToKernelPrefix(namespace: string): string {
-  const ns = namespace.trim().toLowerCase();
-  const root = getRootNamespace();
-  if (ns === root) return "";
-  if (ns.endsWith(`.${root}`)) {
-    const username = ns.slice(0, -(root.length + 1)).split(".")[0] ?? ns;
-    return `users.${username}`;
+  let parsed: ReturnType<typeof parseNamespaceExpression>;
+  try {
+    parsed = parseNamespaceExpression(namespace);
+  } catch {
+    return "";
   }
-  // Unknown domain — not a managed namespace, do not assume identity
+
+  const root = getRootNamespace();
+  const constant = normalizeNamespaceRootName(parsed.constant);
+  if (constant !== root) return "";
+  if (parsed.prefix) return `users.${parsed.prefix}`;
+
+  // Root namespace — operate at kernel root.
   return "";
 }
 

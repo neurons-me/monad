@@ -3,6 +3,10 @@ dist/
 dist-types/
 .turbo/
 env/*.keys.json
+# Real Ed25519 private keys for every claimed namespace during local dev/test
+# runs — was never actually covered by env/*.keys.json above (different path
+# shape) and had been silently committed since the repo's first commit.
+env/claims/.keys/*.private.pem
 *.local
 .env*
 .DS_Store

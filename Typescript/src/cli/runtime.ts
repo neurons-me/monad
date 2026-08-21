@@ -681,48 +681,85 @@ function buildPacFile(proxyPort: number): string {
 }`;
 }
 
+// The mesh dashboard: this *is* the mesh, synthesized down to one page —
+// every monad this machine's `monads` CLI currently knows about, resolved
+// live. Below the nav strip, each running monad gets a real `Namespace`
+// (this.gui/All.This/Cleaker) card — Users/Blockchain/Details/Surface,
+// including the Effective Budget panel — pointed at that monad's own
+// endpoint, not a static status table. Loaded via the same UMD+CDN
+// bootstrap the CLI's own `--html` mode uses (see cli.ts) since this
+// server is a bare node:http listener, not an Express/Vite app that could
+// bundle this.gui itself.
 function buildStatusHtml(monads: MonadRuntimeStatus[], proxyPort: number): string {
-  const rows = monads.length === 0
-    ? `<tr><td colspan="4" style="color:#888;text-align:center">No monads running. Start one: <code>monads start &lt;name&gt;</code></td></tr>`
+  const navLinks = monads.length === 0
+    ? `<span style="color:#888">No monads running. Start one: <code>monads start &lt;name&gt;</code></span>`
     : monads
-        .map(
-          (s) =>
-            `<tr>
-              <td><a href="http://${s.record.name}.monad" target="_blank">${s.record.name}.monad</a></td>
-              <td><a href="${s.record.endpoint}" target="_blank">${s.record.endpoint}</a></td>
-              <td style="font-size:0.9em;color:#555">${s.record.namespace}</td>
-              <td style="color:#2a2">online</td>
-            </tr>`,
-        )
-        .join("");
+        .map((s) => `<a href="http://${s.record.name}.monad" target="_blank">${s.record.name}.monad</a>`)
+        .join(" · ");
+
+  const namespaceCards = monads
+    .map(
+      (s) => `{
+        type: 'Namespace',
+        props: {
+          key: ${JSON.stringify(s.record.name)},
+          endpoint: ${JSON.stringify(s.record.endpoint)},
+          defaultTab: 'surface',
+        },
+      }`,
+    )
+    .join(",\n");
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Monads</title>
+<title>Monad Mesh</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; color: #111; }
-  h1 { font-size: 1.4rem; margin-bottom: 1rem; }
-  table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; padding: 6px 10px; background: #f4f4f4; font-size: 0.85rem; }
-  td { padding: 6px 10px; border-top: 1px solid #eee; font-size: 0.9rem; }
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 0; color: #111; }
+  header { padding: 1rem 1.5rem; border-bottom: 1px solid #eee; }
+  header h1 { font-size: 1.2rem; margin: 0 0 0.35rem; }
+  header .note { font-size: 0.82rem; color: #555; }
   a { color: #0070f3; text-decoration: none; }
   a:hover { text-decoration: underline; }
-  .note { margin-top: 1.5rem; font-size: 0.85rem; color: #555; background: #fafafa; padding: 0.8rem 1rem; border-radius: 6px; }
   code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 0.9em; }
+  #root { padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; max-width: 640px; margin: 0 auto; }
 </style>
 </head>
 <body>
-<h1>Monads</h1>
-<table>
-<thead><tr><th>URL</th><th>Endpoint</th><th>Namespace</th><th>Status</th></tr></thead>
-<tbody>${rows}</tbody>
-</table>
-<div class="note">
-  <strong>local.monad</strong> → first running monad<br>
-  <strong>name.monad</strong> → monad by name<br><br>
-  PAC file: <code>http://127.0.0.1:${proxyPort}/proxy.pac</code>
-</div>
+<header>
+  <h1>Monad Mesh</h1>
+  <div class="note">
+    ${navLinks}<br><br>
+    <strong>local.monad</strong> → first running monad ·
+    PAC: <code>http://127.0.0.1:${proxyPort}/proxy.pac</code>
+  </div>
+</header>
+<div id="root"></div>
+<script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+<script>window.process = window.process || { env: { NODE_ENV: 'production' } };</script>
+<script src="https://cdn.jsdelivr.net/npm/this.gui@latest/dist/this.gui.umd.js" crossorigin="anonymous"></script>
+<script>
+  (function () {
+    const GUI = window.GUI;
+    if (!GUI || typeof GUI.mount !== 'function') {
+      document.getElementById('root').innerHTML =
+        '<p style="color:#a00">this.gui failed to load — mesh dashboard unavailable.</p>';
+      return;
+    }
+    if (${monads.length} === 0) {
+      document.getElementById('root').innerHTML =
+        '<p style="color:#888">No monads running. Start one: <code>monads start &lt;name&gt;</code></p>';
+      return;
+    }
+    const spec = {
+      type: 'Box',
+      children: [${namespaceCards}],
+    };
+    GUI.mount(spec, '#root', { ctx: {} });
+  })();
+</script>
 </body>
 </html>`;
 }

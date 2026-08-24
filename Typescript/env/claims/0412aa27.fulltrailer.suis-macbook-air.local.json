@@ -1,0 +1,24 @@
+{
+  "kind": "PersistentClaimV1",
+  "version": 1,
+  "namespace": "0412aa27.fulltrailer.suis-macbook-air.local",
+  "identityHash": "0aa4b356588cdf82e5fba4814259ba93f22faeaa8c50495d23c5440abefaec2c",
+  "publicKey": {
+    "kid": "sha256:a55c9d4c82a619dfec79f99a195e834481107253fb50deb33f866c1b55d0ce0e",
+    "alg": "ed25519",
+    "key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAaXXYMj/6X6fkV73euI7WuTQ9l8ttfDr0bwN1/hL6QOI=\n-----END PUBLIC KEY-----\n",
+    "source": "generated"
+  },
+  "proofKey": {
+    "kid": "sha256:a55c9d4c82a619dfec79f99a195e834481107253fb50deb33f866c1b55d0ce0e",
+    "alg": "ed25519",
+    "key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAaXXYMj/6X6fkV73euI7WuTQ9l8ttfDr0bwN1/hL6QOI=\n-----END PUBLIC KEY-----\n",
+    "source": "generated"
+  },
+  "issuedAt": 1787591987133,
+  "signature": {
+    "alg": "ed25519",
+    "value": "GY9rY15YjHBLq1p/g+S+O2g83/I6SPBydhGeOd2C/7kCVFgy5VjHpufGpMpEdYHeleHiBPAhbqBNCL76ldoJAA==",
+    "encoding": "base64"
+  }
+}

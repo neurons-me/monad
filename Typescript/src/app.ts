@@ -3,6 +3,7 @@ import cors from "cors";
 import { bootstrapMonad, type MonadBootstrapResult, type MonadOptions } from "./bootstrap.js";
 import { createBridgeHandler } from "./handlers/bridgeHandler.js";
 import { meCommandHandler, rootCommandHandler, rootCompatHandler } from "./handlers/commandHandler.js";
+import { explainRequestHandler, inspectRequestHandler } from "./handlers/explainHandler.js";
 import { createLedgerHandlers } from "./handlers/ledgerHandler.js";
 import { commitHandler, syncEventsHandler } from "./handlers/syncHandler.js";
 import { createClaimsRouter } from "./http/claims.js";
@@ -150,6 +151,8 @@ export async function createMonadApp(options: MonadOptions = {}): Promise<MonadA
   app.use(createFetchSurface({ timeoutMs: config.fetchProxyTimeoutMs }));
 
   app.get("/resolve", bridgeHandler);
+  app.post("/explain", explainRequestHandler);
+  app.post("/inspect", inspectRequestHandler);
   app.post("/me/*", meCommandHandler);
   app.get("/", ledger.root);
   app.post("/", rootCompatHandler);

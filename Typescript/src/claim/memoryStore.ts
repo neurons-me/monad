@@ -79,10 +79,15 @@ function kernelWrite(namespace: string, path: string, data: unknown, operator?: 
   const kernel = getKernel();
   const kpath = kernelPathFor(namespace, path);
 
-  if (operator === "-") {
-    kernel.execute(`me://self:write/${kpath.split(".").join("/")}`, undefined);
-    return;
-  }
+  // Tombstone semantics for operator "-" are implemented entirely at the
+  // semantic-memory branch-read layer (buildSemanticBranchTreeForNamespace
+  // below calls deleteDeepValue when it sees operator === "-" on the stored
+  // row) — the underlying `.me` kernel has no concept of "-" and doesn't
+  // need one. This used to pass `undefined` as the write payload here,
+  // which `.me`'s self:write always rejects ("requires a body payload") —
+  // confirmed by testing, no caller could have ever used this branch
+  // successfully. Just write `data` like any other operator; the row's
+  // stored `operator` field is what later reads key off of.
 
   if (operator === "=" && typeof data !== "object") {
     // preserve explicit = operator via proxy eval syntax (primitives only — arrays/objects corrupt via eval)

@@ -218,6 +218,36 @@ export {
   NRP_TEST_CATALOG,
   type NrpTestCatalogEntry,
 } from "./testing/nrpTestCatalog.js";
+// Programmatic process management — the same functions the `monads` CLI
+// itself is built on (src/cli/runtime.ts), now available to any consumer
+// that wants to spawn/supervise its own monad instance instead of
+// reimplementing PID files, port allocation, and health checks (confirmed
+// pattern: netget does exactly this for its own domain-registry data).
+export {
+  getMonadRuntimeDir,
+  getMonadStatus,
+  getMonadsHome,
+  listMonadRecords,
+  listRunningMonads,
+  normalizeMonadName,
+  pauseMonadProcess,
+  readLogTail,
+  readMonadRecord,
+  restartMonadProcess,
+  resumeMonadProcess,
+  startExistingMonadProcess,
+  startMonadProcess,
+  stopMonadProcess,
+  deleteMonadProcess,
+  followMonadLogs,
+  type ExistingMonadProcessOptions,
+  type FollowMonadLogsOptions,
+  type MonadRecord,
+  type MonadRecordStatus,
+  type MonadRuntimeStatus,
+  type StartMonadCliOptions,
+  type StopMonadProcessOptions,
+} from "./cli/runtime.js";
 export type {
   MonadApp,
   MonadBootstrapResult,

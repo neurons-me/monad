@@ -207,7 +207,20 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
     ? claim.identityHash
     : String((body as any).identityHash || "").trim();
 
-  const entry = recordMemory({ namespace, payload: body, identityHash: blockIdentityHash, timestamp });
+  let entry;
+  try {
+    entry = recordMemory({ namespace, payload: body, identityHash: blockIdentityHash, timestamp });
+  } catch (error) {
+    // The underlying kernel write (this.me's self:write) throws on certain
+    // malformed payloads — e.g. a null/undefined value, even with a valid
+    // operator. That's a request-level error, not a process-level one; let
+    // it surface as 400 instead of taking the whole daemon down (confirmed
+    // by testing: this used to crash the process with an uncaught exception).
+    return res.status(400).json(createErrorEnvelope(target, {
+      error: "INVALID_MEMORY_INPUT",
+      detail: error instanceof Error ? error.message : String(error),
+    }));
+  }
   if (!entry) {
     return res.status(400).json(createErrorEnvelope(target, { error: "INVALID_MEMORY_INPUT" }));
   }

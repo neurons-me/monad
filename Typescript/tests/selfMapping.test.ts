@@ -164,7 +164,10 @@ describe("self mapping", () => {
     //   trust:       "owner"               (local namespace = full owner trust)
     //   resources:   ["public_ingress", "keychain", "filesystem", "gpu", "camera", "local_lan"]
     //                (the capabilities a desktop node typically has)
-    //   capacity:    { cpuCores: null, ramGb: null, ... } (not yet reported → nulls)
+    //   capacity:    cpuCores/ramGb/storageGb measured live from the host
+    //                (os.cpus().length, os.totalmem(), fs.statfsSync("/"))
+    //                when SELF doesn't override them; bandwidthMbps has no
+    //                measurement path and stays null unless configured.
     //   status:      { availability: "online", latencyMs: null, syncState: "current", lastSeen: 1234 }
     //   namespace:   "http://example-host.local:8161" (the host's addressing URL)
     //   endpoint:    "http://localhost:8161"          (the local binding address)
@@ -183,9 +186,9 @@ describe("self mapping", () => {
       trust: "owner",
       resources: ["public_ingress", "keychain", "filesystem", "gpu", "camera", "local_lan"],
       capacity: {
-        cpuCores: null,
-        ramGb: null,
-        storageGb: null,
+        cpuCores: expect.any(Number),
+        ramGb: expect.any(Number),
+        storageGb: expect.any(Number),
         bandwidthMbps: null,
       },
       status: {

@@ -1,4 +1,5 @@
 import fs from "fs";
+import os from "os";
 import path from "path";
 import crypto from "crypto";
 import { normalizeNamespaceIdentity, parseNamespaceIdentityParts } from "../namespace/identity.js";
@@ -498,12 +499,40 @@ function toNumberOrNull(input: unknown): number | null {
   return null;
 }
 
+// cpuCores/ramGb/storageGb are measured live from the host when self.json
+// doesn't explicitly override them — os.cpus()/os.totalmem() are already
+// computed elsewhere in this package (surfaceTelemetry.ts, usageLedger.ts)
+// to build 0-1 pressure ratios, then discarded; this is the first place
+// that actually surfaces the absolute numbers on the wire. bandwidthMbps
+// has no measurement path (would need active probing, not a static host
+// fact) and stays null unless explicitly configured — reporting a made-up
+// number would be worse than reporting "unknown".
+export function measureLiveCpuCores(): number | null {
+  const cores = os.cpus()?.length;
+  return typeof cores === "number" && cores > 0 ? cores : null;
+}
+
+export function measureLiveRamGb(): number | null {
+  const total = os.totalmem();
+  return total > 0 ? Math.round((total / 1e9) * 10) / 10 : null;
+}
+
+export function measureLiveStorageGb(): number | null {
+  try {
+    const stats = fs.statfsSync("/");
+    const totalBytes = Number(stats.blocks) * Number(stats.bsize);
+    return totalBytes > 0 ? Math.round(totalBytes / 1e9) : null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeSurfaceCapacity(input: unknown): SelfSurfaceCapacity {
   const raw = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
   return {
-    cpuCores: toNumberOrNull(raw.cpuCores),
-    ramGb: toNumberOrNull(raw.ramGb),
-    storageGb: toNumberOrNull(raw.storageGb),
+    cpuCores: toNumberOrNull(raw.cpuCores) ?? measureLiveCpuCores(),
+    ramGb: toNumberOrNull(raw.ramGb) ?? measureLiveRamGb(),
+    storageGb: toNumberOrNull(raw.storageGb) ?? measureLiveStorageGb(),
     bandwidthMbps: toNumberOrNull(raw.bandwidthMbps),
   };
 }

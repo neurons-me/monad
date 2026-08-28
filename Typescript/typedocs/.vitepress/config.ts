@@ -40,6 +40,7 @@ export default defineConfig({
           { text: 'Monad vs Cleaker', link: '/Monad-&&-Cleaker(me)' },
           { text: 'Namespace Protocol', link: '/NRP-v0.3.0' },
           { text: 'NRP v0.2.1 Archive', link: '/NRP-v0.2.1' },
+          { text: 'Knowledge Graph', link: '/KnowledgeGraph' },
         ],
       },
       {

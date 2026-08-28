@@ -8,6 +8,7 @@ import { seedSelfMonadIndexEntry } from "./kernel/monadIndex.js";
 import { normalizeNamespaceIdentity, normalizeNamespaceRootName } from "./namespace/identity.js";
 import { loadSelfNodeConfig, type SelfNodeConfig } from "./http/selfMapping.js";
 import { defaultUsageLedger } from "./resources/usageLedger.js";
+import { defaultHostTelemetryLedger } from "./resources/hostTelemetryLedger.js";
 
 export type MonadLogger = Pick<Console, "log" | "warn" | "error">;
 
@@ -69,6 +70,11 @@ export interface MonadBootstrapResult {
    * NetGet can aggregate usage and budgets.
    */
   usageLedgerStarted: boolean;
+  /**
+   * `true` when the host telemetry bridge started successfully — periodic
+   * CPU/RAM/storage samples written to surface.host.cpu/memory/storage.
+   */
+  hostTelemetryLedgerStarted: boolean;
 }
 
 function stringifyList(input: string | string[] | undefined): string | undefined {
@@ -209,11 +215,19 @@ export async function bootstrapMonad(options: MonadOptions = {}): Promise<MonadB
   const windowMs = Number(process.env.MONAD_USAGE_WINDOW_MS || 10_000);
   defaultUsageLedger.start(windowMs);
 
+  // Start the host telemetry bridge: this host's own CPU/RAM/storage
+  // (same numbers HostSurface shows) get written to surface.host.cpu/
+  // memory/storage on a timer, so they're part of the queryable .me
+  // knowledge graph, not just an ephemeral HTTP response.
+  const hostTelemetryMs = Number(process.env.MONAD_HOST_TELEMETRY_INTERVAL_MS || 30_000);
+  defaultHostTelemetryLedger.start(hostTelemetryMs);
+
   return {
     config,
     kernelStateDir: getKernelStateDir(),
     rebuiltProjectedClaims,
     seededSemanticBootstrap,
     usageLedgerStarted: defaultUsageLedger.isRunning,
+    hostTelemetryLedgerStarted: defaultHostTelemetryLedger.isRunning,
   };
 }

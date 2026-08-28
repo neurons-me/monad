@@ -1,4 +1,6 @@
 import os from "os";
+import fs from "fs";
+import { execSync } from "child_process";
 import type express from "express";
 
 export type SurfaceRequestEvent = {
@@ -18,11 +20,41 @@ export type SurfaceRequestEvent = {
   identityHash: string | null;
 };
 
+export type SurfaceMemoryDetail = {
+  /** How the ratio/pressure below were computed: real page-level accounting
+   *  (macOS vm_stat, Linux /proc/meminfo MemAvailable) vs the naive
+   *  (total-free)/total fallback, which reads misleadingly high on macOS —
+   *  the OS deliberately fills "free" RAM with reclaimable disk cache. */
+  source: "vm_stat" | "proc_meminfo" | "naive";
+  /** GB actually pinned/in-use: wired + active + compressed (macOS) or
+   *  MemTotal - MemAvailable (Linux) — the number that actually reflects
+   *  memory pressure, not just "not instantly free." */
+  usedGb: number;
+  /** GB the OS can reclaim instantly if an app needs it (inactive +
+   *  speculative + free on macOS, MemAvailable - MemFree on Linux). */
+  reclaimableGb: number;
+  /** macOS-only page breakdown, in GB, when source === "vm_stat". */
+  breakdown?: {
+    wired: number;
+    active: number;
+    compressed: number;
+    inactive: number;
+    speculative: number;
+    free: number;
+  };
+};
+
 export type SurfaceTelemetrySnapshot = {
   usage: {
     cpu: number;
+    /** 0-1 fraction of RAM under real pressure — see memoryDetail.source
+     *  for how this was computed; not simply (total-free)/total. */
+    memory: number;
+    /** 0-1 fraction of the root filesystem currently in use (fs.statfsSync("/")). */
+    storage: number;
     requestRatePer10s: number;
   };
+  memoryDetail: SurfaceMemoryDetail;
   pressure: {
     cpu: number;
   };
@@ -110,6 +142,112 @@ function computeCpuUsageRatio() {
   return clamp01(load / cores);
 }
 
+function naiveMemoryDetail(): SurfaceMemoryDetail {
+  const total = os.totalmem();
+  const free = os.freemem();
+  return {
+    source: "naive",
+    usedGb: Math.max(0, (total - free) / 1e9),
+    reclaimableGb: Math.max(0, free / 1e9),
+  };
+}
+
+// macOS deliberately fills "free" RAM with reclaimable disk cache (inactive
+// pages), so os.freemem() alone reads misleadingly high-pressure on a
+// perfectly healthy machine — this is why the naive (total-free)/total
+// ratio showed 98%+ even at rest. vm_stat's own page categories are what
+// Activity Monitor's "Memory Pressure" is actually built from: wired
+// (can't be paged out) + active (in current use) + compressed (already
+// pressured, being kept small via compression) is real usage; inactive +
+// speculative + free is what the OS can hand to a new process instantly.
+function parseVmStatMemoryDetail(): SurfaceMemoryDetail | null {
+  try {
+    const raw = execSync("vm_stat", { timeout: 2000 }).toString("utf8");
+    const pageSizeMatch = raw.match(/page size of (\d+) bytes/);
+    const pageSize = pageSizeMatch ? Number(pageSizeMatch[1]) : 4096;
+
+    const pages = (label: string): number => {
+      const match = raw.match(new RegExp(`Pages ${label}:\\s+(\\d+)\\.`));
+      return match ? Number(match[1]) : 0;
+    };
+
+    const toGb = (count: number) => (count * pageSize) / 1e9;
+
+    const free = toGb(pages("free"));
+    const active = toGb(pages("active"));
+    const inactive = toGb(pages("inactive"));
+    const speculative = toGb(pages("speculative"));
+    const wired = toGb(pages("wired down"));
+    const compressed = toGb(pages("occupied by compressor"));
+
+    const usedGb = wired + active + compressed;
+    const reclaimableGb = free + inactive + speculative;
+    if (usedGb + reclaimableGb <= 0) return null;
+
+    return {
+      source: "vm_stat",
+      usedGb,
+      reclaimableGb,
+      breakdown: { wired, active, compressed, inactive, speculative, free },
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Linux's kernel already computes "available" correctly (accounts for
+// reclaimable page cache/slab, unlike a naive MemFree read) — MemAvailable
+// has existed in /proc/meminfo since kernel 3.14, no need to hand-roll it.
+function parseProcMeminfoMemoryDetail(): SurfaceMemoryDetail | null {
+  try {
+    const raw = fs.readFileSync("/proc/meminfo", "utf8");
+    const kb = (label: string): number | null => {
+      const match = raw.match(new RegExp(`^${label}:\\s+(\\d+) kB`, "m"));
+      return match ? Number(match[1]) * 1024 : null;
+    };
+
+    const total = kb("MemTotal");
+    const available = kb("MemAvailable");
+    if (total == null || available == null || total <= 0) return null;
+
+    return {
+      source: "proc_meminfo",
+      usedGb: Math.max(0, (total - available) / 1e9),
+      reclaimableGb: Math.max(0, available / 1e9),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function computeMemoryDetail(): SurfaceMemoryDetail {
+  if (process.platform === "darwin") {
+    return parseVmStatMemoryDetail() ?? naiveMemoryDetail();
+  }
+  if (process.platform === "linux") {
+    return parseProcMeminfoMemoryDetail() ?? naiveMemoryDetail();
+  }
+  return naiveMemoryDetail();
+}
+
+function computeMemoryUsageRatio(detail: SurfaceMemoryDetail) {
+  const total = detail.usedGb + detail.reclaimableGb;
+  if (total <= 0) return 0;
+  return clamp01(detail.usedGb / total);
+}
+
+function computeStorageUsageRatio() {
+  try {
+    const stats = fs.statfsSync("/");
+    const totalBlocks = Number(stats.blocks);
+    if (totalBlocks <= 0) return 0;
+    const freeBlocks = Number(stats.bavail);
+    return clamp01((totalBlocks - freeBlocks) / totalBlocks);
+  } catch {
+    return 0;
+  }
+}
+
 function getRecentRequestRatePer10s(now: number) {
   const recent = recentRequests.filter((event) => now - event.timestamp <= REQUEST_RATE_WINDOW_MS);
   return recent.length;
@@ -125,12 +263,16 @@ export function getSurfaceTelemetrySnapshot(): SurfaceTelemetrySnapshot {
   const cpuUsage = computeCpuUsageRatio();
   const requestPressure = computeRequestPressure(now);
   const cpuPressure = Math.max(cpuUsage, requestPressure);
+  const memoryDetail = computeMemoryDetail();
 
   return {
     usage: {
       cpu: cpuUsage,
+      memory: computeMemoryUsageRatio(memoryDetail),
+      storage: computeStorageUsageRatio(),
       requestRatePer10s: getRecentRequestRatePer10s(now),
     },
+    memoryDetail,
     pressure: {
       cpu: cpuPressure,
     },

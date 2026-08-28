@@ -293,7 +293,19 @@ export function isNamespaceWriteAuthorized(input: NamespaceWriteAuthInput): bool
   const signature = decodeSignature(rawSignature);
   if (!signature) return false;
 
+  // signedPayload is an optional client-supplied convenience — the exact
+  // string the client's own signer serialized and signed, so it doesn't
+  // have to trust its own JSON stringification matches this server's
+  // toStableJson() byte-for-byte. But a signature only proves possession of
+  // the private key for WHATEVER string it verifies against — if that
+  // string is just taken from the client at face value, a caller can sign
+  // an innocuous payload once and replay that valid signature next to an
+  // entirely different, unsigned real body ("sign A, send B"). The
+  // signature is only meaningful authorization for THIS write if the
+  // signed string is independently confirmed to equal the canonical form
+  // of the body actually being committed — never trusted as given.
+  const canonicalBody = toStableJson(stripWriteAuthFields(bodyRecord));
   const signedPayload = String(bodyRecord.signedPayload || "").trim();
-  const message = signedPayload || toStableJson(stripWriteAuthFields(bodyRecord));
-  return verifySignature(publicKey, message, signature);
+  if (signedPayload && signedPayload !== canonicalBody) return false;
+  return verifySignature(publicKey, canonicalBody, signature);
 }

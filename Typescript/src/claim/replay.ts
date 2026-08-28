@@ -280,9 +280,12 @@ export function isNamespaceWriteAuthorized(input: NamespaceWriteAuthInput): bool
   if (!body || typeof body !== "object") return false;
 
   const bodyRecord = body as Record<string, unknown>;
-  const bodyIdentityHash = String(bodyRecord.identityHash || "").trim();
-  if (bodyIdentityHash && bodyIdentityHash === claimIdentityHash) return true;
-
+  // A matching identityHash alone proves nothing — identityHash is a public
+  // fingerprint (keccak256 of the seed, documented as such, displayed in
+  // MeLauncher's own UI), not a secret. Anyone who observes a target's
+  // identityHash could previously write to their claimed namespace by just
+  // echoing it back, no key possession required. Only a verified signature
+  // (below) proves the caller actually holds the claim's private key.
   const publicKey = String(input.claimPublicKey || "").trim();
   const rawSignature = String(bodyRecord.signature || "").trim();
   if (!publicKey || !rawSignature) return false;

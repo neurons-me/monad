@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
 import os from "node:os";
+import path from "node:path";
 import type { MonadBootstrapResult, MonadLogger } from "../bootstrap.js";
 import { resolveMeIdentityHash } from "../identity/meIdentity.js";
 
@@ -68,6 +70,15 @@ function normalizeToken(value: unknown): string {
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function resolveFrontendDistDir(cwd: string): string | undefined {
+  try {
+    const dir = path.join(cwd, "dist");
+    return fs.existsSync(path.join(dir, "index.html")) ? dir : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function unique(values: Array<string | undefined | null>): string[] {
@@ -235,6 +246,12 @@ export function buildNetGetMonadRegistrationPayload(input: {
       claimed_namespaces: claimedNamespaces,
       defaultPath: "/",
       capabilities,
+      // Pure fact about this app's own filesystem, not operator-set — safe
+      // to re-report identically every heartbeat. Lets netget's gateway
+      // offer this app's dev↔dist toggle (see setNginxConfigRoutes.ts's
+      // getAppFrontendDistLocations()) without the operator having to type
+      // a path in by hand. Only set when a real build is actually there.
+      frontendDistDir: resolveFrontendDistDir(config.cwd),
     },
     status: "running",
     health: {

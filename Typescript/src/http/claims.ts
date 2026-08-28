@@ -146,14 +146,13 @@ export const claimRequestHandler: express.RequestHandler = async (req, res) => {
         ? 409
         : out.error === "NAMESPACE_REQUIRED"
             || out.error === "SECRET_REQUIRED"
-            || out.error === "IDENTITY_HASH_REQUIRED"
             || out.error === "CLAIM_KEY_INVALID"
             || out.error === "CLAIM_KEYPAIR_MISMATCH"
             || out.error === "PROOF_MESSAGE_INVALID"
             || out.error === "PROOF_NAMESPACE_MISMATCH"
             || out.error === "PROOF_TIMESTAMP_INVALID"
           ? 400
-          : out.error === "PROOF_INVALID"
+          : out.error === "PROOF_INVALID" || out.error === "PROOF_REQUIRED"
             ? 403
           : 500;
     return res.status(status).json(createErrorEnvelope(target, { error: out.error }));

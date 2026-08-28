@@ -36,6 +36,7 @@ import crypto from "crypto";
 import { claimNamespace } from "../src/claim/records";
 import { seedClaimNamespaceSemantics } from "../src/claim/claimSemantics";
 import { readOpenedClaimProfile } from "../src/http/claims";
+import { buildClaimProof } from "./helpers/claimProof";
 
 describe("claims open profile hydration", () => {
   // Use beforeAll/afterAll (not beforeEach/afterEach) because this test file
@@ -79,10 +80,12 @@ describe("claims open profile hydration", () => {
     const timestamp = Date.now(); // capture before seeding
 
     // Step 1: Claim the namespace
+    const identityHash = crypto.randomBytes(32).toString("hex");
     const claimed = await claimNamespace({
       namespace,
       secret: "secret-123",
-      identityHash: crypto.randomBytes(32).toString("hex"),
+      identityHash,
+      proof: await buildClaimProof({ namespace, identityHash }),
     });
 
     expect(claimed.ok).toBe(true);

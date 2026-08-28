@@ -27,6 +27,7 @@ import crypto from "crypto";
 import { claimNamespace } from "../src/claim/records";
 import { getMemoriesForNamespace, recordMemory } from "../src/claim/replay";
 import { seedClaimNamespaceSemantics } from "../src/claim/claimSemantics";
+import { buildClaimProof } from "./helpers/claimProof";
 
 // Generate a unique namespace for each test to prevent state collisions
 function uniqueNamespace() {
@@ -60,6 +61,7 @@ describe("canonical replay memories", () => {
       namespace,
       secret: "luna",
       identityHash,
+      proof: await buildClaimProof({ namespace, identityHash }),
     });
 
     expect(claim.ok).toBe(true);
@@ -114,6 +116,7 @@ describe("canonical replay memories", () => {
       namespace,
       secret: "sol",
       identityHash,
+      proof: await buildClaimProof({ namespace, identityHash }),
     });
 
     expect(claim.ok).toBe(true);

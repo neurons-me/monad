@@ -404,6 +404,26 @@ export async function startMonadProcess(options: StartMonadCliOptions = {}): Pro
   if (existing && pidAlive(existing.pid)) {
     throw new Error(`Monad "${name}" is already running on port ${existing.port}.`);
   }
+  // pidAlive() alone trusts the recorded PID exactly — if that record ever
+  // goes stale (crashed writer, a manually-started process that never
+  // updated it, a detached child that outlived what killed its recorded
+  // parent) a genuinely-still-listening process is invisible here, and
+  // findFreePort() below happily hands out the next port instead of
+  // catching the duplicate. Confirmed live: three orphaned "netget"
+  // processes accumulated this way, each on a different port, none of them
+  // the one this record ever pointed at. A live listener on the recorded
+  // port — regardless of which PID actually owns it — means something is
+  // already serving this name; fail loudly instead of spawning alongside it.
+  if (existing?.port) {
+    const listenerPid = await findListeningPid(existing.port);
+    if (typeof listenerPid === 'number') {
+      throw new Error(
+        `Monad "${name}" already has a process listening on port ${existing.port} `
+        + `(pid ${listenerPid}, recorded pid was ${existing.pid}) — the record is stale. `
+        + `Run "monads stop ${name}" (or kill pid ${listenerPid} directly) before starting again.`,
+      );
+    }
+  }
 
   const runtimeDir = getMonadRuntimeDir(name);
   const port = await findFreePort(options.port ?? existing?.port);

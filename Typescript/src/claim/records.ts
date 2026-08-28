@@ -32,7 +32,7 @@ type ClaimProofPayload = {
 };
 
 type ClaimIdentityResolutionError =
-  | "IDENTITY_HASH_REQUIRED"
+  | "PROOF_REQUIRED"
   | "PROOF_INVALID"
   | "PROOF_MESSAGE_INVALID"
   | "PROOF_NAMESPACE_MISMATCH"
@@ -131,11 +131,17 @@ async function resolveClaimIdentity(input: NamespaceClaimInput): Promise<
   | { ok: true; identityHash: string; publicKeyPem: string | null }
   | { ok: false; error: ClaimIdentityResolutionError }
 > {
+  // A first claim without a proof used to trust input.identityHash as
+  // asserted — but identityHash is a PUBLIC fingerprint (shown in the UI,
+  // meant to be shared), so anyone could claim a namespace under someone
+  // else's identityHash with zero cryptographic check. Every real caller
+  // (cleaker's bindKernel, via me['!'].prove()) already sends a proof —
+  // this is now mandatory, not merely verified-when-present. openNamespace()
+  // is unaffected: re-opening an already-claimed namespace is gated by
+  // secretCommitment, not identityHash, and never reaches this function.
   const proof = input.proof;
   if (!proof) {
-    const identityHash = String(input.identityHash || "").trim();
-    if (!identityHash) return { ok: false, error: "IDENTITY_HASH_REQUIRED" };
-    return { ok: true, identityHash, publicKeyPem: String(input.publicKey || "").trim() || null };
+    return { ok: false, error: "PROOF_REQUIRED" };
   }
 
   const payload = parseClaimProofPayload(proof);
@@ -200,7 +206,13 @@ export async function claimNamespace(input: NamespaceClaimInput): Promise<ClaimN
   const secret = String(input.secret || "");
   const resolved = await resolveClaimIdentity(input);
   const identityHash = resolved.ok ? resolved.identityHash : "";
-  const publicKey = resolved.ok ? resolved.publicKeyPem : null;
+  // input.publicKey is a distinct, optional concept from the proof's own
+  // signing key: it's the NAMESPACE's own long-lived key (hardware key,
+  // external PKI, cross-device identity — see persistentClaim.test.ts),
+  // separate from the proof's ephemeral branch-signing key that only
+  // establishes identityHash. An explicit one always wins; the proof's key
+  // is just the fallback when the caller supplied none.
+  const publicKey = String(input.publicKey || "").trim() || (resolved.ok ? resolved.publicKeyPem : null);
   const privateKey = String(input.privateKey || "").trim() || null;
 
   if (!namespace) return { ok: false, error: "NAMESPACE_REQUIRED" };

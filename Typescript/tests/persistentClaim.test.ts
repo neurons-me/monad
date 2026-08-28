@@ -40,6 +40,7 @@ import {
   loadPersistentClaim,
   verifyPersistentClaim,
 } from "../src/claim/manager";
+import { buildClaimProof } from "./helpers/claimProof";
 
 // Generate a unique namespace for each test to prevent file collisions.
 function uniqueNamespace() {
@@ -82,9 +83,14 @@ describe("persistent claims", () => {
     // DETAILS:
     //   claimNamespace returns:
     //     ok: true
-    //     record.publicKey:            the namespace's Ed25519 public key (PEM)
+    //     record.publicKey:            the namespace's Ed25519 public key (PEM) —
+    //       here, the proof's own signing key, since no explicit publicKey
+    //       was supplied and every first claim now requires a proof.
     //     persistentClaim.claim.publicKey.key: same key in the signed claim doc
-    //     persistentClaim.claim.proofKey.key:  the daemon's public key (also in the doc)
+    //     persistentClaim.claim.proofKey.key:  the daemon's OWN separate key
+    //       (freshly generated — a namespace public key was supplied, via
+    //       the proof, so this is the same "provided key" branch test 2
+    //       exercises, not the "nothing supplied" branch).
     //
     //   The public key in the record EQUALS the public key in the claim:
     //     out.record.publicKey === out.persistentClaim.claim.publicKey.key
@@ -102,10 +108,12 @@ describe("persistent claims", () => {
     //      any user could access any namespace.
 
     const namespace = uniqueNamespace();
+    const identityHash = uniqueIdentityHash();
     const out = await claimNamespace({
       namespace,
       secret: "luna",
-      identityHash: uniqueIdentityHash(),
+      identityHash,
+      proof: await buildClaimProof({ namespace, identityHash }),
     });
 
     expect(out.ok).toBe(true);
@@ -117,7 +125,11 @@ describe("persistent claims", () => {
     // The public key fields must be populated and consistent between record and claim
     expect(out.record.publicKey).toBeTruthy();
     expect(out.persistentClaim.claim.publicKey.key).toBe(out.record.publicKey);
-    expect(out.persistentClaim.claim.proofKey.key).toBe(out.record.publicKey);
+    // The proof supplies a namespace public key (the proof's own signing
+    // key), so the daemon generates its OWN separate proof key here — same
+    // "provided key" shape as the next test, not the "nothing supplied,
+    // reuse one key for both roles" shape.
+    expect(out.persistentClaim.claim.proofKey.key).not.toBe(out.record.publicKey);
 
     // The claim file signature must verify correctly
     expect(verifyPersistentClaim(namespace)).toBe(true);
@@ -166,11 +178,13 @@ describe("persistent claims", () => {
       format: "pem",
     }).toString();
 
+    const identityHash = uniqueIdentityHash();
     const out = await claimNamespace({
       namespace,
       secret: "sol",
-      identityHash: uniqueIdentityHash(),
+      identityHash,
       publicKey: supplied, // client's own public key
+      proof: await buildClaimProof({ namespace, identityHash }),
     });
 
     expect(out.ok).toBe(true);
@@ -199,12 +213,14 @@ describe("persistent claims", () => {
     const a = crypto.generateKeyPairSync("ed25519"); // keypair A
     const b = crypto.generateKeyPairSync("ed25519"); // keypair B — completely different
 
+    const identityHash = uniqueIdentityHash();
     const out = await claimNamespace({
       namespace,
       secret: "estrella",
-      identityHash: uniqueIdentityHash(),
+      identityHash,
       publicKey: a.publicKey.export({ type: "spki", format: "pem" }).toString(),   // from A
       privateKey: b.privateKey.export({ type: "pkcs8", format: "pem" }).toString(), // from B (!)
+      proof: await buildClaimProof({ namespace, identityHash }),
     });
 
     expect(out).toEqual({

@@ -24,11 +24,11 @@ function claimStatusCode(error: string): number {
   if (error === "NAMESPACE_TAKEN") return 409;
   if (
     error === "NAMESPACE_REQUIRED" || error === "SECRET_REQUIRED"
-    || error === "IDENTITY_HASH_REQUIRED" || error === "CLAIM_KEY_INVALID"
+    || error === "CLAIM_KEY_INVALID"
     || error === "CLAIM_KEYPAIR_MISMATCH" || error === "PROOF_MESSAGE_INVALID"
     || error === "PROOF_NAMESPACE_MISMATCH" || error === "PROOF_TIMESTAMP_INVALID"
   ) return 400;
-  if (error === "PROOF_INVALID") return 403;
+  if (error === "PROOF_INVALID" || error === "PROOF_REQUIRED") return 403;
   return 500;
 }
 

@@ -68,7 +68,7 @@ export type ClaimNamespaceResult =
       error:
         | "NAMESPACE_REQUIRED"
         | "SECRET_REQUIRED"
-        | "IDENTITY_HASH_REQUIRED"
+        | "PROOF_REQUIRED"
         | "NAMESPACE_TAKEN"
         | "CLAIM_KEY_INVALID"
         | "CLAIM_KEYPAIR_MISMATCH"

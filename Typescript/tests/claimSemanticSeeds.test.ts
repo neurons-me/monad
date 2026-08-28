@@ -33,6 +33,7 @@ import crypto from "crypto";
 import { claimNamespace } from "../src/claim/records";
 import { seedClaimNamespaceSemantics } from "../src/claim/claimSemantics";
 import { readSemanticValueForNamespace } from "../src/claim/memoryStore";
+import { buildClaimProof } from "./helpers/claimProof";
 
 describe("claim semantic seeds", () => {
   // Each test gets its own isolated claim directory on disk.
@@ -81,10 +82,12 @@ describe("claim semantic seeds", () => {
 
     // Step 1: Claim the namespace
     // identityHash is a random 32-byte hex string (simulating a hashed password)
+    const identityHash = crypto.randomBytes(32).toString("hex"); // simulated password hash
     const claim = await claimNamespace({
       namespace,
       secret: "luna",                                      // the signing secret
-      identityHash: crypto.randomBytes(32).toString("hex"), // simulated password hash
+      identityHash,
+      proof: await buildClaimProof({ namespace, identityHash }),
     });
     expect(claim.ok).toBe(true);
     if (!claim.ok) return; // TypeScript narrowing — claim.record is only available when ok=true

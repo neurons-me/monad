@@ -36,6 +36,7 @@ import { getUsersForRootNamespace } from "../src/Blockchain/users";
 import { listSemanticMemoriesByNamespace } from "../src/claim/memoryStore";
 import { composeProjectedNamespace, normalizeNamespaceRootName } from "../src/namespace/identity";
 import { deletePersistentClaim, getPersistentClaimPath } from "../src/claim/manager";
+import { buildClaimProof } from "./helpers/claimProof";
 
 // Generate unique usernames to avoid collision between test runs
 function uniqueUsername(prefix: string) {
@@ -78,15 +79,19 @@ test("projects claimed users from the root namespace", async () => {
 
   try {
     // Claim both namespaces — this triggers the root pointer writes
+    const identityHashA = uniqueIdentityHash();
+    const identityHashB = uniqueIdentityHash();
     const claimA = await claimNamespace({
       namespace: namespaceA,
       secret: "orwell1984",
-      identityHash: uniqueIdentityHash(),
+      identityHash: identityHashA,
+      proof: await buildClaimProof({ namespace: namespaceA, identityHash: identityHashA, rootNamespace: localRoot }),
     });
     const claimB = await claimNamespace({
       namespace: namespaceB,
       secret: "animalfarm",
-      identityHash: uniqueIdentityHash(),
+      identityHash: identityHashB,
+      proof: await buildClaimProof({ namespace: namespaceB, identityHash: identityHashB, rootNamespace: localRoot }),
     });
 
     assert.equal(claimA.ok, true, "first projected namespace should claim successfully");

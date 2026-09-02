@@ -1,5 +1,16 @@
 # **Algebra de audiencias cifradas**.
 
+> **Nota de canon (esta página se corrige a sí misma más abajo).** La
+> primera formulación de este documento (español, abajo) usa `P` para
+> **procedure/capability**. Ese uso quedó superado — el modelo canónico
+> real es `(A, T, C, P)`, documentado en
+> [`.me`'s Algebra of Contexts](https://neurons-me.github.io/.me/Typescript/typedocs/Algebra-of-Contexts.html),
+> donde `P` = **path/subspace** y `C` = **capability**. La sección en
+> inglés después del separador `---` ya usa esa forma correcta — es la
+> que manda. La sección en español se deja intacta como registro del
+> pensamiento original, no como referencia vigente; no reusar su `P`
+> en trabajo nuevo.
+
 **Actualización NRP:** el mesh actual separa explícitamente topología y
 decisión. `claimed_namespaces` y `tags` describen el conjunto topológico
 rápido (`T`: qué monads pueden cargar/servir algo). La capa abierta

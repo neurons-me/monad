@@ -32,6 +32,22 @@ cleaker(me, "sui-macbook.local") // private/LAN surface
 it answers "where does this identity live in the network?"
 `cleaker.me` is the default public rootspace. It is a verification surface, not a cloud.
 
+Precision, added without reopening this doc's frozen status: "where does this
+identity live" is a naming answer (which namespace a `.me` identity claims —
+`cleaker`'s own contextual-meaning job), not a reachability answer (which
+live endpoint currently answers for that namespace right now — network
+state that changes independent of identity). Cleaker does not track ports,
+tunnels, or WAN state itself; the seam for that is a `TopologyResolver`
+interface (`modules/cleaker/Typescript/src/topology/resolver.ts`), which
+netget already implements (`modules/netget/Typescript/src/kernel/topologyResolver.ts`
+-- `resolveSurface()`, the same trust/recency reduction `surface_proxy.lua`
+runs at request time, exposed as a plain callable). Neither side calls the
+other yet: `binder.ts` never references `TopologyResolver`, and nothing
+imports `netgetTopologyResolver`. Defined and correct, not wired -- see
+Implementation Status below. Same split this doc's own
+"Layer separation" table already draws between `cleaker` (projection) and
+`monad.ai` (execution) — this just names the seam between them.
+
 ### `namespace` — Semantic Surface
 
 ```
@@ -326,6 +342,7 @@ The mesh is the marketplace where they meet.
 | `surface[]` mesh resolver in bridge | 🔲 planned | `bridge.ts` + `bridgeHandler.ts` |
 | `surface[a+b]` audience compound resolver | 🔲 planned | `cleaker/Typescript/src/` (NRP layer, not `.me`) |
 | `group:name` stable group namespace | 🔲 planned | `cleaker/Typescript/src/` + monad kernel for group |
+| `TopologyResolver` (naming vs. reachability) | 🔲 interface + impl exist, unwired | `cleaker/Typescript/src/topology/resolver.ts` + `netget/Typescript/src/kernel/topologyResolver.ts` |
 
 **Layer contract (permanent):**
 - `.me` = sovereign knowledge graph. Offline, individual, relational. No social chemistry.

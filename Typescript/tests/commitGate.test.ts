@@ -125,7 +125,10 @@ describe("POST /api/v1/commit", () => {
 
   it("accepts a real signed commit from a claimed identity", async () => {
     const caller = await claimTestIdentity(origin, "alice", "alice-secret");
-    const events = [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.name", data: "Book Club" }];
+    const events = [
+      { namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: caller.identityHash },
+      { namespace: ROOT_NAMESPACE, path: "groups.book-club.name", data: "Book Club" },
+    ];
     const signedFields = { events, identityHash: caller.identityHash, namespace: caller.namespace };
     const signature = await caller.sign(normalizeProofMessage(signedFields));
 
@@ -186,5 +189,110 @@ describe("POST /api/v1/commit", () => {
     const res = await post(origin, "/api/v1/commit", { ...signedFields, signature });
     expect(res.status).toBe(403);
     expect(res.json.error).toBe("ATTRIBUTION_MISMATCH");
+  });
+
+  it("rejects a stranger self-joining an already-owned group", async () => {
+    const owner = await claimTestIdentity(origin, "frank", "frank-secret");
+    const bootstrap = { events: [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: owner.identityHash }], identityHash: owner.identityHash, namespace: owner.namespace };
+    const bootstrapRes = await post(origin, "/api/v1/commit", { ...bootstrap, signature: await owner.sign(normalizeProofMessage(bootstrap)) });
+    expect(bootstrapRes.status).toBe(201);
+
+    const stranger = await claimTestIdentity(origin, "gina", "gina-secret");
+    const events = [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.member.gina", data: stranger.namespace }];
+    const signedFields = { events, identityHash: stranger.identityHash, namespace: stranger.namespace };
+    const signature = await stranger.sign(normalizeProofMessage(signedFields));
+
+    const res = await post(origin, "/api/v1/commit", { ...signedFields, signature });
+    expect(res.status).toBe(403);
+    expect(res.json.error).toBe("GROUP_AUTHORIZATION_REQUIRED");
+  });
+
+  it("lets the owner keep writing group metadata after bootstrap", async () => {
+    const owner = await claimTestIdentity(origin, "hank", "hank-secret");
+    const bootstrap = { events: [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: owner.identityHash }], identityHash: owner.identityHash, namespace: owner.namespace };
+    const bootstrapRes = await post(origin, "/api/v1/commit", { ...bootstrap, signature: await owner.sign(normalizeProofMessage(bootstrap)) });
+    expect(bootstrapRes.status).toBe(201);
+
+    const events = [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.name", data: "Renamed Book Club" }];
+    const signedFields = { events, identityHash: owner.identityHash, namespace: owner.namespace };
+    const signature = await owner.sign(normalizeProofMessage(signedFields));
+
+    const res = await post(origin, "/api/v1/commit", { ...signedFields, signature });
+    expect(res.status).toBe(201);
+    expect(res.json.ok).toBe(true);
+  });
+
+  it("rejects a non-member rewriting group metadata", async () => {
+    const owner = await claimTestIdentity(origin, "ivy", "ivy-secret");
+    const bootstrap = { events: [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: owner.identityHash }], identityHash: owner.identityHash, namespace: owner.namespace };
+    const bootstrapRes = await post(origin, "/api/v1/commit", { ...bootstrap, signature: await owner.sign(normalizeProofMessage(bootstrap)) });
+    expect(bootstrapRes.status).toBe(201);
+
+    const stranger = await claimTestIdentity(origin, "jack", "jack-secret");
+    const events = [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.name", data: "Hijacked" }];
+    const signedFields = { events, identityHash: stranger.identityHash, namespace: stranger.namespace };
+    const signature = await stranger.sign(normalizeProofMessage(signedFields));
+
+    const res = await post(origin, "/api/v1/commit", { ...signedFields, signature });
+    expect(res.status).toBe(403);
+    expect(res.json.error).toBe("GROUP_AUTHORIZATION_REQUIRED");
+  });
+
+  it("lets a member with an explicit scope grant write a non-reserved field", async () => {
+    const owner = await claimTestIdentity(origin, "kate", "kate-secret");
+    const bootstrap = { events: [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: owner.identityHash }], identityHash: owner.identityHash, namespace: owner.namespace };
+    expect((await post(origin, "/api/v1/commit", { ...bootstrap, signature: await owner.sign(normalizeProofMessage(bootstrap)) })).status).toBe(201);
+
+    const member = await claimTestIdentity(origin, "leo", "leo-secret");
+    const grant = { events: [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.grants.leo", data: ["notes:write"] }], identityHash: owner.identityHash, namespace: owner.namespace };
+    expect((await post(origin, "/api/v1/commit", { ...grant, signature: await owner.sign(normalizeProofMessage(grant)) })).status).toBe(201);
+
+    const events = [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.notes.entry1", data: "hello" }];
+    const signedFields = { events, identityHash: member.identityHash, namespace: member.namespace };
+    const signature = await member.sign(normalizeProofMessage(signedFields));
+
+    const res = await post(origin, "/api/v1/commit", { ...signedFields, signature });
+    expect(res.status).toBe(201);
+    expect(res.json.ok).toBe(true);
+  });
+
+  it("rejects a member without a matching scope writing that same field", async () => {
+    const owner = await claimTestIdentity(origin, "mona", "mona-secret");
+    const bootstrap = { events: [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: owner.identityHash }], identityHash: owner.identityHash, namespace: owner.namespace };
+    expect((await post(origin, "/api/v1/commit", { ...bootstrap, signature: await owner.sign(normalizeProofMessage(bootstrap)) })).status).toBe(201);
+
+    // "nora" is registered (has a grants entry, so isMember() is true) but was never granted notes:write.
+    const member = await claimTestIdentity(origin, "nora", "nora-secret");
+    const register = { events: [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.grants.nora", data: [] }], identityHash: owner.identityHash, namespace: owner.namespace };
+    expect((await post(origin, "/api/v1/commit", { ...register, signature: await owner.sign(normalizeProofMessage(register)) })).status).toBe(201);
+
+    const events = [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.notes.entry1", data: "hijacked note" }];
+    const signedFields = { events, identityHash: member.identityHash, namespace: member.namespace };
+    const signature = await member.sign(normalizeProofMessage(signedFields));
+
+    const res = await post(origin, "/api/v1/commit", { ...signedFields, signature });
+    expect(res.status).toBe(403);
+    expect(res.json.error).toBe("GROUP_AUTHORIZATION_REQUIRED");
+  });
+
+  it("lets only one of two concurrent bootstrap claims for the same group win", async () => {
+    const first = await claimTestIdentity(origin, "oscar", "oscar-secret");
+    const second = await claimTestIdentity(origin, "petra", "petra-secret");
+
+    const claimAs = async (caller: { identityHash: string; namespace: string; sign: (m: string) => Promise<string> }) => {
+      const signedFields = {
+        events: [{ namespace: ROOT_NAMESPACE, path: "groups.concurrency-club.owner", data: caller.identityHash }],
+        identityHash: caller.identityHash,
+        namespace: caller.namespace,
+      };
+      const signature = await caller.sign(normalizeProofMessage(signedFields));
+      return post(origin, "/api/v1/commit", { ...signedFields, signature });
+    };
+
+    const [resA, resB] = await Promise.all([claimAs(first), claimAs(second)]);
+    const statuses = [resA.status, resB.status].sort();
+    expect(statuses).toEqual([201, 403]);
+    const rejected = resA.status === 403 ? resA : resB;
+    expect(rejected.json.error).toBe("GROUP_AUTHORIZATION_REQUIRED");
   });
 });

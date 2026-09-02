@@ -4,6 +4,7 @@ import {
   listHostMemoryHistory,
   listSemanticMemoriesByNamespace,
 } from "../claim/memoryStore.js";
+import { checkGroupAuthorization } from "../claim/groupAuthorization.js";
 import { getClaim } from "../claim/records.js";
 import { isNamespaceWriteAuthorized } from "../claim/replay.js";
 
@@ -18,11 +19,17 @@ import { isNamespaceWriteAuthorized } from "../claim/replay.js";
 // string anyone could type in.
 //
 // The caller's own namespace need not be the same as the events' target
-// namespace (see groupsApi.ts: group events target the shared root
-// namespace, which nobody individually owns) — what's required is that the
-// caller IS a claimed identity, proven by signature, and that any field an
-// event uses to assert "I did this" (created_by / member.<username>)
-// actually names that same claimed identity. Anything else is impersonation.
+// namespace (group events target the shared root namespace, which nobody
+// individually owns) — what's required is that the caller IS a claimed
+// identity, proven by signature, and that any field an event uses to assert
+// "I did this" (created_by / member.<username>) actually names that same
+// claimed identity. Anything else is impersonation.
+//
+// Self-attribution alone doesn't gate group membership or metadata, though
+// — see groupAuthorization.ts (checkGroupAuthorization) below, which
+// requires the caller be an owner/admin of any groups.<key>.* namespace
+// they write to, using the shared anchored-group shape defined in cleaker
+// (group/group.ts) and already proven by GatewayClaimsManager.
 
 function callerUsernameFrom(namespace: string): string {
   return String(namespace || "").trim().toLowerCase().split(".")[0] || "";
@@ -100,6 +107,11 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
     const attributionError = findAttributionMismatch(rawEvents, callerNamespace);
     if (attributionError) {
       return res.status(403).json({ error: "ATTRIBUTION_MISMATCH", detail: attributionError });
+    }
+
+    const groupError = checkGroupAuthorization(rawEvents, callerIdentityHash);
+    if (groupError) {
+      return res.status(403).json({ error: "GROUP_AUTHORIZATION_REQUIRED", detail: groupError });
     }
 
     const results = [];

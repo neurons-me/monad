@@ -23,6 +23,7 @@
     "build": "tsc && node --input-type=commonjs -e \"require('fs').writeFileSync('dist/package.json', JSON.stringify({ type: 'module' }, null, 2) + '\\n')\"",
     "start": "tsx server.ts",
     "test": "vitest run",
+    "test:security": "vitest run tests/Security/ tests/Identity/",
     "test:netget": "vitest run tests/netgetRegistration.test.ts",
     "test:claims": "tsx tests/claim_test_verification.ts",
     "init:public-figures": "tsx tests/inits/public_figures/index.ts",
@@ -43,7 +44,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "this.gui": "^2.1.8",
-    "this.me": "^3.9.1",
+    "this.me": "workspace:*",
     "ws": "^8.21.1"
   },
   "devDependencies": {

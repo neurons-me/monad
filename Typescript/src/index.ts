@@ -260,3 +260,22 @@ export type {
   SelfSurfaceTrust,
   SelfSurfaceType,
 };
+// Installation-authorization: the local-only, single-use proof that a
+// never-yet-bootstrapped gatewayId's first owner was actually established
+// through THIS installation's own authorized setup (netget's setup-code
+// ceremony), not merely by holding a valid namespace claim + key under this
+// monad's shared root. Issued by whichever process owns the target monad's
+// stateDir (netget, for the monad it spawned via startMonadProcess() —
+// see gatewaySetupSession.ts); consumed only by that same monad's own
+// bootstrapGatewayAuthority(). See claim/installationAuthorization.ts's own
+// header comment for the full design and its concurrency/durability
+// guarantees.
+export {
+  getInstallationAuthorizationPath,
+  issueInstallationAuthorization,
+  readInstallationAuthorization,
+  type InstallationAuthorizationError,
+  type InstallationAuthorizationRecord,
+  type InstallationAuthorizationResult,
+  type InstallationAuthorizationStatus,
+} from "./claim/installationAuthorization.js";

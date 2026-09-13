@@ -70,29 +70,75 @@ export function getKernel(): InstanceType<typeof ME> {
   return _kernel;
 }
 
+/**
+ * Same write as saveSnapshot() below, but rethrows instead of swallowing —
+ * saveSnapshot()'s own catch-and-log contract is relied on elsewhere (fire-
+ * and-forget after an ordinary write), so it stays as-is for every existing
+ * caller. This variant exists for callers that must actually know whether
+ * the write reached disk before deciding a caller-visible outcome (e.g.
+ * gatewayAuthority.ts's first-bootstrap gate, which must not finalize an
+ * installation authorization as consumed on the strength of an in-memory
+ * mutation alone — see installationAuthorization.ts's header comment).
+ */
+export function saveSnapshotOrThrow(): void {
+  if (!_kernel) throw new Error("KERNEL_NOT_READY");
+  const stateDir = getKernelStateDir();
+  mkdirSync(stateDir, { recursive: true });
+  const snapshotPath = getKernelStatePath("snapshot.json");
+  const snapshot = _kernel.exportSnapshot();
+  const payload = JSON.stringify(snapshot);
+  // Durability boundary: write-then-rename, not an in-place write. A
+  // process killed mid-write (SIGKILL, OOM, host crash) leaves the
+  // canonical snapshot.json untouched — either the previous complete file
+  // is still there, or the new complete file replaced it — never a
+  // truncated hybrid of both. A same-directory rename is atomic at the
+  // filesystem level on the platforms this runs on (POSIX rename(2); the
+  // security battery's process-interruption tests verify this against a
+  // real SIGKILL, not just reasoning about it).
+  const tmpPath = getKernelStatePath(`.snapshot.json.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  writeFileSync(tmpPath, payload, "utf8");
+  renameSync(tmpPath, snapshotPath);
+  console.log("[kernel] snapshot saved to", snapshotPath);
+}
+
 export function saveSnapshot(): void {
-  if (!_kernel) return;
   try {
-    const stateDir = getKernelStateDir();
-    mkdirSync(stateDir, { recursive: true });
-    const snapshotPath = getKernelStatePath("snapshot.json");
-    const snapshot = _kernel.exportSnapshot();
-    const payload = JSON.stringify(snapshot);
-    // Durability boundary: write-then-rename, not an in-place write. A
-    // process killed mid-write (SIGKILL, OOM, host crash) leaves the
-    // canonical snapshot.json untouched — either the previous complete file
-    // is still there, or the new complete file replaced it — never a
-    // truncated hybrid of both. A same-directory rename is atomic at the
-    // filesystem level on the platforms this runs on (POSIX rename(2); the
-    // security battery's process-interruption tests verify this against a
-    // real SIGKILL, not just reasoning about it).
-    const tmpPath = getKernelStatePath(`.snapshot.json.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    writeFileSync(tmpPath, payload, "utf8");
-    renameSync(tmpPath, snapshotPath);
-    console.log("[kernel] snapshot saved to", snapshotPath);
+    saveSnapshotOrThrow();
   } catch (e) {
     console.error("[kernel] snapshot save failed:", e);
   }
+}
+
+/**
+ * Reads a path from the LAST snapshot.json actually written to disk, via a
+ * fresh, throwaway kernel instance hydrated straight from that file — never
+ * the live in-memory `_kernel` singleton. `kernelSet`/`kernelWrite` mutate
+ * the in-memory kernel immediately; saveSnapshot's own disk write can still
+ * fail, or simply not have run yet. Anywhere "did this survive to durable
+ * storage" must be answered precisely — not "does the in-memory object
+ * currently say so" — reads through here instead of the ordinary get.
+ * Returns undefined if no snapshot exists yet, or the path isn't present in
+ * the one that does. Not memoized on purpose: correctness over the cost of
+ * a rare, deliberately-infrequent re-read (see call sites).
+ */
+export function readDurableSnapshotValue(path: string): unknown {
+  const snapshotPath = getKernelStatePath("snapshot.json");
+  if (!existsSync(snapshotPath)) return undefined;
+  const seed = process.env.SEED || process.env.ME_SEED;
+  if (!seed) throw new Error("SEED is required — set it in your environment before starting monad.ai");
+  const raw = readFileSync(snapshotPath, "utf8");
+  // Deliberately NO `store` option here — omitting it defaults to this.me's
+  // own in-memory MemoryStore (kernel-state.ts: `options.store ?? new
+  // MemoryStore()`), not a DiskStore pointed at this same directory. A
+  // DiskStore's own hydrate/import path writes its OWN index files to
+  // `baseDir` as a side effect (confirmed the hard way: this used to throw
+  // EACCES on a read-only state dir, exactly the scenario this function
+  // exists to verify through) — a read-only VERIFICATION of what's already
+  // on disk must never itself touch disk.
+  const verifyKernel = new ME(seed);
+  verifyKernel.hydrate(JSON.parse(raw));
+  const reader = verifyKernel as unknown as (p: string) => unknown;
+  return reader(path);
 }
 
 export function kernelReady(): boolean {
@@ -198,7 +244,7 @@ export function isForeignNamespaceCollapsingToRoot(namespace: string): boolean {
  * for in place of a silent fallback: two concretely-named, process-owned
  * env values, not "anything that happens to collapse to root storage."
  */
-function isRecognizedOwnRootConstant(constant: string): boolean {
+export function isRecognizedOwnRootConstant(constant: string): boolean {
   if (!constant) return false;
   if (constant === getRootNamespace()) return true;
   const selfIdentity = normalizeNamespaceRootName(String(process.env.MONAD_SELF_IDENTITY || ""));

@@ -35,14 +35,48 @@
  * administer THAT keychain," a different privilege — see keychain.ts's own
  * header comment for the same principle from the other side). A validly-
  * signed message from a perfectly live key proves nothing about gateway
- * authority on its own.
+ * authority on its own. `bootstrapGatewayAuthority` additionally requires
+ * the claiming namespace to be rooted in THIS installation's own
+ * configured identity (`isNamespaceLocalToThisInstallation`) — see that
+ * function's own doc comment for what this does and does not close.
+ *
+ * LIVE-VERIFIED GUARANTEES (2026-09-13, disposable infra, real HTTP, real
+ * process restarts — see the cited test files, not just unit coverage):
+ *   - Bootstrap is atomic under concurrency: two simultaneous bootstrap
+ *     requests for the same gatewayId from two different real identities
+ *     produce exactly one winner, never two, never a torn record
+ *     (tests/gatewayAuthority.test.ts).
+ *   - The canonical branch survives a REAL monad process restart (kill +
+ *     relaunch, same on-disk state dir) — netget's local cache, even after
+ *     being deleted entirely, recovers the exact same owner by reading
+ *     this branch back; a different identity still cannot rebootstrap
+ *     post-restart (modules/netget/Typescript/tests/gateway-authority-
+ *     durability.test.ts).
+ *   - Revoking gateway-admin status takes effect on an ALREADY-ISSUED
+ *     admin session's very next use — the same session token, the same
+ *     never-revoked signing key — while an identity that retains authority
+ *     keeps working (modules/netget/Typescript/tests/gateway-admin-
+ *     session-revocation.test.ts).
  */
 
+import { parseNamespaceExpression } from "cleaker";
 import { getClaim } from "./records.js";
 import { isNamespaceWriteAuthorized } from "./replay.js";
 import { getKeychainKey } from "./keychain.js";
-import { getKernel, saveSnapshot } from "../kernel/manager.js";
-import { normalizeNamespaceIdentity } from "../namespace/identity.js";
+import {
+  getKernel,
+  getKernelStateDir,
+  isRecognizedOwnRootConstant,
+  readDurableSnapshotValue,
+  saveSnapshot,
+  saveSnapshotOrThrow,
+} from "../kernel/manager.js";
+import { normalizeNamespaceIdentity, normalizeNamespaceRootName } from "../namespace/identity.js";
+import {
+  beginInstallationAuthorizationConsumption,
+  finalizeInstallationAuthorization,
+  type InstallationAuthorizationError,
+} from "./installationAuthorization.js";
 
 export interface GatewayAuthorityRecord {
   gatewayId: string;
@@ -74,7 +108,10 @@ export type GatewayAuthorityError =
   | "PERMISSION_DENIED"
   | "OWNER_ONLY"
   | "TARGET_NOT_ADMIN"
-  | "CANNOT_REVOKE_OWNER";
+  | "CANNOT_REVOKE_OWNER"
+  | "NAMESPACE_NOT_LOCAL_TO_THIS_INSTALLATION"
+  | InstallationAuthorizationError
+  | "INSTALLATION_AUTHORIZATION_PERSIST_FAILED";
 
 export type GatewayAuthorityResult<T> =
   | { ok: true; value: T }
@@ -97,6 +134,55 @@ function kernelGet(path: string): GatewayAuthorityRecord | undefined {
 
 function kernelSet(path: string, value: unknown): void {
   nav(getKernel(), path)(value);
+}
+
+/**
+ * Is `namespace` genuinely rooted in THIS monad's own configured identity
+ * (isRecognizedOwnRootConstant() — accepts ME_NAMESPACE/getRootNamespace()
+ * or the MONAD_SELF_IDENTITY alias, both set once at process startup, never
+ * attacker-influenced per-request)? Reuses the exact root-recognition
+ * kernel/manager.ts's own isForeignNamespaceCollapsingToRoot() is built
+ * from, rather than re-deriving a second, possibly-drifting definition of
+ * "is this genuinely local."
+ *
+ * Why this exists: bootstrapGatewayAuthority previously only checked that
+ * SOME namespace claim + active key existed — with no relationship
+ * verified between that namespace and this specific installation.
+ *
+ * INVESTIGATED (2026-09, before adding this check — do not assume the
+ * obvious attack below is exploitable without re-checking this note first):
+ * claimNamespace()'s own materializeProjectedNamespaceClaim() already
+ * throws FOREIGN_NAMESPACE_REJECTED (via appendSemanticMemory's existing
+ * guard) for any COMPOUND namespace whose root doesn't match this monad's
+ * own — so an attacker can't obtain a genuine claim for a foreign compound
+ * namespace here at all. A BARE foreign root namespace (no prefix) CAN be
+ * claimed, but registering a keychain key against it fails for the exact
+ * same reason (keychain.ts's own writeKeyRecord() writes through the same
+ * guard). So today, reaching bootstrapGatewayAuthority with BOTH a real
+ * claim AND an active key for a genuinely foreign namespace is not
+ * possible via the standard claim+keychain HTTP flow — this check is
+ * therefore defense-in-depth, not closing a currently-reachable exploit:
+ * it makes the guarantee explicit and local to the function that most
+ * needs it, rather than relying on being an accidental side effect of
+ * unrelated code elsewhere (which could silently stop applying if that
+ * other code ever changes). See claim/gatewayAuthority.test.ts's own
+ * direct unit test of this function for why an HTTP-level repro of the
+ * "attacker" side isn't included: the precondition it would need isn't
+ * constructible through the real flow.
+ */
+/** @internal exported for gatewayAuthority.test.ts's direct unit test only
+ *  — see this function's own doc comment for why an HTTP-level repro of
+ *  the rejected case isn't constructible through the real claim+keychain
+ *  flow. */
+export function isNamespaceLocalToThisInstallation(namespace: string): boolean {
+  let parsed: ReturnType<typeof parseNamespaceExpression>;
+  try {
+    parsed = parseNamespaceExpression(namespace);
+  } catch {
+    return false;
+  }
+  const constant = normalizeNamespaceRootName(parsed.constant);
+  return Boolean(constant) && isRecognizedOwnRootConstant(constant);
 }
 
 function gatewayIdKey(gatewayId: string): string {
@@ -159,6 +245,34 @@ export function readGatewayAuthority(gatewayId: string): GatewayAuthorityRecord 
   return kernelGet(gatewayPath(id)) ?? null;
 }
 
+/**
+ * Same as readGatewayAuthority(), but reads the actual snapshot.json on
+ * disk (via readDurableSnapshotValue()) instead of the in-memory kernel.
+ * Used by every authorization-sensitive gate in this file —
+ * bootstrapGatewayAuthority()'s own first-bootstrap check AND
+ * resolveActingIdentity() (grant/revoke/transfer) — so a phantom in-
+ * memory owner/admin (kernelSet succeeded, the durable persist that's
+ * supposed to follow it did not — see installationAuthorization.ts's
+ * header comment) is never mistaken for confirmed authority anywhere a
+ * real, durably-persisted side effect could result from trusting it.
+ * Confirmed empirically that this matters even though the ONE failure
+ * mode this session could reproduce (an unwritable state directory) makes
+ * `kernelSet` itself fail atomically before any in-memory mutation is
+ * visible: that atomicity is a property of THIS specific failure mode,
+ * not a guarantee this file's own correctness should depend on for every
+ * possible way a later durable-persist step could fail. Not used by the
+ * public read endpoint (`readGatewayAuthorityHandler`) or by
+ * `listKeychainKeys`-style listings — those are informational, not an
+ * authorization decision; widening this to every read site in the
+ * codebase is a larger, separate change than this fix's scope.
+ */
+function readDurableGatewayAuthority(gatewayId: string): GatewayAuthorityRecord | undefined {
+  const id = String(gatewayId || "").trim();
+  if (!id) return undefined;
+  const value = readDurableSnapshotValue(gatewayPath(id));
+  return value === undefined || value === null ? undefined : (value as GatewayAuthorityRecord);
+}
+
 function emptyRecord(gatewayId: string): GatewayAuthorityRecord {
   return {
     gatewayId,
@@ -215,6 +329,10 @@ export function bootstrapGatewayAuthority(input: BootstrapGatewayAuthorityInput)
   if (!input.challenge || !input.signature) return { ok: false, error: "PROOF_REQUIRED" };
   if (!isFreshTimestamp(input.timestamp)) return { ok: false, error: "PROOF_INVALID" };
 
+  if (!isNamespaceLocalToThisInstallation(namespace)) {
+    return { ok: false, error: "NAMESPACE_NOT_LOCAL_TO_THIS_INSTALLATION" };
+  }
+
   const claim = getClaim(namespace);
   if (!claim) return { ok: false, error: "CLAIM_REQUIRED" };
   if (claim.identityHash !== identityHash) return { ok: false, error: "IDENTITY_MISMATCH" };
@@ -243,15 +361,45 @@ export function bootstrapGatewayAuthority(input: BootstrapGatewayAuthorityInput)
   });
   if (!authorized) return { ok: false, error: "PROOF_INVALID" };
 
-  const existing = readGatewayAuthority(gatewayId);
-  if (existing?.owner && existing.owner !== identityHash) {
+  // Durable-verified, not the in-memory read: see readDurableGatewayAuthority()'s
+  // own doc comment for why a phantom in-memory-only owner must never be
+  // trusted at this specific decision point.
+  const existingDurable = readDurableGatewayAuthority(gatewayId);
+  if (existingDurable?.owner && existingDurable.owner !== identityHash) {
     return { ok: false, error: "ALREADY_BOOTSTRAPPED" };
+  }
+
+  const isFirstBootstrap = !existingDurable?.owner;
+  const stateDir = getKernelStateDir();
+
+  // Genuinely never durably bootstrapped: the ONE case that needs proof of
+  // installation authorization (see installationAuthorization.ts). A valid
+  // namespace claim + active key under this monad's own root is, on its
+  // own, no longer sufficient to win first-bootstrap of an arbitrary
+  // gatewayId — that was exactly the gap this closes.
+  if (isFirstBootstrap) {
+    let authResult;
+    try {
+      authResult = beginInstallationAuthorizationConsumption({
+        stateDir,
+        gatewayId,
+        namespace,
+        identityHash,
+        isDurablyBootstrapped: () => readDurableGatewayAuthority(gatewayId)?.owner === identityHash,
+      });
+    } catch {
+      // A real filesystem failure marking "in-flight" itself (e.g. the
+      // state dir just became unwritable) — nothing was consumed, nothing
+      // to revert; report it the same way a later persist failure would be.
+      return { ok: false, error: "INSTALLATION_AUTHORIZATION_PERSIST_FAILED" };
+    }
+    if (!authResult.ok) return { ok: false, error: authResult.error };
   }
 
   consumeNonce(`bootstrap:${gatewayId}`, identityHash, input.challenge);
 
   const username = input.username ? String(input.username).trim() : undefined;
-  const record: GatewayAuthorityRecord = existing ?? emptyRecord(gatewayId);
+  const record: GatewayAuthorityRecord = existingDurable ?? emptyRecord(gatewayId);
   record.owner = identityHash;
   record.admins[identityHash] = true;
   if (!record.grants[identityHash]) record.grants[identityHash] = [];
@@ -262,8 +410,66 @@ export function bootstrapGatewayAuthority(input: BootstrapGatewayAuthorityInput)
   record.pubkeys[identityHash] = key.publicKey;
   if (username) record.usernames[identityHash] = username;
 
-  persist(record);
-  return { ok: true, value: record };
+  if (!isFirstBootstrap) {
+    // Idempotent re-bootstrap by the already-durable owner (e.g. refreshing
+    // a rotated key) — no installation authorization involved, same as
+    // before this change.
+    persist(record);
+    return { ok: true, value: record };
+  }
+
+  let durablyPersisted = false;
+  try {
+    kernelSet(gatewayPath(gatewayId), { ...record, updatedAt: Date.now() });
+    saveSnapshotOrThrow();
+    const verified = readDurableGatewayAuthority(gatewayId);
+    if (verified?.owner !== identityHash) {
+      throw new Error("DURABILITY_VERIFICATION_FAILED");
+    }
+    // The durable write itself is now confirmed — a failure from here on
+    // (finalizing the authorization file's own bookkeeping) must NOT be
+    // reported as a persist failure: the guarantee that actually matters
+    // (the owner survives on disk) already holds.
+    durablyPersisted = true;
+    finalizeInstallationAuthorization(stateDir, gatewayId, "consumed");
+    return { ok: true, value: record };
+  } catch {
+    if (durablyPersisted) {
+      // Only finalizeInstallationAuthorization("consumed") failed — the
+      // record itself may be left stuck "in-flight" (harmless bookkeeping
+      // debt: the next read of this exact record resolves it via
+      // beginInstallationAuthorizationConsumption's own reclaim-against-
+      // durable-truth logic, which will see the owner really is durable
+      // and finalize it to "consumed" then). The bootstrap itself
+      // genuinely succeeded — report that, not a false failure.
+      return { ok: true, value: record };
+    }
+    // The in-memory kernel may now hold this record even though it never
+    // reached disk (kernelSet already ran) — harmless: every future
+    // decision at THIS gate reads readDurableGatewayAuthority() (disk-
+    // verified), never the in-memory value, so the phantom write is simply
+    // ignored rather than needing to be explicitly rolled back. The
+    // authorization itself goes back to "pending" so a genuine retry (the
+    // same operator, same still-valid setup window) can succeed once the
+    // underlying write actually lands.
+    //
+    // This revert-to-"pending" write can ITSELF fail (e.g. the same
+    // filesystem failure that just broke saveSnapshotOrThrow() also blocks
+    // writing installation-authorizations.json, since both live under the
+    // same stateDir) — that must never escape as a second, uncaught
+    // exception on top of the first. Left "in-flight" in that rare double-
+    // failure case, it's still fully recoverable later: the very next
+    // attempt's own reclaim logic (beginInstallationAuthorizationConsumption)
+    // resolves an in-flight record against durable truth, not elapsed
+    // time, and finds no durable owner here — reclaiming it to "pending"
+    // itself once the filesystem is writable again.
+    try {
+      finalizeInstallationAuthorization(stateDir, gatewayId, "pending");
+    } catch {
+      // Swallowed on purpose — see comment above.
+    }
+    return { ok: false, error: "INSTALLATION_AUTHORIZATION_PERSIST_FAILED" };
+  }
 }
 
 // ─── shared acting-key + authorization check ───────────────────────────
@@ -281,7 +487,16 @@ function resolveActingIdentity(
   if (!claim) return { ok: false, error: "CLAIM_REQUIRED" };
   const actingIdentity = claim.identityHash;
 
-  const record = readGatewayAuthority(gatewayId);
+  // Durable-verified, not the in-memory read — same reasoning as
+  // bootstrapGatewayAuthority's own first-bootstrap gate (see
+  // readDurableGatewayAuthority's doc comment): granting/revoking/
+  // transferring authority off an owner/admin record that only exists in
+  // memory (a bootstrap whose kernelSet ran but whose durable persist
+  // never confirmed) would let a never-actually-established owner still
+  // produce a REAL, durably-persisted side effect through this path —
+  // e.g. granting a third party — even though the acting identity was
+  // never confirmed as owner at all.
+  const record = readDurableGatewayAuthority(gatewayId);
   if (!record || !record.owner) return { ok: false, error: "GATEWAY_NOT_BOOTSTRAPPED" };
 
   // The authorization check: does THIS IDENTITY currently hold gateway

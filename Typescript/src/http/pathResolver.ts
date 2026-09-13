@@ -3,6 +3,7 @@ import { readSemanticBranchForNamespace, isPathNearSecretScope } from "../claim/
 import { resolveNamespace } from "./namespace.js";
 import { normalizeHttpRequestToMeTarget } from "./meTarget.js";
 import { createEnvelope, createErrorEnvelope } from "./envelope.js";
+import { resolveLogsFromSource, shouldInterceptLogsPath } from "./logsSourceProxy.js";
 import type { DisclosureContent } from "./disclosure.js";
 
 export type ResolvedNamespacePath = {
@@ -83,6 +84,34 @@ export function createPathResolverHandler() {
     const dotPath = normalizeDotPath(segments.join("/"));
     if (!dotPath) {
       return res.status(404).json(createErrorEnvelope(target, { error: "NOT_FOUND" }));
+    }
+
+    // logs/logs.* never resolves against the memory store — see
+    // logsSourceProxy.ts's own header for why (an append-only hash-chained
+    // log is the wrong place for high-volume, rotating operational data).
+    // Handled entirely separately from the public/closed/404 disclosure
+    // classification below: logs existing isn't a secret to hide the
+    // existence of, it's admin-RBAC-gated, a different, already-
+    // established pattern in this mesh (same as netget's own
+    // /domains/metadata) — so this returns the source's own error/status
+    // directly rather than folding into "closed". shouldInterceptLogsPath
+    // requires an exact namespace + exact dotPath match (never a blanket
+    // "any namespace asking for logs.*") — see its own doc comment.
+    if (shouldInterceptLogsPath(namespace, dotPath)) {
+      const logsResult = await resolveLogsFromSource(req, dotPath);
+      if (!logsResult.ok) {
+        return res.status(logsResult.status).json(createErrorEnvelope(target, {
+          namespace,
+          path: dotPath,
+          error: logsResult.error,
+        }));
+      }
+      return res.json(createEnvelope(target, {
+        namespace,
+        path: dotPath,
+        value: logsResult.value,
+        disclosure: "public",
+      }));
     }
 
     const resolved = await resolveNamespacePathValue(namespace, dotPath);

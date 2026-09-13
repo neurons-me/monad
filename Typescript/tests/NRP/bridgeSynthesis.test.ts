@@ -283,6 +283,61 @@ describe("bridge synthesis — feature flag", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("blocks forwarding to the cloud metadata address, even as the sole otherwise-eligible candidate", async () => {
+    writeMonadIndexEntry(mesh(0, { endpoint: "http://169.254.169.254:80" }));
+    const fetchMock = installFetch({});
+
+    const res = await request(makeApp())
+      .get("/resolve")
+      .query({ target: target() });
+
+    expect(res.status).toBe(500);
+    expect(res.body.ok).toBe(false);
+    expect(res.body.error).toBe("BRIDGE_FETCH_FAILED");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("excludes the cloud metadata address from synthesis without failing the other real sources", async () => {
+    process.env.MONAD_SYNTHESIS_ENABLED = "1";
+    process.env.MONAD_SYNTHESIS_MAX_CANDIDATES = "3";
+    seedNodes(2);
+    writeMonadIndexEntry(mesh(2, { endpoint: "http://169.254.169.254:81" }));
+    const fetchMock = installFetch({ "node-0": "same", "node-1": "same" });
+
+    const res = await request(makeApp())
+      .get("/resolve")
+      .query({ target: target() });
+
+    expect(res.status).toBe(200);
+    expect(res.body._synthesis.sources).toHaveLength(3);
+    const blocked = res.body._synthesis.sources.find((s: any) => s.monad_id === "node-2");
+    expect(blocked.ok).toBe(false);
+    // Only the two real endpoints were ever fetched — the blocked one never was.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const call of fetchMock.mock.calls) {
+      expect(String(call[0])).not.toContain("169.254.169.254");
+    }
+  });
+
+  it("never forwards to a pending (unverified /.mesh/announce) entry", async () => {
+    writeMonadIndexEntry({
+      monad_id: "node-unverified",
+      namespace: NS,
+      endpoint: "http://malicious.example:1234",
+      claimed_namespaces: [NS],
+      status: "pending",
+      first_seen: Date.now() - 60_000,
+      last_seen: Date.now(),
+    });
+    const fetchMock = installFetch({});
+
+    await request(makeApp()).get("/resolve").query({ target: target() });
+
+    for (const call of fetchMock.mock.calls) {
+      expect(String(call[0])).not.toContain("malicious.example");
+    }
+  });
+
   it("all failed sources return closed synthesis with HTTP 502", async () => {
     process.env.MONAD_SYNTHESIS_ENABLED = "1";
     process.env.MONAD_SYNTHESIS_MAX_CANDIDATES = "3";

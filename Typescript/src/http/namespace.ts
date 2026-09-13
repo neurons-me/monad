@@ -6,7 +6,7 @@ import {
   normalizeNamespaceIdentity,
   parseNamespaceIdentityParts,
 } from "../namespace/identity.js";
-import { resolveHostToCanonicalNamespace } from "../runtime/hostResolver.js";
+import { resolveHostToMeUri } from "../runtime/hostResolver.js";
 
 export type ObserverRelationMode = "raw" | "self" | "observer" | "view";
 
@@ -82,11 +82,28 @@ export function resolveHostNamespace(req: express.Request) {
   const first = String(hostHeaderRaw).split(",")[0].trim();
   const noProto = first.replace(/^https?:\/\//i, "");
   const hostnameOnly = noProto.split(":")[0].trim();
-  const canonical = resolveHostToCanonicalNamespace(hostnameOnly);
-  if (canonical) return canonical;
+
+  const projected = resolveHostToMeUri(hostnameOnly);
+  if (projected.ok) return projected.namespace;
+
   const localIdentity = readLocalIdentityNamespace(hostnameOnly);
   if (localIdentity) return localIdentity;
-  return normalizeNamespaceIdentity(hostnameOnly) || "unknown";
+
+  // Host is client-supplied transport metadata, not a verified identity claim
+  // (see all.this/CLAUDE.md "Known architectural gaps" #1/#2 — surface claims
+  // aren't implemented yet, so we must not invent a parallel trust path here).
+  // A hostname that doesn't fall under one of this monad's own known
+  // spaces/aliases (UNKNOWN_SPACE / INVALID_HOST / NOT_CANONICAL_NAMESPACE)
+  // must not be trusted as a namespace selector — otherwise any caller could
+  // read another namespace's ledger just by forging Host. The one case kept
+  // is TRANSPORT_ONLY_HOST (localhost/.local mDNS addressing): the network
+  // layer, not the header, is what put the caller on that name, and existing
+  // LAN/direct-daemon routing already depends on trusting it literally.
+  if (projected.reason === "TRANSPORT_ONLY_HOST") {
+    return normalizeNamespaceIdentity(hostnameOnly) || "unknown";
+  }
+
+  return "unknown";
 }
 
 export function resolveTransportHost(req: express.Request) {

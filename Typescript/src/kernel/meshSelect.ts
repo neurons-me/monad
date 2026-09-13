@@ -174,6 +174,10 @@ export async function selectMeshClaimantByScope(opts: {
       m.endpoint.replace(/\/+$/, "") !== normSelf &&
       (!selfMonadId || m.monad_id !== selfMonadId) &&
       now - m.last_seen <= stalenessMs &&
+      // An announce that hasn't verified its signature never becomes a
+      // routing candidate — see MonadIndexEntry.status's own doc comment.
+      // Absent status (self/CLI entries) passes through unchanged.
+      m.status !== "pending" &&
       ((m.name?.toLowerCase() === normalizedName) || m.monad_id.toLowerCase() === normalizedName),
   );
 
@@ -237,7 +241,13 @@ export async function selectMeshClaimant(opts: {
 
   if (monadSelector) {
     const named = await findMonadByNameAsync(monadSelector);
-    if (named?.endpoint) return { entry: named, reason: "name-selector" };
+    // Same pending gate as the namespace-scored path below — this shortcut
+    // bypasses scoring entirely, so it must not also bypass the eligibility
+    // check. Found in review: an explicit `?monad=name` selector (wired
+    // through from bridgeHandler.ts's req.query.monad) reached this branch
+    // with no status check at all, letting a caller route directly to an
+    // unverified /.mesh/announce entry just by knowing its name.
+    if (named?.endpoint && named.status !== "pending") return { entry: named, reason: "name-selector" };
     return null;
   }
 
@@ -246,6 +256,8 @@ export async function selectMeshClaimant(opts: {
       m.endpoint.replace(/\/+$/, "") !== normSelf &&
       (!selfMonadId || m.monad_id !== selfMonadId) &&
       now - m.last_seen <= stalenessMs &&
+      // See selectMeshClaimantByScope's identical guard above.
+      m.status !== "pending" &&
       matchesMeshSelector(m, selectorConstraint),
   );
 

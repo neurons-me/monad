@@ -60,6 +60,22 @@ function buildForwardUrl(
   return url;
 }
 
+// Cloud-provider instance-metadata endpoints answer unauthenticated by
+// design, trusting that only same-host callers can reach them — so forwarding
+// a request there on a candidate's behalf would leak whatever credentials
+// live behind it. A mesh candidate's `endpoint` can originate from an
+// unauthenticated `/.mesh/announce` (see MonadIndexEntry.status's doc
+// comment); this floor applies regardless of that entry's verified/pending
+// status, since "verified" only proves who signed the announce, never that
+// its endpoint is safe to fetch.
+const BLOCKED_FORWARD_HOSTS = new Set(["169.254.169.254"]);
+
+function assertSafeForwardUrl(url: URL): void {
+  if (BLOCKED_FORWARD_HOSTS.has(url.hostname)) {
+    throw new Error(`BLOCKED_FORWARD_DESTINATION: ${url.hostname}`);
+  }
+}
+
 function buildForwardInit(
   req: express.Request,
   namespace: string,
@@ -145,6 +161,7 @@ async function forwardCandidate(
   const startedAt = Date.now();
 
   try {
+    assertSafeForwardUrl(url);
     const response = await fetch(url, buildForwardInit(req, namespace, controller.signal));
     const latencyMs = Date.now() - startedAt;
     const contentType = String(response.headers.get("content-type") || "");
@@ -572,6 +589,7 @@ export function createBridgeHandler(config: BridgeHandlerConfig): express.Reques
       }
 
       const url = buildForwardUrl(origin, forwardPath, req.query);
+      assertSafeForwardUrl(url);
 
       const response = await fetch(url, buildForwardInit(req, parsed.namespace));
 

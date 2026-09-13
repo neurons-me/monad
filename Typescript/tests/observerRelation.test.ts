@@ -41,6 +41,7 @@ import { createEnvelope } from "../src/http/envelope";
 import { normalizeHttpRequestToMeTarget } from "../src/http/meTarget";
 import {
   formatObserverRelationLabel,
+  resolveHostNamespace,
   resolveNamespace,
   resolveNamespaceProjectionRoot,
   resolveObserverRelation,
@@ -289,6 +290,33 @@ describe("observer relation routing", () => {
       if (previousTags === undefined) delete process.env.MONAD_SELF_TAGS;
       else process.env.MONAD_SELF_TAGS = previousTags;
     }
+  });
+
+  it("does not trust a forged Host for a namespace this monad doesn't own", () => {
+    // WHAT: A client hits this monad directly (bypassing any gateway) and
+    //       sets Host to some other namespace's domain-shaped hostname, e.g.
+    //       "local.cleaker" — a string that isn't this monad's own known
+    //       space (ME_NAMESPACE="cleaker.me" from tests/setup.ts), isn't a
+    //       configured MONAD_SELF_* alias, and isn't a bare .local/localhost
+    //       transport hostname either.
+    //
+    // WHY: Host is client-supplied transport metadata, not a verified
+    //      identity claim. Before this fix, resolveHostNamespace() fell back
+    //      to trusting the literal Host string as the namespace to serve —
+    //      so anyone who guessed/forged a namespace string as Host could read
+    //      that namespace's ledger data, with zero authorization check. See
+    //      all.this/CLAUDE.md "Known architectural gaps" #1/#2.
+    //
+    // resolveHostNamespace(req) must NOT return "local.cleaker" literally —
+    // it should fall back to the safe "no match" namespace ("unknown"),
+    // same as when Host is absent, instead of trusting the forged value.
+    const req = makeRequest({
+      host: "local.cleaker",
+      path: "/blockchain",
+    });
+
+    expect(resolveHostNamespace(req)).toBe("unknown");
+    expect(resolveNamespace(req)).not.toBe("local.cleaker");
   });
 
   it("preserves legacy named views as a non-identity relation", () => {

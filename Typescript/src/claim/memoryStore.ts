@@ -1,6 +1,12 @@
 import crypto from "crypto";
 import { normalizeNamespaceRootName } from "../namespace/identity.js";
-import { getKernel, kernelPathFor, namespaceToKernelPrefix, getRootNamespace } from "../kernel/manager.js";
+import {
+  getKernel,
+  kernelPathFor,
+  namespaceToKernelPrefix,
+  getRootNamespace,
+  isForeignNamespaceCollapsingToRoot,
+} from "../kernel/manager.js";
 import type { Memory } from "this.me";
 
 export interface SemanticMemoryRow {
@@ -79,15 +85,21 @@ function kernelWrite(namespace: string, path: string, data: unknown, operator?: 
   const kernel = getKernel();
   const kpath = kernelPathFor(namespace, path);
 
-  // Tombstone semantics for operator "-" are implemented entirely at the
+  // Tombstone semantics for operator "-" are implemented at the
   // semantic-memory branch-read layer (buildSemanticBranchTreeForNamespace
-  // below calls deleteDeepValue when it sees operator === "-" on the stored
-  // row) — the underlying `.me` kernel has no concept of "-" and doesn't
-  // need one. This used to pass `undefined` as the write payload here,
-  // which `.me`'s self:write always rejects ("requires a body payload") —
-  // confirmed by testing, no caller could have ever used this branch
-  // successfully. Just write `data` like any other operator; the row's
-  // stored `operator` field is what later reads key off of.
+  // below calls deleteDeepValue when it sees operator === "-" on the
+  // stored row) — but that row's `operator` field has to actually BE "-"
+  // for that to ever fire. Confirmed live (2026-09 incident): it wasn't.
+  // `.me`'s own kernel.execute()/postulate() chain already accepts and
+  // correctly stores whatever operator it's given (me/Typescript's
+  // core.ts handleSelfTarget -> self.postulate(path, body, operator)) —
+  // the gap was entirely here: this call used to drop the 3rd argument
+  // on the floor, so every write through this branch became operator:null
+  // regardless of what the caller asked for, and a "delete" silently
+  // turned into an unconditional overwrite. Fixed by actually passing it
+  // through — see me/Typescript's core.ts/me.ts for the matching half of
+  // this fix (execute() previously had no parameter to carry operator at
+  // all).
 
   if (operator === "=" && typeof data !== "object") {
     // preserve explicit = operator via proxy eval syntax (primitives only — arrays/objects corrupt via eval)
@@ -100,7 +112,7 @@ function kernelWrite(namespace: string, path: string, data: unknown, operator?: 
     return;
   }
 
-  kernel.execute(`me://self:write/${kpath.split(".").join("/")}`, data);
+  kernel.execute(`me://self:write/${kpath.split(".").join("/")}`, data, operator ?? null);
 }
 
 function kernelRead(namespace: string, path: string): unknown {
@@ -180,6 +192,30 @@ export function appendSemanticMemory(input: {
   const namespace = input.namespace.trim().toLowerCase();
   const path = input.path.trim();
   if (!namespace || !path) throw new Error("INVALID_MEMORY_INPUT");
+
+  // This is the ONE function every write path in the codebase funnels
+  // through (commitHandler, rootCommandHandler/recordMemory, keychain.ts,
+  // records.ts's own claim-projection writes, session.ts, claims.ts,
+  // usageLedger.ts, hostTelemetryLedger.ts, Blockchain/users.ts,
+  // claimSemantics.ts, semanticBootstrap.ts -- confirmed by grepping every
+  // caller). It is therefore the right single place to close this, rather
+  // than re-adding the same check at every perimeter handler (syncHandler.ts
+  // already had its own copy of this check before this one was added here;
+  // that one is now a redundant-but-harmless early exit for the commit
+  // path specifically -- this is the version that actually protects every
+  // OTHER path too, including POST / (rootCommandHandler), which had none
+  // of this at all and needed no claim/signature whatsoever to reach here).
+  //
+  // Proven exploitable via TWO independent real HTTP paths in
+  // namespaceCollisionAuthorization.test.ts before this guard existed here:
+  // (1) a claimed-but-foreign namespace string authorizing a commit that
+  // physically collided with the real root's data, and (2) a fully
+  // anonymous POST / request whose unrecognized Host header resolved to a
+  // namespace ("unknown") that ALSO collapses onto the same kernel-root
+  // storage, requiring no identity at all.
+  if (isForeignNamespaceCollapsingToRoot(namespace)) {
+    throw new Error("FOREIGN_NAMESPACE_REJECTED");
+  }
 
   kernelWrite(namespace, path, input.data, input.operator);
 

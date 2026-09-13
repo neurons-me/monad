@@ -5,8 +5,12 @@ import {
   listSemanticMemoriesByNamespace,
 } from "../claim/memoryStore.js";
 import { checkGroupAuthorization } from "../claim/groupAuthorization.js";
+import { checkAppAuthorization } from "../claim/appAuthorization.js";
 import { getClaim } from "../claim/records.js";
 import { isNamespaceWriteAuthorized } from "../claim/replay.js";
+import { isKeychainReservedPath } from "../claim/keychain.js";
+import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
+import { isForeignNamespaceCollapsingToRoot } from "../kernel/manager.js";
 
 // This used to be a fully open write: any POST here landed in
 // appendSemanticMemory() with zero identity check, regardless of who the
@@ -77,6 +81,43 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
 
     if (!rawEvents.length) return res.status(400).json({ error: "No events provided" });
 
+    // Same reserved-path guard as rootCommandHandler (POST /) -- keychain.*
+    // is only ever mutated through claim/keychain.ts's own validated
+    // functions, never through a generic commit, even by the target
+    // namespace's own claim holder.
+    const reservedEvent = rawEvents.find(
+      (event) => event && typeof event === "object" && isKeychainReservedPath(String((event as Record<string, unknown>).path || "")),
+    );
+    if (reservedEvent) {
+      return res.status(403).json({ error: "KEYCHAIN_PATH_REQUIRES_KEYCHAIN_API" });
+    }
+    // Same reasoning, for the gateway-authority branch (claim/gatewayAuthority.ts).
+    const reservedGatewayEvent = rawEvents.find(
+      (event) => event && typeof event === "object" && isGatewayAuthorityReservedPath(String((event as Record<string, unknown>).path || "")),
+    );
+    if (reservedGatewayEvent) {
+      return res.status(403).json({ error: "GATEWAY_PATH_REQUIRES_GATEWAY_API" });
+    }
+
+    // Reject before any authorization check runs, not just before the
+    // write: an event whose `namespace` collapses onto kernel-ROOT storage
+    // (namespaceToKernelPrefix's "" fallback) without actually BEING this
+    // monad's real root must never reach checkGroupAuthorization/
+    // checkAppAuthorization at all. Those gates authorize a write by
+    // checking getClaim(event.namespace) -- keyed by the STRING the caller
+    // chose, not by where it physically lands. Anyone can claim an
+    // unrelated bare namespace string (first-claim-wins on the string
+    // alone) and be its legitimate "owner" for that string while still
+    // physically colliding with the real root's own apps.*/groups.* data.
+    // Proven exploitable end-to-end in
+    // namespaceCollisionAuthorization.test.ts before this guard existed.
+    const foreignRootEvent = rawEvents.find(
+      (event) => event && typeof event === "object" && isForeignNamespaceCollapsingToRoot(String((event as Record<string, unknown>).namespace || "")),
+    );
+    if (foreignRootEvent) {
+      return res.status(403).json({ error: "FOREIGN_NAMESPACE_REJECTED", detail: "This namespace does not resolve to the monad's real root or a sub-identity of it -- it cannot be used as a write target here." });
+    }
+
     const callerIdentityHash = String(body.identityHash || "").trim();
     const callerNamespace = String(body.namespace || "").trim().toLowerCase();
     if (!callerIdentityHash || !callerNamespace || !String(body.signature || "").trim()) {
@@ -114,6 +155,11 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
       return res.status(403).json({ error: "GROUP_AUTHORIZATION_REQUIRED", detail: groupError });
     }
 
+    const appError = checkAppAuthorization(rawEvents, callerIdentityHash);
+    if (appError) {
+      return res.status(403).json({ error: "APP_AUTHORIZATION_REQUIRED", detail: appError });
+    }
+
     const results = [];
     for (const event of rawEvents) {
       // Each event's own `namespace` field is its write target (e.g. the
@@ -133,6 +179,32 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
       ok: results.every((entry) => Boolean((entry as { ok?: boolean }).ok)),
       hash: first?.memory?.hash || null,
       results,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: String(err) });
+  }
+};
+
+// Lets a client find out "is this identity the namespace's claimed owner"
+// without a dedicated per-app claim step -- see appAuthorization.ts: a
+// namespace owner has implicit authority over every apps.<appId>.* branch
+// inside it, so the UI needs this to decide whether to show edit tools
+// *before* the caller attempts a write, not just react to a 403 afterward.
+// Deliberately returns only a boolean, never the claim record itself
+// (publicKey, secretCommitment, etc.) -- identityHash is already a public
+// fingerprint (shown in the UI, meant to be shared), so confirming a
+// namespace/identityHash pair leaks nothing that wasn't already public.
+export const namespaceOwnerHandler: express.RequestHandler = async (req, res) => {
+  try {
+    const namespace = String(req.query.namespace || "").trim().toLowerCase();
+    const identityHash = String(req.query.identityHash || "").trim();
+    if (!namespace || !identityHash) {
+      return res.status(400).json({ error: "namespace and identityHash are required" });
+    }
+    const claim = getClaim(namespace);
+    return res.json({
+      claimed: Boolean(claim),
+      isOwner: Boolean(claim && claim.identityHash === identityHash),
     });
   } catch (err) {
     return res.status(500).json({ error: String(err) });

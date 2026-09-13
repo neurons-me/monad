@@ -1,6 +1,6 @@
 import { getBlocksForIdentity } from "./blockchain.js";
 import { getClaim } from "../claim/records.js";
-import { appendSemanticMemory, buildSemanticTreeForNamespace, listSemanticMemoriesByNamespace } from "../claim/memoryStore.js";
+import { appendSemanticMemory, readSemanticBranchForNamespace } from "../claim/memoryStore.js";
 import { getRootNamespace } from "../kernel/manager.js";
 import { composeProjectedNamespace, normalizeNamespaceRootName } from "../namespace/identity.js";
 
@@ -29,8 +29,19 @@ export function getAllUsers(): UserRow[] {
 }
 
 function readProjectedUsersMetadata(rootNamespace: string): Record<string, Record<string, unknown>> {
-  const tree = buildSemanticTreeForNamespace(rootNamespace) as Record<string, unknown>;
-  const usersBranch = tree.users as Record<string, unknown> | undefined;
+  // Scoped to the "users" branch specifically (not the whole namespace's
+  // memory stream) — a namespace with heavy unrelated activity (e.g.
+  // surface.usage.* telemetry, tens of thousands of entries) would
+  // otherwise push real users.<name> entries out of the unscoped read's
+  // 5,000-entry recency cap entirely. See getUsersForRootNamespace's own
+  // identical fix below for the bug this caused: real registered users
+  // (found via /users, which already reads this same branch-scoped way)
+  // silently missing from this namespace-wide view.
+  // readSemanticBranchForNamespace (not buildSemanticBranchTreeForNamespace
+  // directly) — the latter returns the tree still rooted at the full path
+  // (`{ users: { jabellae: {...} } }`), the former unwraps it down to the
+  // branch itself (`{ jabellae: {...} }`), matching what GET /users returns.
+  const usersBranch = readSemanticBranchForNamespace(rootNamespace, "users") as Record<string, unknown>;
   const records: Record<string, Record<string, unknown>> = {};
 
   if (!usersBranch || typeof usersBranch !== "object" || Array.isArray(usersBranch)) {
@@ -49,35 +60,40 @@ export function getUsersForRootNamespace(rootNamespaceInput: string): UserRow[] 
   const rootNamespace = normalizeNamespaceRootName(rootNamespaceInput);
   if (!rootNamespace) return [];
 
-  const rows = listSemanticMemoriesByNamespace(rootNamespace) as Array<{
-    path: string;
-    data: unknown;
-    timestamp: number;
-  }>;
-
-  const pointerRows = rows.filter((row) => /^users\.[a-z0-9_-]+$/i.test(row.path));
+  // readProjectedUsersMetadata() already reads the "users" branch
+  // specifically (see its own comment) — reusing it here as the primary
+  // source of usernames too, instead of a second, separately-scoped scan.
+  // Previously this function scanned the WHOLE namespace's memory stream
+  // (listSemanticMemoriesByNamespace(rootNamespace), no branch prefix) for
+  // rows matching `users.<name>` — capped at the same 5,000-entry recency
+  // window as every other activity in that namespace. On a namespace with
+  // heavy unrelated write volume (e.g. surface.usage.* telemetry — tens of
+  // thousands of entries), that cap was reached entirely by non-user
+  // activity, silently pushing real users.<name> entries out of the window.
+  // Real registered users were still visible via the "users" semantic path
+  // directly (GET /users, me://<ns>:read/users) because that read was
+  // already branch-scoped — this function just wasn't using the same scope.
+  const projectedMetadata = readProjectedUsersMetadata(rootNamespace);
   const seen = new Set<string>();
   const users: UserRow[] = [];
-  const projectedMetadata = readProjectedUsersMetadata(rootNamespace);
 
-  for (const row of pointerRows) {
-    const match = row.path.match(/^users\.([a-z0-9_-]+)$/i);
-    const username = normalizeUsername(String(match?.[1] || ""));
+  for (const [rawUsername, record] of Object.entries(projectedMetadata)) {
+    const username = normalizeUsername(rawUsername);
     if (!username || seen.has(username)) continue;
     seen.add(username);
 
-    const ptr = row.data as Record<string, unknown> | null;
-    const projectedNamespace = String((ptr as { __ptr?: unknown } | null)?.__ptr || "").trim().toLowerCase()
+    const ptr = record as { __ptr?: unknown } | null;
+    const projectedNamespace = String(ptr?.__ptr || "").trim().toLowerCase()
       || composeProjectedNamespace(username, rootNamespace);
     const claim = projectedNamespace ? getClaim(projectedNamespace) : undefined;
-    const metadata = projectedMetadata[username] || {};
+    const metadata = record || {};
 
     users.push({
       username,
       identityHash: String(claim?.identityHash || metadata.identityHash || "").trim(),
       publicKey: String(claim?.publicKey || metadata.publicKey || "").trim(),
-      createdAt: Number(claim?.createdAt || metadata.createdAt || row.timestamp || 0),
-      updatedAt: Number(claim?.updatedAt || metadata.updatedAt || row.timestamp || 0),
+      createdAt: Number(claim?.createdAt || metadata.createdAt || 0),
+      updatedAt: Number(claim?.updatedAt || metadata.updatedAt || 0),
     });
   }
 

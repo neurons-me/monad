@@ -745,9 +745,23 @@ export function loadSelfNodeConfig(input: {
   hostname: string;
   port: string | number;
 }): SelfNodeConfig | null {
+  // Default self-identity path derives from ME_STATE_DIR when the caller has
+  // explicitly opted into an isolated state dir (the standard test/disposable
+  // pattern) — never from the real ambient `env/self.json` in that case. A
+  // disposable run that sets ME_STATE_DIR but forgets a dedicated
+  // MONAD_SELF_CONFIG_PATH previously fell through to the CWD-relative
+  // default and silently read/wrote the REAL surface identity file when run
+  // from inside the actual repo checkout (caught 2026-09-12; see
+  // feedback_disposable_infra_only_for_testing.md). When ME_STATE_DIR is
+  // unset, behavior is byte-for-byte unchanged — the real ambient monad,
+  // which sets neither var, keeps resolving to "env/self.json" exactly as
+  // before.
+  const defaultSelfConfigPath = input.env.ME_STATE_DIR
+    ? path.join(input.env.ME_STATE_DIR, "self.json")
+    : "env/self.json";
   const configPath = path.resolve(
     input.cwd,
-    String(input.env.MONAD_SELF_CONFIG_PATH || "env/self.json"),
+    String(input.env.MONAD_SELF_CONFIG_PATH || defaultSelfConfigPath),
   );
 
   let fileConfig: Record<string, unknown> = {};

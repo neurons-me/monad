@@ -636,3 +636,92 @@ describe("selectMeshClaimantByScope — scope chain fallback", () => {
     expect(r).toBeNull();
   });
 });
+
+// ── 9. status: "pending" eligibility gate ──────────────────────────────────────
+//
+// An entry written by the open, unauthenticated `/.mesh/announce` route
+// (meshAnnounce.ts) starts life as status: "pending" until its signature
+// verifies. Neither selection function may ever hand a pending entry back as
+// a routing destination — see MonadIndexEntry.status's own doc comment.
+
+describe("selectMeshClaimant — status: pending gate", () => {
+  it("never selects a pending entry, even when it would otherwise win on score", async () => {
+    writeMonadIndexEntry(mesh({ monad_id: "m-pending", endpoint: "http://localhost:8282", status: "pending" }));
+    const r = await selectMeshClaimant({ monadSelector: "", namespace: NS, selfEndpoint: SELF, selfMonadId: SELF_ID });
+    expect(r).toBeNull();
+  });
+
+  it("falls through to a verified candidate when a pending one is also present", async () => {
+    writeMonadIndexEntry(mesh({ monad_id: "m-pending", endpoint: "http://localhost:8282", status: "pending" }));
+    writeMonadIndexEntry(mesh({ monad_id: "m-verified", endpoint: "http://localhost:8283", status: "verified" }));
+    const r = await selectMeshClaimant({ monadSelector: "", namespace: NS, selfEndpoint: SELF, selfMonadId: SELF_ID });
+    expect(r!.entry.monad_id).toBe("m-verified");
+  });
+
+  it("selects an entry with no status field at all (self/CLI-seeded, never gated)", async () => {
+    const entry = mesh({ monad_id: "m-no-status", endpoint: "http://localhost:8282" });
+    delete (entry as { status?: string }).status;
+    writeMonadIndexEntry(entry);
+    const r = await selectMeshClaimant({ monadSelector: "", namespace: NS, selfEndpoint: SELF, selfMonadId: SELF_ID });
+    expect(r!.entry.monad_id).toBe("m-no-status");
+  });
+});
+
+describe("selectMeshClaimantByScope — status: pending gate", () => {
+  it("never selects a pending entry by name, even as the only candidate", async () => {
+    writeMonadIndexEntry(mesh({
+      monad_id: "frank-pending",
+      name: "frank",
+      endpoint: "http://localhost:8282",
+      status: "pending",
+    }));
+    const r = await selectMeshClaimantByScope({
+      monadId: "frank",
+      namespace: NS,
+      selfEndpoint: SELF,
+      selfMonadId: SELF_ID,
+    });
+    expect(r).toBeNull();
+  });
+});
+
+describe("selectMeshClaimant — explicit monadSelector — status: pending gate", () => {
+  it("never selects a pending entry via an explicit ?monad=name selector", async () => {
+    // Regression test for a real gap found in review: this branch
+    // (monadSelector set — e.g. bridgeHandler.ts's req.query.monad) bypasses
+    // scoring entirely via findMonadByNameAsync() and previously returned
+    // the named entry with NO status check at all, letting a caller route
+    // directly to an unverified /.mesh/announce entry just by knowing its
+    // name — a completely separate code path from the namespace-scored one
+    // above, not covered by that gate.
+    writeMonadIndexEntry(mesh({
+      monad_id: "frank-pending-selector",
+      name: "frank",
+      endpoint: "http://localhost:8282",
+      status: "pending",
+    }));
+    const r = await selectMeshClaimant({
+      monadSelector: "frank",
+      namespace: NS,
+      selfEndpoint: SELF,
+      selfMonadId: SELF_ID,
+    });
+    expect(r).toBeNull();
+  });
+
+  it("still selects a verified entry via an explicit ?monad=name selector", async () => {
+    writeMonadIndexEntry(mesh({
+      monad_id: "frank-verified-selector",
+      name: "frank",
+      endpoint: "http://localhost:8282",
+      status: "verified",
+    }));
+    const r = await selectMeshClaimant({
+      monadSelector: "frank",
+      namespace: NS,
+      selfEndpoint: SELF,
+      selfMonadId: SELF_ID,
+    });
+    expect(r!.entry.monad_id).toBe("frank-verified-selector");
+  });
+});

@@ -50,7 +50,11 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function toStableJson(value: unknown): string {
+// Exported for reuse by anything else that needs the SAME canonical-JSON +
+// PEM-Ed25519-verify convention this file already proved out (namespace
+// writes) — meshAnnounce.ts's signature verification, specifically. Kept
+// here rather than duplicated so the two never quietly drift apart.
+export function toStableJson(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(toStableJson).join(",")}]`;
   const obj = value as Record<string, unknown>;
@@ -58,7 +62,7 @@ function toStableJson(value: unknown): string {
   return `{${keys.map((k) => `${JSON.stringify(k)}:${toStableJson(obj[k])}`).join(",")}}`;
 }
 
-function decodeSignature(rawSignature: string): Buffer | null {
+export function decodeSignature(rawSignature: string): Buffer | null {
   const sig = String(rawSignature || "").trim();
   if (!sig) return null;
   try {
@@ -73,7 +77,7 @@ function stripWriteAuthFields(body: Record<string, unknown>) {
   return rest;
 }
 
-function verifySignature(publicKey: string, message: string, signature: Buffer): boolean {
+export function verifySignature(publicKey: string, message: string, signature: Buffer): boolean {
   try {
     const key = crypto.createPublicKey(publicKey);
     const keyType = key.asymmetricKeyType || "";

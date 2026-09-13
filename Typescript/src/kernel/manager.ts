@@ -132,6 +132,79 @@ export function kernelPathFor(namespace: string, path: string): string {
   return prefix ? `${prefix}.${path}` : path;
 }
 
+/**
+ * True when `namespace` resolves to kernel-ROOT storage (the "" prefix
+ * from namespaceToKernelPrefix above) WITHOUT actually being this monad's
+ * own configured root namespace -- i.e. the fallback branch for an
+ * unparseable string or a genuinely foreign root, not the legitimate "this
+ * IS the root" case.
+ *
+ * Why this matters: claimNamespace() (records.ts) lets anyone claim ANY
+ * unclaimed bare namespace string -- first-claim-wins on the string alone,
+ * with no requirement that it relate to this monad's real root at all. A
+ * write-authorization gate keyed off that claim (appAuthorization.ts,
+ * groupAuthorization.ts: getClaim(event.namespace)) is therefore only as
+ * safe as the assumption that a DIFFERENT claimed namespace string can
+ * never land in the SAME physical storage as the real root's data. That
+ * assumption was false: namespaceToKernelPrefix's "" fallback collapses
+ * every foreign/unparseable namespace onto the exact same kernel-root
+ * location the real root itself uses. Proven exploitable end-to-end in
+ * namespaceCollisionAuthorization.test.ts before this function existed --
+ * an identity claiming an unrelated namespace string could authorize a
+ * write under THEIR OWN claim that physically overwrote apps.<id>.* data
+ * that actually belonged to the real root's owner.
+ *
+ * commitHandler (syncHandler.ts) calls this on every event's namespace
+ * BEFORE any authorization check runs, and rejects the whole commit if any
+ * event would land here without truly being the root -- closing this for
+ * every namespace-gated write path at once (apps.*, groups.*, and any
+ * future one), not just one call site.
+ */
+export function isForeignNamespaceCollapsingToRoot(namespace: string): boolean {
+  const trimmed = String(namespace || "").trim();
+  if (!trimmed) return false; // nothing to collapse onto anything
+
+  let parsed: ReturnType<typeof parseNamespaceExpression>;
+  try {
+    parsed = parseNamespaceExpression(trimmed);
+  } catch {
+    // Same unparseable case namespaceToKernelPrefix treats as kernel-root
+    // -- never legitimately "the root" itself.
+    return true;
+  }
+
+  if (parsed.prefix) return false; // resolves to users.<prefix>, not root
+  const constant = normalizeNamespaceRootName(parsed.constant);
+  return !isRecognizedOwnRootConstant(constant);
+}
+
+/**
+ * True when `constant` is one of the namespace strings THIS PROCESS itself
+ * is explicitly bound to -- never anything a caller/request can supply.
+ *
+ * Two, not one: getRootNamespace() (ME_NAMESPACE-first) is the semantic
+ * root callers write user data under. Separately, http/selfMapping.ts's
+ * ensureSelfIdentityConfig() persists (or, on first run, generates) this
+ * monad's own surface/self identity into process.env.MONAD_SELF_IDENTITY
+ * at boot -- and bootstrap.ts's ensureRootSemanticBootstrap() deliberately
+ * seeds ROOT_SCHEMA_SEEDS under THAT identity (config.selfNodeConfig on a
+ * fresh install where no ME_NAMESPACE-matching self.json exists yet), not
+ * under getRootNamespace(). That's pre-existing, intentional behavior
+ * (confirmed live: it broke 5 real test files the first time this guard
+ * shipped without knowing about it) -- both values are explicit,
+ * server-side bindings this process set for itself during its own
+ * bootstrap, never attacker-suppliable input, so both are legitimately
+ * "not foreign" here. This is the "vinculación explícita" the review asked
+ * for in place of a silent fallback: two concretely-named, process-owned
+ * env values, not "anything that happens to collapse to root storage."
+ */
+function isRecognizedOwnRootConstant(constant: string): boolean {
+  if (!constant) return false;
+  if (constant === getRootNamespace()) return true;
+  const selfIdentity = normalizeNamespaceRootName(String(process.env.MONAD_SELF_IDENTITY || ""));
+  return Boolean(selfIdentity) && constant === selfIdentity;
+}
+
 export function resetKernelStateForTests(): void {
   _kernel = null;
   rmSync(getKernelStateDir(), { recursive: true, force: true });

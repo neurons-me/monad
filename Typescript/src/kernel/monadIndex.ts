@@ -23,6 +23,19 @@ export interface MonadIndexEntry {
   capabilities?: string[];
   /** Where in the namespace tree this monad operates. Absent = treats as "/". */
   scope_path?: string;
+  /**
+   * Set ONLY by the remote `/.mesh/announce` path (meshAnnounce.ts) — 'pending'
+   * for an unsigned or unverifiable announce, 'verified' once its Ed25519
+   * signature checks out against its own claimed public_key. Absent (not
+   * 'pending' or 'verified') on self-seeded (seedSelfMonadIndexEntry) and
+   * CLI-derived (cliRecordToEntry) entries — those come from same-machine,
+   * already-trusted sources, never the open remote announce endpoint, so
+   * there's nothing to verify and nothing to gate. meshSelect.ts's
+   * candidate filters exclude ONLY `status === 'pending'`, so absent and
+   * 'verified' are both eligible — this keeps existing self/CLI entries
+   * working unchanged.
+   */
+  status?: "pending" | "verified";
 }
 
 // Secret space path — encrypted at snapshot/persist time, plain in live memory.

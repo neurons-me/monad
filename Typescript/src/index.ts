@@ -141,12 +141,13 @@ export async function startMonad(options: StartMonadOptions = {}): Promise<Start
 
     // Announce on startup (after server is listening), then on interval.
     server.once("listening", () => {
+      const privateKeyPem = config.selfNodeConfig?.privateKey;
       const entry = readMonadIndexEntry(selfMonadId);
       if (entry) {
-        announceToSurface(surfaceUrl, entry);
+        announceToSurface(surfaceUrl, entry, privateKeyPem);
         const announceInterval = setInterval(() => {
           const current = readMonadIndexEntry(selfMonadId);
-          if (current) announceToSurface(surfaceUrl, current);
+          if (current) announceToSurface(surfaceUrl, current, privateKeyPem);
         }, intervalMs);
         announceInterval.unref();
       }

@@ -5,7 +5,22 @@ import { createBridgeHandler } from "./handlers/bridgeHandler.js";
 import { meCommandHandler, rootCommandHandler, rootCompatHandler } from "./handlers/commandHandler.js";
 import { explainRequestHandler, inspectRequestHandler } from "./handlers/explainHandler.js";
 import { createLedgerHandlers } from "./handlers/ledgerHandler.js";
-import { commitHandler, syncEventsHandler } from "./handlers/syncHandler.js";
+import { commitHandler, syncEventsHandler, namespaceOwnerHandler } from "./handlers/syncHandler.js";
+import {
+  getKeychainKeyHandler,
+  listKeychainKeysHandler,
+  recoverKeychainHandler,
+  registerKeychainKeyHandler,
+  revokeKeychainKeyHandler,
+  signKeychainOperationHandler,
+} from "./handlers/keychainHandler.js";
+import {
+  bootstrapGatewayAuthorityHandler,
+  getGatewayAuthorityHandler,
+  grantGatewayAdminHandler,
+  revokeGatewayAdminHandler,
+  transferGatewayOwnerHandler,
+} from "./handlers/gatewayAuthorityHandler.js";
 import { createClaimsRouter } from "./http/claims.js";
 import { createDisclosureMiddleware } from "./http/disclosure.js";
 import { createMeshAnnounceRouter } from "./http/meshAnnounce.js";
@@ -163,6 +178,18 @@ export async function createMonadApp(options: MonadOptions = {}): Promise<MonadA
   app.get("/@*", ledger.atPath);
   app.post("/api/v1/commit", commitHandler);
   app.get("/api/v1/sync", syncEventsHandler);
+  app.get("/api/v1/namespace-owner", namespaceOwnerHandler);
+  app.get("/api/v1/keychain/keys", listKeychainKeysHandler);
+  app.get("/api/v1/keychain/keys/:keyId", getKeychainKeyHandler);
+  app.post("/api/v1/keychain/keys", registerKeychainKeyHandler);
+  app.post("/api/v1/keychain/keys/:keyId/revoke", revokeKeychainKeyHandler);
+  app.post("/api/v1/keychain/keys/:keyId/sign", signKeychainOperationHandler);
+  app.post("/api/v1/keychain/recover", recoverKeychainHandler);
+  app.get("/api/v1/gateway/:gatewayId/authority", getGatewayAuthorityHandler);
+  app.post("/api/v1/gateway/:gatewayId/bootstrap", bootstrapGatewayAuthorityHandler);
+  app.post("/api/v1/gateway/:gatewayId/admins", grantGatewayAdminHandler);
+  app.post("/api/v1/gateway/:gatewayId/admins/:identityHash/revoke", revokeGatewayAdminHandler);
+  app.post("/api/v1/gateway/:gatewayId/transfer", transferGatewayOwnerHandler);
   app.use(createMeshAnnounceRouter());
   app.use(createMeshMonadsRouter());
   app.use(createMeshResolveRouter());

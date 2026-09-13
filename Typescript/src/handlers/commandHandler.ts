@@ -2,6 +2,8 @@ import type express from "express";
 import { claimRequestHandler, openRequestHandler } from "../http/claims.js";
 import { claimNamespace, getClaim, openNamespace } from "../claim/records.js";
 import { getMemoriesForNamespace, isNamespaceWriteAuthorized, recordMemory } from "../claim/replay.js";
+import { isKeychainReservedPath } from "../claim/keychain.js";
+import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
 import { saveSnapshot } from "../kernel/manager.js";
 import { notify as notifyPathChanged } from "../kernel/pathNotify.js";
 import { createEnvelope, createErrorEnvelope } from "../http/envelope.js";
@@ -190,6 +192,28 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
 
   const namespace = resolveNamespace(req);
   const timestamp = Date.now();
+
+  // keychain.* must only ever be mutated through the dedicated, validated
+  // keychain API (permission/vigencia/replay checks, correct keyId
+  // derivation) -- never through this generic namespace-write surface,
+  // even by the namespace's own claim holder. See keychain.ts's
+  // isKeychainReservedPath() for why: this surface would otherwise let a
+  // valid claim signature silently overwrite the registry by hand.
+  const candidatePath = String((body as Record<string, unknown>).path || (body as Record<string, unknown>).expression || "").trim();
+  if (isKeychainReservedPath(candidatePath)) {
+    return res.status(403).json(createErrorEnvelope(target, { error: "KEYCHAIN_PATH_REQUIRES_KEYCHAIN_API" }));
+  }
+  // daemon.gateways.* must only ever be mutated through the dedicated,
+  // signed gateway-authority API (claim/gatewayAuthority.ts) -- same
+  // reasoning as the keychain guard directly above, and load-bearing for
+  // the identical reason: this branch is kernel-root/namespace-independent
+  // storage, and a namespace that legitimately resolves to this monad's
+  // own configured root writes UNPREFIXED at literal kernel root via this
+  // generic surface (see kernel/manager.ts's isForeignNamespaceCollapsingToRoot()).
+  if (isGatewayAuthorityReservedPath(candidatePath)) {
+    return res.status(403).json(createErrorEnvelope(target, { error: "GATEWAY_PATH_REQUIRES_GATEWAY_API" }));
+  }
+
   const claim = getClaim(namespace);
 
   if (claim) {
@@ -211,6 +235,20 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
   try {
     entry = recordMemory({ namespace, payload: body, identityHash: blockIdentityHash, timestamp });
   } catch (error) {
+    const code = error instanceof Error ? error.message : String(error);
+    // appendSemanticMemory's own guard (memoryStore.ts): `namespace` here
+    // came from resolveNamespace(req) -- an unrecognized/unresolved Host
+    // header falls back to a literal string ("unknown") that has no claim
+    // to verify against (the `if (claim)` branch above is simply skipped),
+    // meaning this request needed no identity at all to reach this write.
+    // Proven exploitable end-to-end in
+    // namespaceCollisionAuthorization.test.ts before this guard existed.
+    if (code === "FOREIGN_NAMESPACE_REJECTED") {
+      return res.status(403).json(createErrorEnvelope(target, {
+        error: "FOREIGN_NAMESPACE_REJECTED",
+        detail: "This request's namespace does not resolve to the monad's real root or a sub-identity of it -- it cannot be used as a write target here.",
+      }));
+    }
     // The underlying kernel write (this.me's self:write) throws on certain
     // malformed payloads — e.g. a null/undefined value, even with a valid
     // operator. That's a request-level error, not a process-level one; let
@@ -218,7 +256,7 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
     // by testing: this used to crash the process with an uncaught exception).
     return res.status(400).json(createErrorEnvelope(target, {
       error: "INVALID_MEMORY_INPUT",
-      detail: error instanceof Error ? error.message : String(error),
+      detail: code,
     }));
   }
   if (!entry) {

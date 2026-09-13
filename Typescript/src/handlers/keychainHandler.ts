@@ -32,7 +32,24 @@ const ERROR_STATUS: Record<KeychainError, number> = {
   TARGET_KEY_NOT_FOUND: 404,
   CANNOT_REVOKE_LAST_ADMIN: 409,
   RESERVED_PATH: 403,
+  FOREIGN_NAMESPACE_REJECTED: 403,
 };
+
+// Structured detail for error codes whose bare name doesn't explain itself
+// -- same wording commandHandler.ts/syncHandler.ts already return for this
+// exact rejection on their own write paths, so a client sees one consistent
+// explanation regardless of which write surface produced it.
+const ERROR_DETAIL: Partial<Record<KeychainError, string>> = {
+  FOREIGN_NAMESPACE_REJECTED:
+    "This request's namespace does not resolve to the monad's real root or a sub-identity of it -- it cannot be used as a write target here.",
+};
+
+function keychainErrorResponse(res: express.Response, error: KeychainError) {
+  const body: Record<string, unknown> = { ok: false, error };
+  const detail = ERROR_DETAIL[error];
+  if (detail) body.detail = detail;
+  return res.status(ERROR_STATUS[error]).json(body);
+}
 
 export const listKeychainKeysHandler: express.RequestHandler = (req, res) => {
   const namespace = String(req.query.namespace || "").trim();
@@ -73,7 +90,7 @@ export const registerKeychainKeyHandler: express.RequestHandler = (req, res) => 
     signature: String(body.signature || ""),
     signedPayload: body.signedPayload ? String(body.signedPayload) : undefined,
   });
-  if (!result.ok) return res.status(ERROR_STATUS[result.error]).json({ ok: false, error: result.error });
+  if (!result.ok) return keychainErrorResponse(res, result.error);
   return res.status(201).json({ ok: true, key: result.value });
 };
 
@@ -88,7 +105,7 @@ export const revokeKeychainKeyHandler: express.RequestHandler = (req, res) => {
     signature: String(body.signature || ""),
     signedPayload: body.signedPayload ? String(body.signedPayload) : undefined,
   });
-  if (!result.ok) return res.status(ERROR_STATUS[result.error]).json({ ok: false, error: result.error });
+  if (!result.ok) return keychainErrorResponse(res, result.error);
   return res.status(200).json({ ok: true, key: result.value });
 };
 
@@ -103,7 +120,7 @@ export const recoverKeychainHandler: express.RequestHandler = (req, res) => {
     signature: String(body.signature || ""),
     signedPayload: body.signedPayload ? String(body.signedPayload) : undefined,
   });
-  if (!result.ok) return res.status(ERROR_STATUS[result.error]).json({ ok: false, error: result.error });
+  if (!result.ok) return keychainErrorResponse(res, result.error);
   return res.status(201).json({ ok: true, key: result.value });
 };
 
@@ -118,6 +135,6 @@ export const signKeychainOperationHandler: express.RequestHandler = (req, res) =
     signature: String(body.signature || ""),
     signedPayload: body.signedPayload ? String(body.signedPayload) : undefined,
   });
-  if (!result.ok) return res.status(ERROR_STATUS[result.error]).json({ ok: false, error: result.error });
+  if (!result.ok) return keychainErrorResponse(res, result.error);
   return res.status(200).json({ ok: true, opId: result.value.opId });
 };

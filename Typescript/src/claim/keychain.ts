@@ -90,7 +90,8 @@ export type KeychainError =
   | "PERMISSION_DENIED"
   | "TARGET_KEY_NOT_FOUND"
   | "CANNOT_REVOKE_LAST_ADMIN"
-  | "RESERVED_PATH";
+  | "RESERVED_PATH"
+  | "FOREIGN_NAMESPACE_REJECTED";
 
 export type KeychainResult<T> = { ok: true; value: T } | { ok: false; error: KeychainError };
 
@@ -211,6 +212,31 @@ function writeKeyRecord(namespace: string, record: KeychainKeyRecord): void {
   appendSemanticMemory({ namespace, path: `${KEYCHAIN_KEYS_BRANCH}.${record.keyId}`, data: record });
 }
 
+// appendSemanticMemory (memoryStore.ts) throws a bare Error("FOREIGN_NAMESPACE_REJECTED")
+// for a namespace that doesn't resolve to this monad's own root -- a real,
+// reachable case here (a bare foreign namespace CAN be claimed, and this
+// keychain's bootstrap path only requires that claim, not that it be
+// locally rooted). Left uncaught, that throw propagated straight past every
+// KeychainResult-returning function in this file to Express's own default
+// error handler -- an uncaught 500 with no JSON body, instead of the clean,
+// structured rejection every OTHER error case in this file already returns.
+// This does not change what gets rejected or why, only how the rejection is
+// reported: every write below is now wrapped so that specific throw is
+// translated into the same KeychainResult shape everything else here uses.
+function isForeignNamespaceRejectionError(error: unknown): boolean {
+  return error instanceof Error && error.message === "FOREIGN_NAMESPACE_REJECTED";
+}
+
+function tryNamespaceWrite(write: () => void): KeychainError | null {
+  try {
+    write();
+    return null;
+  } catch (error) {
+    if (isForeignNamespaceRejectionError(error)) return "FOREIGN_NAMESPACE_REJECTED";
+    throw error;
+  }
+}
+
 // ─── register ────────────────────────────────────────────────────────────
 
 export interface RegisterKeychainKeyInput {
@@ -281,7 +307,8 @@ export function registerKeychainKey(input: RegisterKeychainKeyInput): KeychainRe
       addedAt: Date.now(),
       addedBy: "bootstrap",
     };
-    writeKeyRecord(namespace, record);
+    const writeError = tryNamespaceWrite(() => writeKeyRecord(namespace, record));
+    if (writeError) return { ok: false, error: writeError };
     saveSnapshot();
     return { ok: true, value: record };
   }
@@ -319,7 +346,8 @@ export function registerKeychainKey(input: RegisterKeychainKeyInput): KeychainRe
     addedAt: Date.now(),
     addedBy: actingKeyId,
   };
-  writeKeyRecord(namespace, record);
+  const writeError = tryNamespaceWrite(() => writeKeyRecord(namespace, record));
+  if (writeError) return { ok: false, error: writeError };
   saveSnapshot();
   return { ok: true, value: record };
 }
@@ -380,7 +408,8 @@ export function revokeKeychainKey(input: RevokeKeychainKeyInput): KeychainResult
     revokedAt: Date.now(),
     revokedBy: actingKeyId,
   };
-  writeKeyRecord(namespace, updated);
+  const writeError = tryNamespaceWrite(() => writeKeyRecord(namespace, updated));
+  if (writeError) return { ok: false, error: writeError };
   saveSnapshot();
   return { ok: true, value: updated };
 }
@@ -431,11 +460,12 @@ export function signKeychainOperation(input: SignKeychainOperationInput): Keycha
   consumeNonce(namespace, keyId, input.nonce);
 
   const opId = crypto.randomUUID();
-  appendSemanticMemory({
+  const writeError = tryNamespaceWrite(() => appendSemanticMemory({
     namespace,
     path: `${KEYCHAIN_OPERATIONS_BRANCH}.${opId}`,
     data: { opId, keyId, payload: input.payload ?? null, at: Date.now() },
-  });
+  }));
+  if (writeError) return { ok: false, error: writeError };
   saveSnapshot();
   return { ok: true, value: { opId } };
 }
@@ -505,12 +535,13 @@ export function recoverKeychainWithRoot(input: RecoverKeychainInput): KeychainRe
   const now = Date.now();
   for (const existing of listKeychainKeys(namespace)) {
     if (existing.authorization === "active") {
-      writeKeyRecord(namespace, {
+      const revokeWriteError = tryNamespaceWrite(() => writeKeyRecord(namespace, {
         ...existing,
         authorization: "revoked",
         revokedAt: now,
         revokedBy: "root-recovery",
-      });
+      }));
+      if (revokeWriteError) return { ok: false, error: revokeWriteError };
     }
   }
 
@@ -524,7 +555,8 @@ export function recoverKeychainWithRoot(input: RecoverKeychainInput): KeychainRe
     addedAt: now,
     addedBy: "root-recovery",
   };
-  writeKeyRecord(namespace, record);
+  const writeError = tryNamespaceWrite(() => writeKeyRecord(namespace, record));
+  if (writeError) return { ok: false, error: writeError };
   saveSnapshot();
   return { ok: true, value: record };
 }

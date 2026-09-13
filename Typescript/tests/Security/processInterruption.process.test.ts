@@ -24,12 +24,13 @@
  * ALWAYS the exact bytes of some saveSnapshot() call that actually
  * completed (its rename finished) — never a partial write.
  *
- * Concurrent writers: this file also documents (not "supports") the
- * single-writer assumption — two independent processes racing to persist
- * to the SAME ME_STATE_DIR do not merge; the later rename wins outright,
- * atomically (never a corrupted hybrid), and the earlier writer's state is
- * simply gone. This is asserted as the actual, honest behavior, not
- * invented or presented as a supported concurrency feature.
+ * Concurrent writers: getKernel() now holds a real, whole-process-lifetime
+ * exclusive lock on its ME_STATE_DIR (kernel/manager.ts's
+ * acquireStateDirLock()) — a second process can no longer even initialize
+ * a kernel against a state directory a live process already holds. This
+ * file also proves the lock recovers correctly after a real SIGKILL (no
+ * cleanup handler ever runs): the next process to start reclaims the
+ * stale lock via a pid-liveness check, not a permanent lockout.
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -205,8 +206,17 @@ describe("Security — process interruption (real SIGKILL/SIGTERM against real p
   );
 
   it(
-    "concurrent writers (documented limit, not a supported feature): two independent processes racing on the same ME_STATE_DIR never corrupt the file — the later save wins outright, atomically",
+    "concurrent writers on the same ME_STATE_DIR: the second is refused outright while the first is alive — no longer a documented limit, an enforced exclusion",
     async () => {
+      // Superseded 2026-09-13: this used to document (not prevent) two
+      // real processes racing on the same ME_STATE_DIR, asserting only
+      // that the file never ended up corrupted. getKernel() now acquires
+      // a real, whole-process-lifetime exclusive lock on the state
+      // directory (kernel/manager.ts's acquireStateDirLock()) — a second
+      // process can no longer even initialize its kernel while a live one
+      // already holds it, so there is no longer a race to document; the
+      // "no corruption" guarantee this test used to carry is now
+      // subsumed by "no second writer ever exists to race with."
       stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "monad-security-concurrent-"));
       const baseEnv: NodeJS.ProcessEnv = {
         ...process.env,
@@ -221,43 +231,93 @@ describe("Security — process interruption (real SIGKILL/SIGTERM against real p
         TEST_BRANCH_SECRET: "concurrent-secret-A",
         TEST_BRANCH_VALUE: "VALUE_FROM_WRITER_A",
       });
+      spawned.push(writerA);
+      await waitForStdoutMarker(writerA, "WRITER_READY", TEST_TIMEOUT_MS);
+
+      // Started only once A is confirmed alive and holding the lock — not
+      // a simultaneous race, but a direct test of "refused while the
+      // first is alive," exactly the guarantee in question.
       const writerB = spawnFixture(identityWriterScript, {
         ...baseEnv,
         TEST_IDENTITY_PASSWORD: "concurrent-password-B-0002",
         TEST_BRANCH_SECRET: "concurrent-secret-B",
         TEST_BRANCH_VALUE: "VALUE_FROM_WRITER_B",
       });
-      spawned.push(writerA, writerB);
+      spawned.push(writerB);
 
-      await Promise.all([
-        waitForStdoutMarker(writerA, "WRITER_READY", TEST_TIMEOUT_MS),
-        waitForStdoutMarker(writerB, "WRITER_READY", TEST_TIMEOUT_MS),
-      ]);
+      const writerBExitCode = await waitForExit(writerB, TEST_TIMEOUT_MS);
+      expect(writerBExitCode, `writer B stdout:\n${writerB.stdout}\nstderr:\n${writerB.stderr}`).toBe(1);
+      expect(writerB.stderr).toContain("STATE_DIR_ALREADY_IN_USE");
 
-      // SIGTERM both at nearly the same time — a real (if adversarial)
-      // "two monads pointed at the same state dir" scenario.
+      // Writer A is completely unaffected by B's rejected attempt — still
+      // alive, and a real SIGTERM still triggers its normal graceful save.
+      expect(writerA.child.exitCode, "writer A must still be alive after B was refused").toBeNull();
       writerA.child.kill("SIGTERM");
-      writerB.child.kill("SIGTERM");
-      await Promise.all([waitForExit(writerA, TEST_TIMEOUT_MS), waitForExit(writerB, TEST_TIMEOUT_MS)]);
+      const writerAExitCode = await waitForExit(writerA, TEST_TIMEOUT_MS);
+      expect(writerAExitCode, `writer A stdout:\n${writerA.stdout}\nstderr:\n${writerA.stderr}`).toBe(0);
+      expect(writerA.stdout).toContain("[kernel] snapshot saved to");
 
       const snapshotPath = path.join(stateDir, "snapshot.json");
       expect(fs.existsSync(snapshotPath)).toBe(true);
       const raw = fs.readFileSync(snapshotPath, "utf8");
+      // Branch secrets/values are redacted ("***") in an exported snapshot
+      // by design (this.me never writes them in the clear) — the
+      // identityRoot's presence is what confirms writer A's own save
+      // genuinely landed, matching this codebase's own established
+      // pattern for this exact assertion elsewhere in this file.
       let parsed: any;
-      expect(() => {
-        parsed = JSON.parse(raw);
-      }, `even under a same-directory write race, the file must be valid JSON — never a corrupted interleaving of both writers' bytes. Raw (first 300 chars): ${raw.slice(0, 300)}`).not.toThrow();
+      expect(() => { parsed = JSON.parse(raw); }).not.toThrow();
+      expect(parsed.identityRoot?.rootId, "writer A's identity root must be present").toBeTruthy();
+    },
+    TEST_TIMEOUT_MS,
+  );
 
-      // Documented limit: exactly ONE writer's full identity root survives
-      // (whichever renamed last) — there is no merge. Assert this
-      // explicitly rather than silently accepting either outcome without
-      // comment, so a future change that DOES add merge semantics has to
-      // consciously update this test rather than pass by accident.
-      const rootIdA = parsed.identityRoot?.rootId;
-      expect(rootIdA, "the surviving snapshot must have SOME identity root — one writer's full state, not a blend").toBeTruthy();
-      expect(raw.includes("concurrent-secret-A") || raw.includes("concurrent-secret-B") || raw.includes("VALUE_FROM_WRITER_A") || raw.includes("VALUE_FROM_WRITER_B")).toBe(
-        false,
-      );
+  it(
+    "a stale lock left by a real SIGKILL (no cleanup ran) is reclaimed by the next process, not treated as a permanent lockout",
+    async () => {
+      stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "monad-security-lock-recovery-"));
+      const baseEnv: NodeJS.ProcessEnv = {
+        ...process.env,
+        SEED: "lock-recovery-test-seed-do-not-use-in-prod",
+        ME_SEED: undefined,
+        ME_STATE_DIR: stateDir,
+      };
+
+      const first = spawnFixture(identityWriterScript, {
+        ...baseEnv,
+        TEST_IDENTITY_PASSWORD: "lock-recovery-password-0001",
+        TEST_BRANCH_SECRET: "lock-recovery-secret-first",
+        TEST_BRANCH_VALUE: "VALUE_FROM_FIRST",
+      });
+      spawned.push(first);
+      await waitForStdoutMarker(first, "WRITER_READY", TEST_TIMEOUT_MS);
+
+      const lockPath = path.join(stateDir, "process.lock");
+      expect(fs.existsSync(lockPath), "the lock file must exist while a live process holds it").toBe(true);
+
+      // No cleanup handler runs on SIGKILL, by definition — the lock file
+      // is left behind exactly as a real crash would leave it.
+      first.child.kill("SIGKILL");
+      await waitForExit(first, TEST_TIMEOUT_MS);
+      expect(fs.existsSync(lockPath), "SIGKILL leaves the lock file behind — no cleanup ran").toBe(true);
+
+      const second = spawnFixture(identityWriterScript, {
+        ...baseEnv,
+        TEST_IDENTITY_PASSWORD: "lock-recovery-password-0002",
+        TEST_BRANCH_SECRET: "lock-recovery-secret-second",
+        TEST_BRANCH_VALUE: "VALUE_FROM_SECOND",
+      });
+      spawned.push(second);
+      await waitForStdoutMarker(second, "WRITER_READY", TEST_TIMEOUT_MS);
+
+      second.child.kill("SIGTERM");
+      const secondExitCode = await waitForExit(second, TEST_TIMEOUT_MS);
+      expect(secondExitCode, `second stdout:\n${second.stdout}\nstderr:\n${second.stderr}`).toBe(0);
+
+      const raw = fs.readFileSync(path.join(stateDir, "snapshot.json"), "utf8");
+      let parsed: any;
+      expect(() => { parsed = JSON.parse(raw); }).not.toThrow();
+      expect(parsed.identityRoot?.rootId, "the second process's own identity root must be present after recovering the lock").toBeTruthy();
     },
     TEST_TIMEOUT_MS,
   );

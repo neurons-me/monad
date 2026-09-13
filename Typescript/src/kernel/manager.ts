@@ -1,13 +1,170 @@
 import ME from "this.me";
 import { parseNamespaceExpression } from "cleaker";
 import os from "os";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, renameSync } from "fs";
-import { resolve } from "path";
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  rmSync,
+  renameSync,
+  openSync,
+  writeSync,
+  closeSync,
+  unlinkSync,
+} from "fs";
+import { resolve, join } from "path";
 import { normalizeNamespaceRootName } from "../namespace/identity.js";
 
 const DEFAULT_ME_STATE_DIR = resolve(process.cwd(), "me-state");
 
 let _kernel: InstanceType<typeof ME> | null = null;
+
+// ─── single-process-per-stateDir exclusion ───────────────────────────────
+// The installation-authorization mechanism (claim/installationAuthorization.ts)
+// depends on exactly one live process ever treating a given stateDir as its
+// own kernel — its whole reclaim-an-"in-flight"-record design assumes an
+// in-flight marker can only ever be the residue of an INTERRUPTED attempt,
+// never a genuinely concurrent one. That assumption was unverified and, on
+// investigation, FALSE at the point the previous check ran:
+// startMonadProcess()'s own "already running" check (readMonadRecord +
+// pidAlive) has a real TOCTOU race — confirmed empirically, two concurrent
+// calls under the same name can both proceed. What accidentally prevented
+// two live processes from coexisting was two racing calls usually landing
+// on the SAME free port and one losing the OS-level bind — not a designed
+// guarantee, and not one that holds with two different explicit ports.
+//
+// This closes it at the one place every process that actually TOUCHES a
+// stateDir must go through, regardless of how it was launched (the
+// `monads` CLI, netget's startNetgetMonad(), or a test's createMonadApp()
+// with a hand-set ME_STATE_DIR) — getKernel(), not startMonadProcess()'s
+// own launcher-side check, which only covers ITS OWN specific call path.
+const STATE_DIR_LOCK_FILENAME = "process.lock";
+let _lockFd: number | null = null;
+let _lockPath: string | null = null;
+let _lockExitHandler: (() => void) | null = null;
+
+function isLockHolderPidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error: any) {
+    return error?.code === "EPERM";
+  }
+}
+
+// Deliberately ONLY the 'exit' event, no SIGTERM/SIGINT handlers of our
+// own. kernel/persist.ts's setupPersistence() already owns SIGTERM/SIGINT
+// for the real server path (saves, then calls process.exit(0)) — Node
+// invokes same-event listeners in registration order, so a second
+// SIGTERM/SIGINT handler registered here that ALSO calls process.exit()
+// races it and can short-circuit the save entirely if it happens to run
+// first (confirmed the hard way: this exact mistake broke
+// identityRootPersistence.process.test.ts's SIGTERM-save assertion the
+// first time this lock was added). 'exit' fires exactly once no matter
+// which path triggers it — persist.ts's own process.exit(0), a caller's,
+// or the normal event-loop-drained case — so this never needs to compete
+// for the same event or decide whether it's safe to terminate the process
+// itself. A SIGKILL, or a SIGTERM with truly no listener anywhere, leaves
+// the lock file stale on disk; that is by design, not a gap — the next
+// acquireStateDirLock() call reclaims it via the pid-liveness check below,
+// which is exactly the "recovery after a crash" guarantee this exists to
+// provide, not merely tolerate.
+function registerStateDirLockCleanup(): void {
+  if (_lockExitHandler) return; // already registered for this process
+  _lockExitHandler = () => releaseStateDirLock();
+  process.on("exit", _lockExitHandler);
+}
+
+function unregisterStateDirLockCleanup(): void {
+  if (_lockExitHandler) process.removeListener("exit", _lockExitHandler);
+  _lockExitHandler = null;
+}
+
+/**
+ * Acquires the exclusive lock for `stateDir`, or throws `STATE_DIR_ALREADY_IN_USE`
+ * if a genuinely live process already holds it. A lock file whose recorded
+ * pid is NOT alive is stale (the process that held it crashed or was
+ * killed without running its own cleanup) and is reclaimed automatically —
+ * recovery must never require manual intervention just because a prior
+ * process died uncleanly.
+ *
+ * Deliberately held for the ENTIRE process lifetime, not just at startup:
+ * the guarantee is "one live process may use this stateDir," not "no two
+ * processes may start at the exact same instant" — a lock released right
+ * after boot would let a SECOND process acquire it later while the first
+ * is still running, which is exactly the scenario this exists to prevent.
+ */
+function acquireStateDirLock(stateDir: string): void {
+  if (_lockPath === join(stateDir, STATE_DIR_LOCK_FILENAME) && _lockFd !== null) {
+    return; // this exact process already holds this exact lock
+  }
+  mkdirSync(stateDir, { recursive: true });
+  const lockPath = join(stateDir, STATE_DIR_LOCK_FILENAME);
+
+  let fd: number;
+  try {
+    fd = openSync(lockPath, "wx");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    let holderPid: number | null = null;
+    try {
+      holderPid = Number(JSON.parse(readFileSync(lockPath, "utf8")).pid);
+    } catch {
+      holderPid = null; // unreadable/corrupt lock file — treat as stale below
+    }
+    if (holderPid && isLockHolderPidAlive(holderPid)) {
+      throw new Error(
+        `STATE_DIR_ALREADY_IN_USE: ${stateDir} is already in use by a live process (pid ${holderPid}). `
+        + "Refusing to start a second kernel against the same state directory.",
+      );
+    }
+    // Stale lock (holder pid recorded but dead, or the file was unreadable)
+    // — safe to reclaim. If a genuine concurrent reclaimer wins this exact
+    // race, the following openSync throws EEXIST again and propagates
+    // uncaught rather than silently double-acquiring; that's correct — a
+    // caller-visible failure here is far cheaper than a false lock.
+    try {
+      unlinkSync(lockPath);
+    } catch {
+      // Already gone — another reclaimer got there first; the openSync
+      // below will succeed for whichever process reaches it first.
+    }
+    fd = openSync(lockPath, "wx");
+  }
+
+  writeSync(fd, JSON.stringify({ pid: process.pid, startedAt: Date.now() }));
+  _lockFd = fd;
+  _lockPath = lockPath;
+  registerStateDirLockCleanup();
+}
+
+/** Releases this process's own stateDir lock, if it holds one. Safe to call
+ *  even when no lock is held (tests reset state far more often than a real
+ *  process would ever re-acquire one). */
+export function releaseStateDirLock(): void {
+  if (_lockFd !== null) {
+    try {
+      closeSync(_lockFd);
+    } catch {
+      // Non-fatal — the fd may already be invalid if the process is
+      // already tearing down.
+    }
+    _lockFd = null;
+  }
+  if (_lockPath) {
+    try {
+      unlinkSync(_lockPath);
+    } catch {
+      // Non-fatal — already gone, or a permissions issue on the way out;
+      // a lock that outlives this process is recovered by the next
+      // acquirer's own stale-pid check, not by this cleanup succeeding.
+    }
+    _lockPath = null;
+  }
+  unregisterStateDirLockCleanup();
+}
 
 export function getKernelStateDir(): string {
   const configured = String(process.env.ME_STATE_DIR || "").trim();
@@ -25,6 +182,7 @@ export function getKernel(): InstanceType<typeof ME> {
   if (!seed) throw new Error("SEED is required — set it in your environment before starting monad.ai");
 
   mkdirSync(getKernelStateDir(), { recursive: true });
+  acquireStateDirLock(getKernelStateDir());
 
   _kernel = new ME(seed, {
     store: new ME.DiskStore({ baseDir: getKernelStateDir() }),
@@ -253,5 +411,6 @@ export function isRecognizedOwnRootConstant(constant: string): boolean {
 
 export function resetKernelStateForTests(): void {
   _kernel = null;
+  releaseStateDirLock();
   rmSync(getKernelStateDir(), { recursive: true, force: true });
 }

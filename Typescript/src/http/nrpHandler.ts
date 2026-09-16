@@ -6,6 +6,7 @@ import { getKernel } from "../kernel/manager.js";
 import { resolveNamespacePathValue, type ResolvedNamespacePath } from "./pathResolver.js";
 import { subscribe as subscribePathChange } from "../kernel/pathNotify.js";
 import type { DisclosureContent } from "./disclosure.js";
+import { isValidDomainShape } from "cleaker";
 
 // Internal classification only — never sent on the wire. "stealth" means the
 // kernel would not confirm existence of the path (A0/A2 axioms); per NRP
@@ -41,7 +42,9 @@ type MsgResolved = {
   timestamp: number;
 };
 
-type MsgError = { type: "error"; channelId?: string; payload: string; timestamp: number };
+// code is present only for the domain-shape gate below — see
+// Beatle.types.ts's MsgError doc comment (this is the mirrored copy).
+type MsgError = { type: "error"; channelId?: string; payload: string; code?: "invalid_namespace_shape"; timestamp: number };
 type MsgPong  = { type: "pong"; timestamp: number };
 
 // Client → server: read the current value, or subscribe/unsubscribe to live
@@ -92,6 +95,44 @@ function classifyNamespace(namespace: string): InternalClassification {
   }
 }
 
+// Structural mirror of this.gui's NRPNode (NRPExpression.ts) — duck-typed,
+// not imported, since this package deliberately doesn't depend on this.gui
+// (see MsgNrpOpen's own header comment). Client is intent/hint only, never
+// trusted as authoritative: this just decides WHICH single token to
+// domain-shape-check and classify, it never skips that check for whatever
+// it finds.
+type WireNsNode = {
+  kind?: string;
+  value?: string;
+  parsed?: { fqdn?: string };
+  namespace?: WireNsNode;
+  operand?: WireNsNode;
+};
+
+// A bare (non-me://) expression's canonical string is the WHOLE algebra
+// expression — "local.cleaker @ facebook.com", "a + b" — not a namespace by
+// itself. Before this, the whole string was checked (and classified)
+// as-is, which meant any composite expression (overlay, union,
+// intersection) could never pass the domain-shape gate even when its own
+// namespace leaf was perfectly valid — not because that leaf was wrong, but
+// because the extraction never separated it from the rest of the algebra.
+// This finds the one namespace leaf this server can actually still act on
+// (overlay/complement unwrap to their single operand; union/intersection
+// have no single leaf to prefer, per SetChemistry.findings.md's own
+// per-operator table, so those fall back to the raw string exactly as
+// before). Composite algebra otherwise stays exactly as unresolved as
+// SetChemistry.findings.md already documents — this does not add real `@`/
+// `+`/`∩` resolution, it only fixes what gets shape-checked and classified
+// for the overlay/complement case.
+function extractNamespaceHint(ast: unknown): string | null {
+  const node = ast as WireNsNode | null | undefined;
+  if (!node || typeof node !== "object") return null;
+  if (node.kind === "namespace") return node.parsed?.fqdn || node.value || null;
+  if (node.kind === "overlay") return extractNamespaceHint(node.namespace);
+  if (node.kind === "complement") return extractNamespaceHint(node.operand);
+  return null;
+}
+
 function deriveEndpoints(namespace: string, req: IncomingMessage): string[] {
   const host = req.headers["x-forwarded-host"] as string
     || req.headers["host"]
@@ -117,8 +158,29 @@ function handleNrpOpen(ws: WebSocket, req: IncomingMessage, msg: MsgNrpOpen): vo
     const bracketIdx = namespace.indexOf("[");
     if (bracketIdx >= 0) namespace = namespace.slice(0, bracketIdx);
   } else {
-    // Bare expression — no namespace context available from the expression alone
-    namespace = canonical;
+    // Bare expression — no me:// namespace context in the string itself.
+    // Try the client's ast hint for the one namespace leaf this server can
+    // act on (see extractNamespaceHint's own doc comment); fall back to the
+    // raw string for the cases that hint can't resolve a single leaf for
+    // (plain namespace with no ast, or union/intersection with two).
+    namespace = extractNamespaceHint(msg.ast) || canonical;
+  }
+
+  // Server has semantic authority (see this file's own header comment on
+  // MsgNrpOpen) — re-check domain shape here even though useBeatle.ts already
+  // gates this client-side before ever opening a socket. A namespace can
+  // still be a real claim/branch in `.me` without this passing (the kernel
+  // has always treated namespace as an opaque string); it simply never
+  // derives an NRP channel, so this rejects before doing any kernel lookup.
+  if (!isValidDomainShape(namespace)) {
+    send(ws, {
+      type: "error",
+      channelId,
+      payload: "invalid NRP - domain name",
+      code: "invalid_namespace_shape",
+      timestamp: Date.now(),
+    });
+    return;
   }
 
   const disclosure = toWireDisclosure(classifyNamespace(namespace));

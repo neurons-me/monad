@@ -4,6 +4,7 @@ import { resolveNamespace } from "./namespace.js";
 import { normalizeHttpRequestToMeTarget } from "./meTarget.js";
 import { createEnvelope, createErrorEnvelope } from "./envelope.js";
 import { resolveLogsFromSource, shouldInterceptLogsPath } from "./logsSourceProxy.js";
+import { resolveOpenRestyStatusFromSource, shouldInterceptOpenRestyPath } from "./openRestyStatusProxy.js";
 import type { DisclosureContent } from "./disclosure.js";
 
 export type ResolvedNamespacePath = {
@@ -110,6 +111,33 @@ export function createPathResolverHandler() {
         namespace,
         path: dotPath,
         value: logsResult.value,
+        disclosure: "public",
+      }));
+    }
+
+    // openResty/openResty.<port> never resolves against the memory store
+    // either, same reasoning as logs above: this is a live infrastructure
+    // fact (is the gateway actually listening right now), re-checked on
+    // every read, never a value ever written into the kernel. A confirmed
+    // "not listening" is real information and stays visible as a public
+    // `value: false` -- it is deliberately NOT folded into "closed"/404,
+    // which would make an operator unable to tell "genuinely down" apart
+    // from "no permission to see this". See openRestyStatusProxy.ts's own
+    // header for the full reasoning and why it's a separate module/env
+    // pair from the logs proxy despite sharing one real source today.
+    if (shouldInterceptOpenRestyPath(namespace, dotPath)) {
+      const statusResult = await resolveOpenRestyStatusFromSource(req, dotPath);
+      if (!statusResult.ok) {
+        return res.status(statusResult.status).json(createErrorEnvelope(target, {
+          namespace,
+          path: dotPath,
+          error: statusResult.error,
+        }));
+      }
+      return res.json(createEnvelope(target, {
+        namespace,
+        path: dotPath,
+        value: statusResult.value,
         disclosure: "public",
       }));
     }

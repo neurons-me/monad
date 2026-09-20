@@ -296,3 +296,12 @@ export {
   isInternalRequest,
   readInternalTokenFile,
 } from "./http/internalToken.js";
+
+// The gateway's main server as a path of the namespace (netget.main.server.name):
+// its path, the validation of what is declared there, and the guard on who
+// may write it. See claim/mainServer.ts.
+export {
+  MAIN_SERVER_NAME_PATH,
+  isMainServerReservedPath,
+  normalizeMainServerName,
+} from "./claim/mainServer.js";

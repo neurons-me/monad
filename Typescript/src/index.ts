@@ -284,3 +284,15 @@ export {
   type InstallationAuthorizationResult,
   type InstallationAuthorizationStatus,
 } from "./claim/installationAuthorization.js";
+
+// The credential of the machine's own callers (the gateway module, the netget CLI),
+// and the branch it alone may write. See http/internalToken.ts.
+export {
+  INTERNAL_TOKEN_HEADER,
+  INTERNAL_TOKEN_FILE,
+  ensureInternalToken,
+  internalTokenPath,
+  isGatewayRoutingRecordPath,
+  isInternalRequest,
+  readInternalTokenFile,
+} from "./http/internalToken.js";

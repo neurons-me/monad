@@ -3,6 +3,7 @@ import path from "path";
 import { existsSync } from "fs";
 import { rebuildProjectedNamespaceClaims } from "./claim/records.js";
 import { ensureRootSemanticBootstrap } from "./claim/semanticBootstrap.js";
+import { ensureInternalToken } from "./http/internalToken.js";
 import { getKernel, getKernelStateDir } from "./kernel/manager.js";
 import { seedSelfMonadIndexEntry } from "./kernel/monadIndex.js";
 import { normalizeNamespaceIdentity, normalizeNamespaceRootName } from "./namespace/identity.js";
@@ -220,6 +221,8 @@ export async function bootstrapMonad(options: MonadOptions = {}): Promise<MonadB
   const config = resolveMonadRuntimeConfig(options);
 
   const kernel = getKernel();
+  // The credential of this machine's own callers (see http/internalToken.ts).
+  ensureInternalToken(getKernelStateDir());
 
   // Declare the monad's identity expression in its own .me kernel.
   // This aligns with the browser-entry boot pattern: seed is the cryptographic anchor,

@@ -4,6 +4,7 @@ import { claimNamespace, getClaim, openNamespace } from "../claim/records.js";
 import { getMemoriesForNamespace, isNamespaceWriteAuthorized, recordMemory } from "../claim/replay.js";
 import { isKeychainReservedPath } from "../claim/keychain.js";
 import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
+import { isGatewayRoutingRecordPath, isInternalRequest } from "../http/internalToken.js";
 import { saveSnapshot } from "../kernel/manager.js";
 import { notify as notifyPathChanged } from "../kernel/pathNotify.js";
 import { createEnvelope, createErrorEnvelope } from "../http/envelope.js";
@@ -212,6 +213,14 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
   // generic surface (see kernel/manager.ts's isForeignNamespaceCollapsingToRoot()).
   if (isGatewayAuthorityReservedPath(candidatePath)) {
     return res.status(403).json(createErrorEnvelope(target, { error: "GATEWAY_PATH_REQUIRES_GATEWAY_API" }));
+  }
+
+  // The gateway's routing records decide where a hostname's traffic goes. An
+  // unclaimed namespace takes an unsigned write, so without this anyone reaching
+  // the monad could add or repoint a domain. Only the machine's own callers
+  // (the gateway module, the netget CLI) hold the internal token.
+  if (isGatewayRoutingRecordPath(candidatePath) && !isInternalRequest(req)) {
+    return res.status(403).json(createErrorEnvelope(target, { error: "GATEWAY_ROUTING_RECORDS_REQUIRE_INTERNAL_CALLER" }));
   }
 
   const claim = getClaim(namespace);

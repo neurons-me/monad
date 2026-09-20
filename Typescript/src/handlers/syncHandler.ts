@@ -10,6 +10,7 @@ import { getClaim } from "../claim/records.js";
 import { isNamespaceWriteAuthorized } from "../claim/replay.js";
 import { isKeychainReservedPath } from "../claim/keychain.js";
 import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
+import { isGatewayRoutingRecordPath, isInternalRequest } from "../http/internalToken.js";
 import { isForeignNamespaceCollapsingToRoot } from "../kernel/manager.js";
 
 // This used to be a fully open write: any POST here landed in
@@ -97,6 +98,13 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
     );
     if (reservedGatewayEvent) {
       return res.status(403).json({ error: "GATEWAY_PATH_REQUIRES_GATEWAY_API" });
+    }
+    // Same reasoning as rootCommandHandler for the gateway's routing records.
+    const routingEvent = rawEvents.find(
+      (event) => event && typeof event === "object" && isGatewayRoutingRecordPath(String((event as Record<string, unknown>).path || "")),
+    );
+    if (routingEvent && !isInternalRequest(req)) {
+      return res.status(403).json({ error: "GATEWAY_ROUTING_RECORDS_REQUIRE_INTERNAL_CALLER" });
     }
 
     // Reject before any authorization check runs, not just before the

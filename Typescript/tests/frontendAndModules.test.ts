@@ -177,6 +177,15 @@ describe("a monad given packages to mount (MONAD_MODULES)", () => {
     expect(await (await fetch(`${base}/dflt-probe`)).text()).toBe("ok");
   });
 
+  it("tells the page which modules loaded, so a front end knows what kind of monad it is on", async () => {
+    const good = writeModule("known.mjs", `export function mount() {}`);
+    const missing = path.join(root, "absent.mjs");
+    const { base } = await start({ modules: [good, missing] });
+    const res = await fetch(`${base}/__provider?namespace=cleaker.me`, { headers: { accept: "application/json" } });
+    const body = await res.json();
+    expect(body.provider?.modules ?? body.data?.provider?.modules).toEqual([good]);
+  });
+
   it("reports a module that is missing or exports no mount(), and keeps serving", async () => {
     const empty = writeModule("empty.mjs", "export const nothing = 1;");
     const missing = path.join(root, "nope.mjs");

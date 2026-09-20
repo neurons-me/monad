@@ -21,6 +21,8 @@ export type ProviderSurfaceConfig = {
   selfNodeConfig: SelfNodeConfig | null;
   hostname: string;
   displayName: string;
+  /** Packages mounted into this monad; filled in once they have loaded. */
+  modules?: string[];
 };
 
 function buildSurfaceEntry(
@@ -49,6 +51,7 @@ export function buildProviderBoot(
     resolverHostName: config.hostname,
     resolverDisplayName: config.displayName,
     surfaceEntry: buildSurfaceEntry(req, namespace, config),
+    modules: config.modules,
   });
 }
 

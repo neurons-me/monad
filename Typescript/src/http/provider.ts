@@ -16,6 +16,12 @@ export interface NamespaceProviderBoot {
     subscribe: string | null;
   };
   surfaceEntry: SelfSurfaceEntry | null;
+  /**
+   * The packages mounted into this monad (MONAD_MODULES that loaded), so a
+   * front end can tell what kind of monad it is on -- a gateway's, or a
+   * namespace's -- without probing for routes.
+   */
+  modules: string[];
 }
 
 function readFirstSemanticValue(namespace: string, candidates: string[]): unknown {
@@ -69,6 +75,7 @@ export function buildNamespaceProviderBoot(input: {
   resolverHostName: string;
   resolverDisplayName: string;
   surfaceEntry: SelfSurfaceEntry | null;
+  modules?: string[];
 }): NamespaceProviderBoot {
   const route = normalizeSurfaceRoute(input.route);
   const origin = String(input.origin || "").trim();
@@ -88,6 +95,7 @@ export function buildNamespaceProviderBoot(input: {
       subscribe: null,
     },
     surfaceEntry: input.surfaceEntry || null,
+    modules: [...(input.modules ?? [])],
   };
 }
 

@@ -173,6 +173,7 @@ export async function createMonadApp(options: MonadOptions = {}): Promise<MonadA
   // Packages this monad was started with (MONAD_MODULES) add their routes here,
   // ahead of the provider surface and the NRP handlers.
   app.monadModules = await loadMonadModules(app, { monad, config });
+  surfaceConfig.modules = app.monadModules.loaded;
   app.use(createProviderSurface(surfaceConfig));
   app.use(createFetchSurface({ timeoutMs: config.fetchProxyTimeoutMs }));
 

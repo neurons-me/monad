@@ -225,6 +225,11 @@ export {
 // reimplementing PID files, port allocation, and health checks (confirmed
 // pattern: netget does exactly this for its own domain-registry data).
 export {
+  describeMonadEnv,
+  readMonadEnv,
+  writeMonadEnv,
+} from "./cli/monadEnv.js";
+export {
   getMonadRuntimeDir,
   getMonadStatus,
   getMonadsHome,

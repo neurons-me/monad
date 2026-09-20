@@ -12,6 +12,7 @@ import {
   grantGatewayAdmin,
   readGatewayAuthority,
   revokeGatewayAdmin,
+  setGatewayMainServerName,
   transferGatewayOwner,
   type GatewayAuthorityError,
 } from "../claim/gatewayAuthority.js";
@@ -33,6 +34,7 @@ const ERROR_STATUS: Record<GatewayAuthorityError, number> = {
   TARGET_NOT_ADMIN: 400,
   CANNOT_REVOKE_OWNER: 409,
   NAMESPACE_NOT_LOCAL_TO_THIS_INSTALLATION: 403,
+  MAIN_SERVER_NAME_INVALID: 400,
   INSTALLATION_AUTHORIZATION_REQUIRED: 403,
   INSTALLATION_AUTHORIZATION_MISMATCH: 403,
   INSTALLATION_AUTHORIZATION_EXPIRED: 403,
@@ -86,6 +88,22 @@ export const grantGatewayAdminHandler: express.RequestHandler = (req, res) => {
   });
   if (!result.ok) return res.status(ERROR_STATUS[result.error]).json({ ok: false, error: result.error });
   return res.status(200).json({ ok: true, record: result.value });
+};
+
+export const setGatewayMainServerNameHandler: express.RequestHandler = (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const result = setGatewayMainServerName({
+    gatewayId: String(req.params.gatewayId || ""),
+    namespace: String(body.namespace || ""),
+    actingKeyId: String(body.actingKeyId || ""),
+    name: String(body.name || ""),
+    nonce: String(body.nonce || ""),
+    timestamp: Number(body.timestamp || 0),
+    signature: String(body.signature || ""),
+    signedPayload: body.signedPayload ? String(body.signedPayload) : undefined,
+  });
+  if (!result.ok) return res.status(ERROR_STATUS[result.error]).json({ ok: false, error: result.error });
+  return res.status(200).json({ ok: true, name: result.value.name });
 };
 
 export const revokeGatewayAdminHandler: express.RequestHandler = (req, res) => {

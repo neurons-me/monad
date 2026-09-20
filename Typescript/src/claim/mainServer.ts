@@ -15,7 +15,8 @@
  * the monad could otherwise name the domain that administers the gateway. The
  * branch is therefore reserved on the generic write surfaces (same guard as
  * keychain.* and daemon.gateways.*) and is only ever set by whoever starts the
- * monad (MONAD_MAIN_SERVER_NAME), before it serves anything.
+ * monad (MONAD_MAIN_SERVER_NAME) as a starting value, and afterwards changed
+ * only by the gateway owner's signature (setGatewayMainServerName).
  */
 import { appendSemanticMemory, readSemanticValueForNamespace } from "./memoryStore.js";
 
@@ -48,15 +49,31 @@ export function normalizeMainServerName(input: string | null | undefined): strin
   return /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/.test(host) ? host : null;
 }
 
+export type MainServerSeedOutcome = "written" | "unchanged" | "kept" | "skipped";
+
+/** The one place the path is written; callers are the seed below and the owner-signed change in gatewayAuthority.ts. */
+export function writeMainServerName(namespace: string, name: string): void {
+  appendSemanticMemory({ namespace, path: MAIN_SERVER_NAME_PATH, data: name });
+}
+
 /**
- * Declares the main server on the root namespace. Idempotent: a value that is
- * already there is left alone (the kernel keeps every write, so rewriting on
- * each start would grow the log for nothing). Returns whether it wrote.
+ * Initial value from whoever starts the monad. It is a starting point, not an
+ * authority: it is written when the path is empty, and it may still correct
+ * itself while no gateway has an owner (the installation is the only authority
+ * that exists then). Once a gateway is claimed the tree wins and the operator's
+ * value is ignored ("kept") -- changing it then takes the owner's signature.
+ * Idempotent: the kernel keeps every write, so an unchanged value is not rewritten.
  */
-export function seedMainServerName(namespace: string, name: string | null | undefined): boolean {
+export function seedMainServerName(
+  namespace: string,
+  name: string | null | undefined,
+  opts: { gatewayClaimed: boolean },
+): MainServerSeedOutcome {
   const value = normalizeMainServerName(name);
-  if (!value) return false;
-  if (readSemanticValueForNamespace(namespace, MAIN_SERVER_NAME_PATH) === value) return false;
-  appendSemanticMemory({ namespace, path: MAIN_SERVER_NAME_PATH, data: value });
-  return true;
+  if (!value) return "skipped";
+  const current = readSemanticValueForNamespace(namespace, MAIN_SERVER_NAME_PATH);
+  if (current === value) return "unchanged";
+  if (current !== undefined && opts.gatewayClaimed) return "kept";
+  writeMainServerName(namespace, value);
+  return "written";
 }

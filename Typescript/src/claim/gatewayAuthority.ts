@@ -60,13 +60,15 @@
  */
 
 import { parseNamespaceExpression } from "cleaker";
-import { isMainServerReservedPath } from "./mainServer.js";
+import { isMainServerReservedPath, normalizeMainServerName, writeMainServerName } from "./mainServer.js";
 import { getClaim } from "./records.js";
+import { readSemanticBranchForNamespace } from "./memoryStore.js";
 import { isNamespaceWriteAuthorized } from "./replay.js";
 import { getKeychainKey } from "./keychain.js";
 import {
   getKernel,
   getKernelStateDir,
+  getRootNamespace,
   isRecognizedOwnRootConstant,
   readDurableSnapshotValue,
   saveSnapshot,
@@ -111,6 +113,7 @@ export type GatewayAuthorityError =
   | "TARGET_NOT_ADMIN"
   | "CANNOT_REVOKE_OWNER"
   | "NAMESPACE_NOT_LOCAL_TO_THIS_INSTALLATION"
+  | "MAIN_SERVER_NAME_INVALID"
   | InstallationAuthorizationError
   | "INSTALLATION_AUTHORIZATION_PERSIST_FAILED";
 
@@ -632,6 +635,72 @@ export function revokeGatewayAdmin(input: RevokeGatewayAdminInput): GatewayAutho
 
   persist(record);
   return { ok: true, value: record };
+}
+
+// ─── main server name ───────────────────────────────────────────────────
+
+/** True once any gateway on this monad has an owner. Reads the branch as the semantic tree
+ *  (each record is a value at its own path, so the parent has no value of its own). */
+export function hasAnyGatewayOwner(): boolean {
+  const branch = readSemanticBranchForNamespace(getRootNamespace(), GATEWAY_ROOT);
+  if (!branch || typeof branch !== "object") return false;
+  return Object.values(branch as Record<string, unknown>).some(
+    (record) => Boolean(record) && typeof record === "object" && Boolean((record as GatewayAuthorityRecord).owner),
+  );
+}
+
+export interface SetGatewayMainServerNameInput {
+  gatewayId: string;
+  namespace: string;
+  actingKeyId: string;
+  /** The domain to declare at netget.main.server.name. */
+  name: string;
+  nonce: string;
+  timestamp: number;
+  signature: string;
+  signedPayload?: string;
+}
+
+/**
+ * Changes netget.main.server.name. Owner only -- an admin can administer the
+ * gateway but does not get to move where the gateway is administered from. The
+ * same two checks as every mutation here, kept separate: the acting key is
+ * currently active (vigencia) and the identity behind it is this gateway's
+ * owner per the branch's own state (autorizacion).
+ */
+export function setGatewayMainServerName(input: SetGatewayMainServerNameInput): GatewayAuthorityResult<{ name: string }> {
+  const gatewayId = String(input.gatewayId || "").trim();
+  if (!gatewayId) return { ok: false, error: "GATEWAY_ID_REQUIRED" };
+  const namespace = normalizeNamespaceIdentity(input.namespace);
+  if (!namespace) return { ok: false, error: "NAMESPACE_REQUIRED" };
+  const actingKeyId = String(input.actingKeyId || "").trim();
+  if (!actingKeyId) return { ok: false, error: "IDENTITY_MISMATCH" };
+  if (!input.nonce || !input.signature) return { ok: false, error: "PROOF_REQUIRED" };
+  if (!isFreshTimestamp(input.timestamp)) return { ok: false, error: "PROOF_INVALID" };
+  const name = normalizeMainServerName(input.name);
+  if (!name) return { ok: false, error: "MAIN_SERVER_NAME_INVALID" };
+  if (!isNamespaceLocalToThisInstallation(namespace)) return { ok: false, error: "NAMESPACE_NOT_LOCAL_TO_THIS_INSTALLATION" };
+
+  const resolved = resolveActingIdentity(gatewayId, namespace, actingKeyId);
+  if (!resolved.ok) return resolved;
+  const { record, actingIdentity, actingKeyPublicKey } = resolved.value;
+  if (record.owner !== actingIdentity) return { ok: false, error: "OWNER_ONLY" };
+
+  if (isReplayed(`main-server:${gatewayId}`, actingKeyId, input.nonce)) return { ok: false, error: "REPLAY_REJECTED" };
+
+  const signedFields = { op: "gateway-set-main-server", gatewayId, namespace, name, nonce: input.nonce, timestamp: input.timestamp };
+  const authorized = isNamespaceWriteAuthorized({
+    claimIdentityHash: actingKeyId,
+    claimPublicKey: actingKeyPublicKey,
+    body: { ...signedFields, signature: input.signature, signedPayload: input.signedPayload },
+  });
+  if (!authorized) return { ok: false, error: "PROOF_INVALID" };
+
+  consumeNonce(`main-server:${gatewayId}`, actingKeyId, input.nonce);
+
+  writeMainServerName(getRootNamespace(), name);
+  saveSnapshot();
+  return { ok: true, value: { name } };
 }
 
 // ─── transfer ───────────────────────────────────────────────────────────

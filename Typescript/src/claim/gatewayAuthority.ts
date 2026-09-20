@@ -60,6 +60,7 @@
  */
 
 import { parseNamespaceExpression } from "cleaker";
+import { isMainServerReservedPath } from "./mainServer.js";
 import { getClaim } from "./records.js";
 import { isNamespaceWriteAuthorized } from "./replay.js";
 import { getKeychainKey } from "./keychain.js";
@@ -203,6 +204,7 @@ function gatewayPath(gatewayId: string): string {
  *  isForeignNamespaceCollapsingToRoot() for why that case is real). */
 export function isGatewayAuthorityReservedPath(pathInput: string): boolean {
   const path = String(pathInput || "").trim();
+  if (isMainServerReservedPath(path)) return true; // netget.main.* -- see mainServer.ts
   return path === "daemon" || path === GATEWAY_ROOT || path.startsWith(`${GATEWAY_ROOT}.`);
 }
 

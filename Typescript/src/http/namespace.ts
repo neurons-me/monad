@@ -1,11 +1,5 @@
 import type express from "express";
-import {
-  composeProjectedNamespace,
-  isProjectableNamespaceRoot,
-  normalizeNamespaceConstant,
-  normalizeNamespaceIdentity,
-  parseNamespaceIdentityParts,
-} from "../namespace/identity.js";
+import { composeProjectedNamespace, isProjectableNamespaceRoot, normalizeNamespaceConstant, normalizeNamespaceIdentity, parseNamespaceIdentityParts, isReservedHandleLabel, stripWwwLabel } from "../namespace/identity.js";
 import { resolveHostToMeUri } from "../runtime/hostResolver.js";
 
 export type ObserverRelationMode = "raw" | "self" | "observer" | "view";
@@ -81,7 +75,8 @@ export function resolveHostNamespace(req: express.Request) {
 
   const first = String(hostHeaderRaw).split(",")[0].trim();
   const noProto = first.replace(/^https?:\/\//i, "");
-  const hostnameOnly = noProto.split(":")[0].trim();
+  // www.<root> is <root>: the front door of a namespace is the namespace.
+  const hostnameOnly = stripWwwLabel(noProto.split(":")[0].trim());
 
   const projected = resolveHostToMeUri(hostnameOnly);
   if (projected.ok) return projected.namespace;
@@ -115,8 +110,7 @@ export function resolveTransportHost(req: express.Request) {
 }
 
 export function isReservedLabel(label: string) {
-  const x = String(label || "").toLowerCase();
-  return x === "www" || x === "api";
+  return isReservedHandleLabel(label);
 }
 
 export function isProjectableRootHost(hostname: string) {

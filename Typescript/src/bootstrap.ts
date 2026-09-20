@@ -36,6 +36,18 @@ export interface MonadOptions {
   reactDomUmdDir?: string;
   routesPath?: string;
   indexPath?: string;
+  /**
+   * A built front end this monad serves: its index.html for browser requests
+   * (with the namespace injected) and its files (/assets/...) as they are.
+   * MONAD_FRONTEND_DIR.
+   */
+  frontendDir?: string;
+  /**
+   * Packages that add routes to this monad -- each exports mount(app, ctx).
+   * The monad never loads anything a request names: only what is listed here
+   * or in MONAD_MODULES, by whoever starts it.
+   */
+  modules?: string | string[];
   fetchProxyTimeoutMs?: number;
   logger?: MonadLogger | false;
 }
@@ -54,6 +66,10 @@ export interface MonadRuntimeConfig {
   reactDomUmdDir: string;
   routesPath: string;
   indexPath: string;
+  /** Built front end served by this monad, or null. */
+  frontendDir: string | null;
+  /** Packages that mount routes into this monad. */
+  modules: string[];
   selfNodeConfig: SelfNodeConfig | null;
   localNamespaceRoot: string;
 }
@@ -80,6 +96,14 @@ export interface MonadBootstrapResult {
 function stringifyList(input: string | string[] | undefined): string | undefined {
   if (Array.isArray(input)) return input.join(",");
   return input;
+}
+
+/** "a, b,,c" -> ["a", "b", "c"]; nothing -> []. */
+export function parseModuleList(value: string | undefined): string[] {
+  return String(value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function resolvePath(cwd: string, value: string | undefined, fallback: string) {
@@ -141,6 +165,8 @@ export function resolveMonadRuntimeConfig(options: MonadOptions = {}): MonadRunt
   writeEnv(env, "LOCAL_REACTDOM_UMD_DIR", resolveEnvValue(options, sourceEnv, "reactDomUmdDir", "LOCAL_REACTDOM_UMD_DIR"));
   writeEnv(env, "MONAD_ROUTES_PATH", resolveEnvValue(options, sourceEnv, "routesPath", "MONAD_ROUTES_PATH"));
   writeEnv(env, "MONAD_INDEX_PATH", resolveEnvValue(options, sourceEnv, "indexPath", "MONAD_INDEX_PATH"));
+  writeEnv(env, "MONAD_FRONTEND_DIR", resolveEnvValue(options, sourceEnv, "frontendDir", "MONAD_FRONTEND_DIR"));
+  writeEnv(env, "MONAD_MODULES", resolveEnvValue(options, sourceEnv, "modules", "MONAD_MODULES"));
   writeEnv(env, "MONAD_FETCH_TIMEOUT_MS", fetchProxyTimeoutMs);
 
   const selfNodeConfig = loadSelfNodeConfig({
@@ -176,7 +202,15 @@ export function resolveMonadRuntimeConfig(options: MonadOptions = {}): MonadRunt
     reactDomUmdDir: resolvePath(cwd, env.LOCAL_REACTDOM_UMD_DIR,
       resolveFirstExisting(cwd, "node_modules/react-dom/umd", "../../../packages/GUI/npm/node_modules/react-dom/umd")),
     routesPath: resolvePath(cwd, env.MONAD_ROUTES_PATH, "../routes.js"),
-    indexPath: resolvePath(cwd, env.MONAD_INDEX_PATH, "../index.html"),
+    // An index.html named outright wins; otherwise the front end's own; otherwise
+    // the historical ../index.html.
+    indexPath: resolvePath(
+      cwd,
+      env.MONAD_INDEX_PATH,
+      env.MONAD_FRONTEND_DIR ? path.join(env.MONAD_FRONTEND_DIR, "index.html") : "../index.html",
+    ),
+    frontendDir: env.MONAD_FRONTEND_DIR ? resolvePath(cwd, env.MONAD_FRONTEND_DIR, ".") : null,
+    modules: parseModuleList(env.MONAD_MODULES),
     selfNodeConfig,
     localNamespaceRoot,
   };

@@ -34,12 +34,16 @@ import { createMonadsControlRouter } from "./http/monadsControl.js";
 import { createSessionRouter } from "./http/session.js";
 import { configureMonadShell } from "./http/shell.js";
 import { recordSurfaceRequest } from "./http/surfaceTelemetry.js";
+import { createFrontendStatic } from "./http/frontend.js";
+import { loadMonadModules, type MonadModulesReport } from "./modules.js";
 import type { NamespaceProviderBoot } from "./http/provider.js";
 import { createFetchSurface } from "./surfaces/fetchSurface.js";
 import { buildProviderBoot, createProviderSurface, type ProviderSurfaceConfig } from "./surfaces/providerSurface.js";
 
 export type MonadApp = express.Express & {
   monad: MonadBootstrapResult;
+  /** What MONAD_MODULES asked for, and what came of it. */
+  monadModules: MonadModulesReport;
 };
 
 function createNoCacheStaticOptions() {
@@ -118,6 +122,7 @@ export async function createMonadApp(options: MonadOptions = {}): Promise<MonadA
 
   const app = express() as MonadApp;
   app.monad = monad;
+  app.monadModules = { loaded: [], failed: [] };
 
   app.set("trust proxy", true);
   app.use(cors());
@@ -154,6 +159,9 @@ export async function createMonadApp(options: MonadOptions = {}): Promise<MonadA
   app.use("/cleaker", express.static(config.cleakerPkgDistDir, noCache));
   app.use("/vendor/react", express.static(config.reactUmdDir, noCache));
   app.use("/vendor/react-dom", express.static(config.reactDomUmdDir, noCache));
+  // A built front end, when this monad was given one: its files as they are.
+  // (Its index.html is the shell's, for browser requests -- see http/shell.ts.)
+  if (config.frontendDir) app.use(createFrontendStatic(config.frontendDir));
   app.get("/routes.js", (_req, res) => {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
     return res.sendFile(config.routesPath);
@@ -162,6 +170,9 @@ export async function createMonadApp(options: MonadOptions = {}): Promise<MonadA
   app.use(requestLogger());
   app.use(createDisclosureMiddleware());
   app.use(createMonadsControlRouter());
+  // Packages this monad was started with (MONAD_MODULES) add their routes here,
+  // ahead of the provider surface and the NRP handlers.
+  app.monadModules = await loadMonadModules(app, { monad, config });
   app.use(createProviderSurface(surfaceConfig));
   app.use(createFetchSurface({ timeoutMs: config.fetchProxyTimeoutMs }));
 

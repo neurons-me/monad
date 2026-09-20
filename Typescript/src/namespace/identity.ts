@@ -10,6 +10,34 @@ export interface NamespaceIdentityParts {
 
 export const DEFAULT_LOCAL_NAMESPACE_ROOT = "monad.local";
 
+/**
+ * Labels that are never a person's handle. `www.<root>` is the root itself
+ * (the place where a handle is claimed), and `api.<root>` is an address of the
+ * service, so neither may be claimed as `<handle>.<root>`.
+ */
+export const RESERVED_HANDLE_LABELS: ReadonlySet<string> = new Set(["www", "api"]);
+
+export function isReservedHandleLabel(label: unknown): boolean {
+  return RESERVED_HANDLE_LABELS.has(String(label ?? "").trim().toLowerCase());
+}
+
+/** True for `www.<something>` / `api.<something>`: a reserved label in the handle position. */
+export function hasReservedHandleLabel(namespace: unknown): boolean {
+  const text = String(namespace ?? "").trim().toLowerCase();
+  const dot = text.indexOf(".");
+  return dot > 0 && isReservedHandleLabel(text.slice(0, dot));
+}
+
+/**
+ * `www.cleaker.me` is `cleaker.me`: the front door of a namespace is the
+ * namespace. Only a leading `www` label over a name that still has a dot is
+ * dropped, so a bare `www` or `www.localhost` is left alone.
+ */
+export function stripWwwLabel(hostname: string): string {
+  const text = String(hostname ?? "");
+  return /^www\.[^.]+\./i.test(text) ? text.slice(4) : text;
+}
+
 function normalizeRawNamespace(input: unknown): string {
   return String(input || "").trim().toLowerCase();
 }

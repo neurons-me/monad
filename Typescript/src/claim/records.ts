@@ -4,7 +4,7 @@ import { getKernel } from "../kernel/manager.js";
 import { saveSnapshot } from "../kernel/manager.js";
 import { decryptNoise, deriveSecretCommitment, deriveUnlockKey, encryptNoise } from "./derive.js";
 import { buildPersistentClaimBundle, writePersistentClaimBundle } from "./manager.js";
-import { normalizeNamespaceIdentity, normalizeNamespaceRootName, parseNamespaceIdentityParts } from "../namespace/identity.js";
+import { hasReservedHandleLabel, normalizeNamespaceIdentity, normalizeNamespaceRootName, parseNamespaceIdentityParts } from "../namespace/identity.js";
 import { appendSemanticMemory } from "./memoryStore.js";
 import type {
   ClaimNamespaceResult,
@@ -216,6 +216,9 @@ export async function claimNamespace(input: NamespaceClaimInput): Promise<ClaimN
   const privateKey = String(input.privateKey || "").trim() || null;
 
   if (!namespace) return { ok: false, error: "NAMESPACE_REQUIRED" };
+  // www.<root> is the root's own front door and api.<root> its service address:
+  // never a person's handle, so never claimable as one -- whoever asks.
+  if (hasReservedHandleLabel(namespace)) return { ok: false, error: "RESERVED_HANDLE" };
   if (!secret) return { ok: false, error: "SECRET_REQUIRED" };
   if (!resolved.ok) return { ok: false, error: resolved.error };
 

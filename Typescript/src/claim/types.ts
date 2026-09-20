@@ -70,6 +70,7 @@ export type ClaimNamespaceResult =
         | "SECRET_REQUIRED"
         | "PROOF_REQUIRED"
         | "NAMESPACE_TAKEN"
+        | "RESERVED_HANDLE"
         | "CLAIM_KEY_INVALID"
         | "CLAIM_KEYPAIR_MISMATCH"
         | "PROOF_INVALID"

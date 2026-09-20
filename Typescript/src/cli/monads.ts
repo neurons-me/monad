@@ -18,6 +18,7 @@ import {
   stopMonadProcess,
   type MonadRuntimeStatus,
 } from "./runtime.js";
+import { describeMonadEnv, readMonadEnv, writeMonadEnv } from "./monadEnv.js";
 
 function printHelp(): void {
   console.log(`monads
@@ -38,6 +39,10 @@ Usage:
   monads status [name]       Show status for one Monad or all known Monads
   monads logs <name>         Stream Monad logs in real time
   monads logs <name> --tail  Show recent Monad logs without following
+  monads env <name>          Show the variables a Monad keeps for itself (secrets hidden)
+  monads env <name> K=V ...  Keep variables (SEED, MONAD_MODULES, ...) and use them on every start
+  monads env <name> --unset K  Forget a variable
+  monads env <name> --seed-from-stdin  Keep SEED, read from stdin (never echoed)
   monads proxy               Start the .monad browser gateway (routes name.monad)
   monads proxy --port <port> Start the gateway on a custom port (default: 8160)
 
@@ -111,6 +116,38 @@ async function commandStart(args: string[]): Promise<void> {
   console.log(`  endpoint: ${status.record.endpoint}`);
   console.log(`  pid:      ${status.record.pid}`);
   console.log(`  status:   ${status.status}${status.record.dev ? "  (tsx watch — hot reload)" : ""}`);
+}
+
+async function commandEnv(args: string[]): Promise<void> {
+  const name = args[1];
+  if (!name) throw new Error("Usage: monads env <name> [KEY=VALUE ...] [--unset KEY] [--seed-from-stdin]");
+  const patch: Record<string, string | null> = {};
+  const rest = args.slice(2);
+  for (let i = 0; i < rest.length; i += 1) {
+    const arg = rest[i];
+    if (arg === "--unset") {
+      const key = rest[i + 1];
+      if (!key) throw new Error("--unset needs a variable name.");
+      patch[key] = null;
+      i += 1;
+    } else if (arg === "--seed-from-stdin") {
+      const chunks: Buffer[] = [];
+      for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
+      const seed = Buffer.concat(chunks).toString("utf8").trim();
+      if (!seed) throw new Error("--seed-from-stdin got an empty seed.");
+      patch.SEED = seed;
+    } else if (arg.includes("=")) {
+      const at = arg.indexOf("=");
+      patch[arg.slice(0, at)] = arg.slice(at + 1);
+    } else {
+      throw new Error(`Unexpected argument "${arg}". Use KEY=VALUE, --unset KEY or --seed-from-stdin.`);
+    }
+  }
+  const stored = Object.keys(patch).length > 0 ? writeMonadEnv(name, patch) : readMonadEnv(name);
+  const rows = describeMonadEnv(stored);
+  if (rows.length === 0) console.log(`${name}: nothing stored.`);
+  for (const row of rows) console.log(`${row.key}=${row.value}`);
+  if (Object.keys(patch).length > 0) console.log(`(applies on the next start, resume or restart of ${name})`);
 }
 
 async function commandStop(args: string[]): Promise<void> {
@@ -369,6 +406,7 @@ async function main(): Promise<void> {
   else if (command === "delete" || command === "rm") await commandDelete(args);
   else if (command === "status") await commandStatus(args);
   else if (command === "logs") await commandLogs(args);
+  else if (command === "env") await commandEnv(args);
   else if (command === "proxy") await commandProxy(args);
   else {
     printHelp();

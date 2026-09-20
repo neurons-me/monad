@@ -59,7 +59,11 @@ export function createLedgerHandlers(config: LedgerHandlerConfig): LedgerHandler
     return res.json(createEnvelope(target, { namespace: chainNs, rootNamespace, lens, users, blocks, count: blocks.length }));
   };
 
-  const blocks: express.RequestHandler = (req, res) => {
+  // /blocks and /blockchain are data endpoints AND names of pages a front end
+  // may have: a browser opening the URL gets the shell (the catch-all below),
+  // a data request -- which never asks for text/html -- gets the ledger.
+  const blocks: express.RequestHandler = (req, res, next) => {
+    if (wantsHtml(req)) return next();
     const ns = resolveNamespace(req);
     const target = normalizeHttpRequestToMeTarget(req);
     const lens = formatObserverRelationLabel(target.relation);
@@ -69,7 +73,8 @@ export function createLedgerHandlers(config: LedgerHandlerConfig): LedgerHandler
     return res.json(createEnvelope(target, { namespace: ns, lens, blocks: result, count: result.length }));
   };
 
-  const blockchain: express.RequestHandler = (req, res) => {
+  const blockchain: express.RequestHandler = (req, res, next) => {
+    if (wantsHtml(req)) return next();
     const chainNs = resolveNamespace(req);
     const rootNamespace = resolveNamespaceProjectionRoot(chainNs) || chainNs;
     const target = normalizeHttpRequestToMeTarget(req);

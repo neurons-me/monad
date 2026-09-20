@@ -8,6 +8,7 @@ import { execFile, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolveMeIdentityHash } from "../identity/meIdentity.js";
 import { normalizeNamespaceConstant } from "../namespace/identity.js";
+import { readMonadEnv } from "./monadEnv.js";
 
 export type MonadRecordStatus = "starting" | "running" | "paused" | "stopped" | "dead";
 
@@ -398,6 +399,16 @@ export async function getMonadStatus(record: MonadRecord): Promise<MonadRuntimeS
   }
 }
 
+/**
+ * Which seed a monad starts with. An explicit one, then the one the monad
+ * stored for itself, then the invoking shell's, and only last the namespace
+ * name -- which is public, so it is the fallback of a monad that has nothing
+ * else, not a choice.
+ */
+export function resolveMonadSeed(sources: { explicit?: string; stored?: string; shell?: string; namespace: string }): string {
+  return sources.explicit || sources.stored || sources.shell || sources.namespace;
+}
+
 export async function startMonadProcess(options: StartMonadCliOptions = {}): Promise<MonadRuntimeStatus> {
   const name = normalizeMonadName(options.name);
   const existing = await readMonadRecord(name);
@@ -447,14 +458,19 @@ export async function startMonadProcess(options: StartMonadCliOptions = {}): Pro
 
   const out = fs.openSync(stdoutLog, "w");
   const err = fs.openSync(stderrLog, "w");
+  // What this monad keeps for itself (env.json in its runtime dir, mode 0600):
+  // above all its SEED, so a restart from any shell is the same monad.
+  const stored = readMonadEnv(name);
   const env = {
     ...process.env,
+    ...stored,
     PORT: String(port),
-    // The namespace IS the seed. Same namespace → same SEED → same kernel state.
-    // Multiple monads serving the same namespace share the same SEED so they
-    // can read each other's kernel state. The instance name (haiku, iphone…)
+    // The namespace IS the seed only when nothing else was given. Order: an
+    // explicit seed, the one this monad stored, the invoking shell's, and last
+    // the namespace name -- a public string, so a monad that serves a real
+    // namespace should have a stored seed. The instance name (haiku, iphone…)
     // belongs in MONAD_NAME, never in the namespace authority key.
-    SEED: options.seed || process.env.SEED || process.env.ME_SEED || namespace,
+    SEED: resolveMonadSeed({ explicit: options.seed, stored: stored.SEED, shell: process.env.SEED || process.env.ME_SEED, namespace }),
     ME_NAMESPACE: namespace,
     ME_STATE_DIR: stateDir,
     MONAD_CLAIM_DIR: claimDir,

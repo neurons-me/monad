@@ -60,7 +60,14 @@
  */
 
 import { parseNamespaceExpression } from "cleaker";
-import { isMainServerReservedPath, normalizeMainServerName, writeMainServerName } from "./mainServer.js";
+import {
+  hasMainServerName,
+  isMainServerReservedPath,
+  normalizeMainServerName,
+  readMainServerGateway,
+  writeMainServerGateway,
+  writeMainServerName,
+} from "./mainServer.js";
 import { getClaim } from "./records.js";
 import { readSemanticBranchForNamespace } from "./memoryStore.js";
 import { isNamespaceWriteAuthorized } from "./replay.js";
@@ -114,6 +121,7 @@ export type GatewayAuthorityError =
   | "CANNOT_REVOKE_OWNER"
   | "NAMESPACE_NOT_LOCAL_TO_THIS_INSTALLATION"
   | "MAIN_SERVER_NAME_INVALID"
+  | "MAIN_SERVER_OWNED_BY_ANOTHER_GATEWAY"
   | InstallationAuthorizationError
   | "INSTALLATION_AUTHORIZATION_PERSIST_FAILED";
 
@@ -436,6 +444,7 @@ export function bootstrapGatewayAuthority(input: BootstrapGatewayAuthorityInput)
     // reported as a persist failure: the guarantee that actually matters
     // (the owner survives on disk) already holds.
     durablyPersisted = true;
+    bindSeededMainServerToGateway(gatewayId);
     finalizeInstallationAuthorization(stateDir, gatewayId, "consumed");
     return { ok: true, value: record };
   } catch {
@@ -639,6 +648,23 @@ export function revokeGatewayAdmin(input: RevokeGatewayAdminInput): GatewayAutho
 
 // ─── main server name ───────────────────────────────────────────────────
 
+/**
+ * A main-server name the operator seeded has no gateway yet. The first gateway bootstrapped
+ * on this monad is the installation's own, so it takes the declaration: from then on only
+ * its owner may change it. Best effort -- a bootstrap must not fail over this.
+ */
+function bindSeededMainServerToGateway(gatewayId: string): void {
+  try {
+    const root = getRootNamespace();
+    if (hasMainServerName(root) && !readMainServerGateway(root)) {
+      writeMainServerGateway(root, gatewayId);
+      saveSnapshot();
+    }
+  } catch {
+    // left unbound: the first signed change binds it
+  }
+}
+
 /** True once any gateway on this monad has an owner. Reads the branch as the semantic tree
  *  (each record is a value at its own path, so the parent has no value of its own). */
 export function hasAnyGatewayOwner(): boolean {
@@ -685,6 +711,10 @@ export function setGatewayMainServerName(input: SetGatewayMainServerNameInput): 
   if (!resolved.ok) return resolved;
   const { record, actingIdentity, actingKeyPublicKey } = resolved.value;
   if (record.owner !== actingIdentity) return { ok: false, error: "OWNER_ONLY" };
+  // The name is global to the namespace: another gateway's owner does not get to change
+  // what this one's declaration says.
+  const holder = readMainServerGateway(getRootNamespace());
+  if (holder && holder !== gatewayId) return { ok: false, error: "MAIN_SERVER_OWNED_BY_ANOTHER_GATEWAY" };
 
   if (isReplayed(`main-server:${gatewayId}`, actingKeyId, input.nonce)) return { ok: false, error: "REPLAY_REJECTED" };
 
@@ -698,7 +728,9 @@ export function setGatewayMainServerName(input: SetGatewayMainServerNameInput): 
 
   consumeNonce(`main-server:${gatewayId}`, actingKeyId, input.nonce);
 
-  writeMainServerName(getRootNamespace(), name);
+  const root = getRootNamespace();
+  writeMainServerName(root, name);
+  if (!holder) writeMainServerGateway(root, gatewayId);
   saveSnapshot();
   return { ok: true, value: { name } };
 }

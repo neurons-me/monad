@@ -301,6 +301,7 @@ export {
 // its path, the validation of what is declared there, and the guard on who
 // may write it. See claim/mainServer.ts.
 export {
+  MAIN_SERVER_GATEWAY_PATH,
   MAIN_SERVER_NAME_PATH,
   isMainServerReservedPath,
   normalizeMainServerName,

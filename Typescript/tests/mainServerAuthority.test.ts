@@ -14,7 +14,7 @@ import { createMonadApp, issueInstallationAuthorization } from "../src/index";
 import { resetKernelStateForTests } from "../src/kernel/manager";
 import { resetKeychainNonceCacheForTests } from "../src/claim/keychain";
 import { hasAnyGatewayOwner, resetGatewayAuthorityNonceCacheForTests } from "../src/claim/gatewayAuthority";
-import { MAIN_SERVER_NAME_PATH, seedMainServerName } from "../src/claim/mainServer";
+import { MAIN_SERVER_GATEWAY_PATH, MAIN_SERVER_NAME_PATH, seedMainServerName } from "../src/claim/mainServer";
 import {
   deriveBranchProofSeed,
   importEd25519SigningKey,
@@ -144,7 +144,7 @@ async function registerFirstKeychainKey(origin: string, identity: TestIdentity, 
   return res.json.key.keyId as string;
 }
 
-async function bootstrapGateway(origin: string, gatewayId: string, identity: TestIdentity, keyId: string, key: DeviceKey) {
+async function bootstrapGateway(origin: string, gatewayId: string, identity: TestIdentity, keyId: string, key: DeviceKey, _label?: string) {
   const challenge = randomNonce();
   const timestamp = Date.now();
   const signedFields = { op: "netget-claim-gateway", gatewayId, namespace: identity.namespace, identityHash: identity.identityHash, keyId, challenge, timestamp };
@@ -156,19 +156,20 @@ async function bootstrapGateway(origin: string, gatewayId: string, identity: Tes
 
 async function setMainServer(
   origin: string, acting: { namespace: string }, keyId: string, key: { sign(m: string): Promise<string> }, name: string,
-  overrides: { nonce?: string; tamper?: boolean } = {},
+  overrides: { nonce?: string; tamper?: boolean; gatewayId?: string } = {},
 ) {
+  const gatewayId = overrides.gatewayId ?? GATEWAY_ID;
   const nonce = overrides.nonce ?? randomNonce();
   const timestamp = Date.now();
-  const signedFields = { op: "gateway-set-main-server", gatewayId: GATEWAY_ID, namespace: acting.namespace, name, nonce, timestamp };
+  const signedFields = { op: "gateway-set-main-server", gatewayId, namespace: acting.namespace, name, nonce, timestamp };
   const signature = await key.sign(normalizeProofMessage(signedFields));
-  return post(origin, `/api/v1/gateway/${GATEWAY_ID}/main-server`, {
+  return post(origin, `/api/v1/gateway/${gatewayId}/main-server`, {
     namespace: acting.namespace, actingKeyId: keyId, name: overrides.tamper ? `${name}.evil` : name, nonce, timestamp, signature,
   });
 }
 
-async function readName(origin: string) {
-  const res = await fetch(`${origin}/${MAIN_SERVER_NAME_PATH}`, { headers: { "x-forwarded-host": ROOT_NAMESPACE, accept: "application/json" } });
+async function readName(origin: string, dotPath = MAIN_SERVER_NAME_PATH) {
+  const res = await fetch(`${origin}/${dotPath}`, { headers: { "x-forwarded-host": ROOT_NAMESPACE, accept: "application/json" } });
   const json = await res.json().catch(() => null);
   return json?.target?.value;
 }
@@ -300,5 +301,44 @@ describe("netget.main.server.name: owner-signed change", () => {
     expect(hasAnyGatewayOwner()).toBe(true);
     expect(seedMainServerName(ROOT_NAMESPACE, "env-wants-this.example", { gatewayClaimed: hasAnyGatewayOwner() })).toBe("kept");
     expect(await readName(origin)).toBe("typo-fixed.example");
+  });
+
+  it("the name is global to the namespace: only the gateway that holds it can change it, not another gateway's owner", async () => {
+    // Gateway A: the installation's own, bootstrapped by alice while the operator's seed is there.
+    expect(seedMainServerName(ROOT_NAMESPACE, "netget.site", { gatewayClaimed: false })).toBe("written");
+    const { alice, aliceKey, aliceKeyId } = await claimedGateway();
+    expect(await readName(origin, MAIN_SERVER_GATEWAY_PATH)).toBe(GATEWAY_ID); // bound at bootstrap
+
+    // Gateway B shares the monad and the namespace, with its own owner, bob.
+    const GATEWAY_B = "second-gateway.local";
+    const bob = await claimTestIdentity(origin, "bob", "bob-secret");
+    const bobKey = await generateDeviceKey();
+    const bobKeyId = await registerFirstKeychainKey(origin, bob, bobKey, "Bob's laptop");
+    authorizeInstallation(stateDir, GATEWAY_B, bob);
+    expect((await bootstrapGateway(origin, GATEWAY_B, bob, bobKeyId, bobKey, GATEWAY_B)).status).toBe(201);
+
+    // Being the owner of B does not let bob overwrite what A's declaration says.
+    const refused = await setMainServer(origin, bob, bobKeyId, bobKey, "evil.example", { gatewayId: GATEWAY_B });
+    expect(refused.status).toBe(403);
+    expect(refused.json.error).toBe("MAIN_SERVER_OWNED_BY_ANOTHER_GATEWAY");
+    expect(await readName(origin)).toBe("netget.site");
+
+    // Nor can he pass as A: a signature scoped to B is not accepted for A's id.
+    const asA = await setMainServer(origin, bob, bobKeyId, bobKey, "evil.example", { gatewayId: GATEWAY_ID });
+    expect(asA.status).toBe(403);
+    expect(await readName(origin)).toBe("netget.site");
+
+    // A's owner still can, and the binding stays with A.
+    const ok = await setMainServer(origin, alice, aliceKeyId, aliceKey, "admin.example.org");
+    expect(ok.status).toBe(200);
+    expect(await readName(origin)).toBe("admin.example.org");
+    expect(await readName(origin, MAIN_SERVER_GATEWAY_PATH)).toBe(GATEWAY_ID);
+  });
+
+  it("an unseeded, unbound name is taken by the first gateway whose owner declares it", async () => {
+    const { alice, aliceKey, aliceKeyId } = await claimedGateway();
+    expect(await readName(origin, MAIN_SERVER_GATEWAY_PATH)).toBeUndefined();
+    expect((await setMainServer(origin, alice, aliceKeyId, aliceKey, "netget.site")).status).toBe(200);
+    expect(await readName(origin, MAIN_SERVER_GATEWAY_PATH)).toBe(GATEWAY_ID);
   });
 });

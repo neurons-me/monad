@@ -22,6 +22,13 @@ import { appendSemanticMemory, readSemanticValueForNamespace } from "./memorySto
 
 export const MAIN_SERVER_ROOT = "netget.main";
 export const MAIN_SERVER_NAME_PATH = `${MAIN_SERVER_ROOT}.server.name`;
+/**
+ * The name is global to the namespace, and several gateways can share a namespace. The
+ * gateway that declared it (or, for an operator-seeded name, the first one bootstrapped
+ * here) is recorded next to it; only that gateway's owner may change it. Being the owner
+ * of another gateway on the same monad is not authority over this one's configuration.
+ */
+export const MAIN_SERVER_GATEWAY_PATH = `${MAIN_SERVER_ROOT}.server.gatewayId`;
 
 function normalizeDotPath(input: string): string {
   return String(input || "")
@@ -76,4 +83,19 @@ export function seedMainServerName(
   if (current !== undefined && opts.gatewayClaimed) return "kept";
   writeMainServerName(namespace, value);
   return "written";
+}
+
+/** The gateway the declaration belongs to, or undefined while nobody holds it. */
+export function readMainServerGateway(namespace: string): string | undefined {
+  const value = readSemanticValueForNamespace(namespace, MAIN_SERVER_GATEWAY_PATH);
+  return typeof value === "string" && value ? value : undefined;
+}
+
+export function writeMainServerGateway(namespace: string, gatewayId: string): void {
+  appendSemanticMemory({ namespace, path: MAIN_SERVER_GATEWAY_PATH, data: gatewayId });
+}
+
+/** Whether the namespace declares a main server at all. */
+export function hasMainServerName(namespace: string): boolean {
+  return readSemanticValueForNamespace(namespace, MAIN_SERVER_NAME_PATH) !== undefined;
 }

@@ -4,7 +4,20 @@ import type { SelfSurfaceEntry } from "./selfMapping.js";
 export interface NamespaceProviderBoot {
   kind: "namespace-provider";
   version: 1;
+  /**
+   * The namespace the address this page was loaded from resolves to: the root
+   * (cleaker.me; www.cleaker.me is answered as cleaker.me) or, at a handle host,
+   * that handle's own namespace (jabellae.cleaker.me).
+   */
   namespace: string;
+  /**
+   * The namespace this monad serves -- the root every handle lives under -- whatever
+   * address the page came from. A page that composes a handle's namespace uses THIS,
+   * never `namespace` (at jabellae.cleaker.me that is already the handle's).
+   */
+  rootNamespace: string;
+  /** The handle when `namespace` is <handle>.<rootNamespace>, else null (the root itself). */
+  handle: string | null;
   route: string;
   origin: string;
   apiOrigin: string;
@@ -76,14 +89,22 @@ export function buildNamespaceProviderBoot(input: {
   resolverDisplayName: string;
   surfaceEntry: SelfSurfaceEntry | null;
   modules?: string[];
+  rootNamespace?: string;
 }): NamespaceProviderBoot {
   const route = normalizeSurfaceRoute(input.route);
   const origin = String(input.origin || "").trim();
+  const namespace = String(input.namespace || "").trim();
+  const rootNamespace = String(input.rootNamespace || "").trim() || namespace;
+  const handle = rootNamespace && namespace.endsWith(`.${rootNamespace}`)
+    ? namespace.slice(0, -(rootNamespace.length + 1))
+    : null;
 
   return {
     kind: "namespace-provider",
     version: 1,
-    namespace: String(input.namespace || "").trim(),
+    namespace,
+    rootNamespace,
+    handle,
     route,
     origin,
     apiOrigin: origin,

@@ -1,4 +1,5 @@
 import { Router, type Router as ExpressRouter } from "express";
+import { getRootNamespace } from "../kernel/manager.js";
 import { createEnvelope, createErrorEnvelope } from "../http/envelope.js";
 import { normalizeHttpRequestToMeTarget } from "../http/meTarget.js";
 import { resolveNamespace, resolveTransportHost } from "../http/namespace.js";
@@ -52,6 +53,7 @@ export function buildProviderBoot(
     resolverDisplayName: config.displayName,
     surfaceEntry: buildSurfaceEntry(req, namespace, config),
     modules: config.modules,
+    rootNamespace: getRootNamespace(),
   });
 }
 

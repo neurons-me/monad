@@ -8,12 +8,9 @@ import {
   mkdirSync,
   rmSync,
   renameSync,
-  openSync,
-  writeSync,
-  closeSync,
-  unlinkSync,
 } from "fs";
 import { resolve, join } from "path";
+import { acquireProcessLock } from "./stateDirLock.js";
 import { normalizeNamespaceRootName } from "../namespace/identity.js";
 
 const DEFAULT_ME_STATE_DIR = resolve(process.cwd(), "me-state");
@@ -39,20 +36,9 @@ let _kernel: InstanceType<typeof ME> | null = null;
 // `monads` CLI, netget's startNetgetMonad(), or a test's createMonadApp()
 // with a hand-set ME_STATE_DIR) — getKernel(), not startMonadProcess()'s
 // own launcher-side check, which only covers ITS OWN specific call path.
-const STATE_DIR_LOCK_FILENAME = "process.lock";
-let _lockFd: number | null = null;
 let _lockPath: string | null = null;
+let _releaseLock: (() => void) | null = null;
 let _lockExitHandler: (() => void) | null = null;
-
-function isLockHolderPidAlive(pid: number): boolean {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error: any) {
-    return error?.code === "EPERM";
-  }
-}
 
 // Deliberately ONLY the 'exit' event, no SIGTERM/SIGINT handlers of our
 // own. kernel/persist.ts's setupPersistence() already owns SIGTERM/SIGINT
@@ -97,72 +83,17 @@ function unregisterStateDirLockCleanup(): void {
  * is still running, which is exactly the scenario this exists to prevent.
  */
 function acquireStateDirLock(stateDir: string): void {
-  if (_lockPath === join(stateDir, STATE_DIR_LOCK_FILENAME) && _lockFd !== null) {
-    return; // this exact process already holds this exact lock
-  }
-  mkdirSync(stateDir, { recursive: true });
-  const lockPath = join(stateDir, STATE_DIR_LOCK_FILENAME);
-
-  let fd: number;
-  try {
-    fd = openSync(lockPath, "wx");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-    let holderPid: number | null = null;
-    try {
-      holderPid = Number(JSON.parse(readFileSync(lockPath, "utf8")).pid);
-    } catch {
-      holderPid = null; // unreadable/corrupt lock file — treat as stale below
-    }
-    if (holderPid && isLockHolderPidAlive(holderPid)) {
-      throw new Error(
-        `STATE_DIR_ALREADY_IN_USE: ${stateDir} is already in use by a live process (pid ${holderPid}). `
-        + "Refusing to start a second kernel against the same state directory.",
-      );
-    }
-    // Stale lock (holder pid recorded but dead, or the file was unreadable)
-    // — safe to reclaim. If a genuine concurrent reclaimer wins this exact
-    // race, the following openSync throws EEXIST again and propagates
-    // uncaught rather than silently double-acquiring; that's correct — a
-    // caller-visible failure here is far cheaper than a false lock.
-    try {
-      unlinkSync(lockPath);
-    } catch {
-      // Already gone — another reclaimer got there first; the openSync
-      // below will succeed for whichever process reaches it first.
-    }
-    fd = openSync(lockPath, "wx");
-  }
-
-  writeSync(fd, JSON.stringify({ pid: process.pid, startedAt: Date.now() }));
-  _lockFd = fd;
-  _lockPath = lockPath;
+  if (_lockPath === stateDir && _releaseLock) return;
+  _releaseLock = acquireProcessLock(stateDir);
+  _lockPath = stateDir;
   registerStateDirLockCleanup();
 }
 
-/** Releases this process's own stateDir lock, if it holds one. Safe to call
- *  even when no lock is held (tests reset state far more often than a real
- *  process would ever re-acquire one). */
+/** Release only this process's ownership record, never a successor's lock. */
 export function releaseStateDirLock(): void {
-  if (_lockFd !== null) {
-    try {
-      closeSync(_lockFd);
-    } catch {
-      // Non-fatal — the fd may already be invalid if the process is
-      // already tearing down.
-    }
-    _lockFd = null;
-  }
-  if (_lockPath) {
-    try {
-      unlinkSync(_lockPath);
-    } catch {
-      // Non-fatal — already gone, or a permissions issue on the way out;
-      // a lock that outlives this process is recovered by the next
-      // acquirer's own stale-pid check, not by this cleanup succeeding.
-    }
-    _lockPath = null;
-  }
+  _releaseLock?.();
+  _releaseLock = null;
+  _lockPath = null;
   unregisterStateDirLockCleanup();
 }
 

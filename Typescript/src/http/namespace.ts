@@ -1,6 +1,7 @@
 import type express from "express";
 import { composeProjectedNamespace, isProjectableNamespaceRoot, normalizeNamespaceConstant, normalizeNamespaceIdentity, parseNamespaceIdentityParts, isReservedHandleLabel, stripWwwLabel } from "../namespace/identity.js";
 import { resolveHostToMeUri } from "../runtime/hostResolver.js";
+import { readRequestedNamespace } from "./requestedNamespace.js";
 
 export type ObserverRelationMode = "raw" | "self" | "observer" | "view";
 
@@ -164,7 +165,14 @@ export function getAtNestedUserFromPath(req: express.Request) {
 }
 
 export function resolveChainNamespace(req: express.Request) {
-  const host = normalizeNamespaceIdentity(resolveHostNamespace(req));
+  // A read that NAMES its namespace (?namespace=) is about that namespace, whichever door it came through;
+  // one that names a namespace this monad does not serve is about none ("unknown"), never about the door's.
+  // Without one, the connection's own host decides, as it always did.
+  const requested = readRequestedNamespace(req);
+  if (requested.present && !requested.ok) return "unknown";
+  const host = requested.present && requested.ok
+    ? normalizeNamespaceIdentity(requested.namespace)
+    : normalizeNamespaceIdentity(resolveHostNamespace(req));
   if (!host) return "unknown";
 
   const atSel = getAtSelectorFromPath(req);

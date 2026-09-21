@@ -4,6 +4,7 @@ import { createEnvelope, createErrorEnvelope } from "../http/envelope.js";
 import { normalizeHttpRequestToMeTarget } from "../http/meTarget.js";
 import { resolveNamespace, resolveTransportHost } from "../http/namespace.js";
 import { resolveNamespacePathValue } from "../http/pathResolver.js";
+import { refuseUnservedRequestedNamespace } from "../http/requestedNamespace.js";
 import {
   buildNamespaceProviderBoot,
   resolveNamespaceSurfaceSpec,
@@ -125,9 +126,10 @@ export function createProviderSurface(config: ProviderSurfaceConfig): ExpressRou
   });
 
   router.get("/__surface", (req, res) => {
-    const namespace = resolveNamespace(req);
     const host = resolveTransportHost(req);
     const target = normalizeHttpRequestToMeTarget(req);
+    if (refuseUnservedRequestedNamespace(req, res, (error) => createErrorEnvelope(target, { error }))) return;
+    const namespace = resolveNamespace(req);
     const surfaceEntry = buildSurfaceEntry(req, namespace, config);
     const telemetry = getSurfaceTelemetrySnapshot();
     return res.json(createEnvelope(target, {

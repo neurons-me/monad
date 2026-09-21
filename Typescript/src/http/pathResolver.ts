@@ -3,6 +3,7 @@ import { readSemanticBranchForNamespace, isPathNearSecretScope } from "../claim/
 import { resolveNamespace } from "./namespace.js";
 import { normalizeHttpRequestToMeTarget } from "./meTarget.js";
 import { createEnvelope, createErrorEnvelope } from "./envelope.js";
+import { refuseUnservedRequestedNamespace } from "./requestedNamespace.js";
 import { resolveLogsFromSource, shouldInterceptLogsPath } from "./logsSourceProxy.js";
 import { resolveOpenRestyStatusFromSource, shouldInterceptOpenRestyPath } from "./openRestyStatusProxy.js";
 import type { DisclosureContent } from "./disclosure.js";
@@ -71,6 +72,7 @@ export function createPathResolverHandler() {
       return res.status(404).json(createErrorEnvelope(target, { error: "NOT_FOUND" }));
     }
 
+    if (refuseUnservedRequestedNamespace(req, res, (error) => createErrorEnvelope(target, { error }))) return;
     const namespace = resolveNamespace(req);
     const segments0 = trimmed.split("/").filter(Boolean);
 

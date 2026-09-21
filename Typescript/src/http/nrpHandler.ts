@@ -4,6 +4,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { randomUUID } from "node:crypto";
 import { getKernel } from "../kernel/manager.js";
 import { resolveNamespacePathValue, type ResolvedNamespacePath } from "./pathResolver.js";
+import { resolveServedNamespace } from "./requestedNamespace.js";
 import { subscribe as subscribePathChange } from "../kernel/pathNotify.js";
 import type { DisclosureContent } from "./disclosure.js";
 import { isValidDomainShape } from "cleaker";
@@ -230,11 +231,26 @@ async function sendPathData(
   });
 }
 
+// The namespace a message names is resolved against the spaces this monad serves, as a host is: one it does
+// not serve is refused. (It used to be passed through as a string, and a namespace this monad does not
+// serve fell to the kernel root's storage under a name that was not the root's.)
+function servedNamespaceOf(ws: WebSocket, msg: MsgReadOrSubscribe): string | null {
+  const served = resolveServedNamespace(msg.namespace);
+  if (served.ok) return served.namespace;
+  send(ws, { type: "error", channelId: msg.channelId, payload: served.reason, timestamp: Date.now() });
+  return null;
+}
+
 async function handleRead(ws: WebSocket, msg: MsgReadOrSubscribe): Promise<void> {
-  await sendPathData(ws, "data", msg.channelId, msg.namespace, msg.path);
+  const namespace = servedNamespaceOf(ws, msg);
+  if (namespace === null) return;
+  await sendPathData(ws, "data", msg.channelId, namespace, msg.path);
 }
 
 async function handleSubscribe(ws: WebSocket, msg: MsgReadOrSubscribe): Promise<void> {
+  const requested = servedNamespaceOf(ws, msg);
+  if (requested === null) return;
+  msg = { ...msg, namespace: requested };
   const key = subKey(msg.namespace, msg.path);
   let subs = connectionSubs.get(ws);
   if (!subs) {
@@ -256,7 +272,9 @@ async function handleSubscribe(ws: WebSocket, msg: MsgReadOrSubscribe): Promise<
 }
 
 function handleUnsubscribe(ws: WebSocket, msg: MsgReadOrSubscribe): void {
-  const key = subKey(msg.namespace, msg.path);
+  const served = resolveServedNamespace(msg.namespace);
+  if (!served.ok) return;
+  const key = subKey(served.namespace, msg.path);
   const subs = connectionSubs.get(ws);
   const unsubscribe = subs?.get(key);
   if (!unsubscribe) return;

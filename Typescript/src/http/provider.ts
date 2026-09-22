@@ -18,6 +18,14 @@ export interface NamespaceProviderBoot {
   rootNamespace: string;
   /** The handle when `namespace` is <handle>.<rootNamespace>, else null (the root itself). */
   handle: string | null;
+  /**
+   * Where under `namespace` this interface is mounted -- empty means the namespace's own root, a
+   * semantic path (normalizeSemanticPath's shape, no leading/trailing slash) means an interior node
+   * acting as this interface's own root. Part of the mount reference (namespace + node path) that
+   * ties a self-contained page to `.me` -- see GatewayAccessContract.md §7. This field only names
+   * WHERE the interface is mounted; it grants no identity and no permission.
+   */
+  nodePath: string;
   route: string;
   origin: string;
   apiOrigin: string;
@@ -71,6 +79,20 @@ function routeToSemanticKey(route: string): string {
   return segments.join(".") || "root";
 }
 
+/**
+ * A slash-form semantic path (no leading/trailing slash, no doubled slashes) -- the same shape
+ * `/__provider/resolve`'s own `?path=` query already expects, and this.gui/runtime's own
+ * normalizeSemanticPath produces client-side. Kept local: this is the one place the boot builder
+ * needs it, and the dotted form pathResolver.ts uses internally is a different, storage-facing shape.
+ */
+function normalizeSemanticPath(input: string): string {
+  return String(input || "")
+    .trim()
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "")
+    .replace(/\/{2,}/g, "/");
+}
+
 export function normalizeSurfaceRoute(route: string): string {
   const raw = String(route || "").trim();
   if (!raw) return "/";
@@ -90,6 +112,7 @@ export function buildNamespaceProviderBoot(input: {
   surfaceEntry: SelfSurfaceEntry | null;
   modules?: string[];
   rootNamespace?: string;
+  nodePath?: string;
 }): NamespaceProviderBoot {
   const route = normalizeSurfaceRoute(input.route);
   const origin = String(input.origin || "").trim();
@@ -105,6 +128,7 @@ export function buildNamespaceProviderBoot(input: {
     namespace,
     rootNamespace,
     handle,
+    nodePath: normalizeSemanticPath(String(input.nodePath || "")),
     route,
     origin,
     apiOrigin: origin,

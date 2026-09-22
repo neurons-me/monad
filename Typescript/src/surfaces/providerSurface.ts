@@ -45,6 +45,7 @@ export function buildProviderBoot(
   req: Parameters<typeof resolveRequestOrigin>[0],
   namespace: string,
   config: ProviderSurfaceConfig,
+  nodePath?: string,
 ) {
   return buildNamespaceProviderBoot({
     namespace,
@@ -55,6 +56,7 @@ export function buildProviderBoot(
     surfaceEntry: buildSurfaceEntry(req, namespace, config),
     modules: config.modules,
     rootNamespace: getRootNamespace(),
+    nodePath,
   });
 }
 
@@ -82,8 +84,12 @@ export function createProviderSurface(config: ProviderSurfaceConfig): ExpressRou
 
   router.get("/__provider", (req, res) => {
     const namespace = String((req.query as any)?.namespace || "").trim() || resolveNamespace(req);
+    // The mount reference's node path (GatewayAccessContract.md §7) -- a standalone page fetching
+    // this route asks for the SAME description an injected boot would carry, optionally for an
+    // interior node rather than the namespace's own root.
+    const nodePath = String((req.query as any)?.nodePath || "").trim();
     const target = normalizeHttpRequestToMeTarget(req);
-    const provider = buildProviderBoot(req, namespace, config);
+    const provider = buildProviderBoot(req, namespace, config, nodePath);
     return res.json(createEnvelope(target, { namespace, provider }));
   });
 

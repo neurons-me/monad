@@ -1,209 +1,180 @@
-# Page grants: what a caller was itself given
+# Node grants: what an executor was itself given, over which node
 
-Design for review, revised 2026-09-22 (v2, after the first round's review). Nothing here is implemented.
-Companion to
-[GatewayAccessContract.md](https://github.com/neurons-me/netget/blob/design/gateway-access-contract/Typescript/docs/GatewayAccessContract.md)
-§9 and to `identity-vault-design.md` (branch `design/identity-vault`), whose "local runtime" is where the
-consent step below actually runs.
+Design for review, revised 2026-09-22 (v3 — reframed from a gateway-specific mechanism to a general `.me`
+tree mechanism, per user review). Nothing here is implemented in the sense of wired into the gateway guard;
+a minimal real walkthrough of the mechanism itself is being built alongside this revision (monad branch
+`feat/node-grants`) — see that branch for the actual code and tests this document now matches.
 
-**What changed from v1**, so the review is easy to re-check: the consent flow is now the core mechanism, not
-an open question (§4); the grant is bound to a credential the caller proves possession of, not to `Origin`
-alone (§2.2, §5); the record carries an explicit scope shape — caller, resource, capabilities, and node when
-relevant (§3); revocation is specified to cover HTTP, WebSocket actions, and live subscriptions, not just a
-session's visible state (§7).
+**What changed from v2, so the review is easy to re-check:** this is no longer "page grants for a gateway" —
+it is grants over **any node of the `.me` tree**, of which a gateway's own control surface is one instance,
+not the model. Four corrections: app and executor are separated (§2.3); the scope is a tree coordinate
+(namespace + node + operations), never gateway-specific (§3); reusing structure (a personal version, an
+extension) never inherits authority (§6); every signed action names its exact target, content and
+replay-protection, not just "a signature" (§5).
 
-## 1. The gap this closes
+## 1. The gap this closes, restated at the right level
 
-`GatewayAccessContract.md` §1's rule:
+`GatewayAccessContract.md` §1's rule — capabilities granted to the caller, not assumed from who is behind
+it — turns out not to be gateway-specific at all. The same question applies to any app anchored to any part
+of `.me`: **you** may hold full authority over your own tree; **an app you open** should hold only what you
+gave it, over only the part of the tree you anchored it to. Visiting a page should never itself grant that
+page anything — the owner of a gateway visiting Wikipedia does not thereby let Wikipedia restart the gateway,
+and the same principle holds one level down: opening an app anchored to one node of your tree does not let
+it read or write a different node, or do anything beyond the operations you actually granted.
 
-> Same proven identity, path, operation, state **and capabilities granted to the caller** → same result.
+## 2. The model
 
-`gatewayCapabilities.ts`'s `capabilitiesOf`/`hasGatewayCapability` (monad branch `feat/gateway-capabilities`)
-answers the first half: what an **identity** holds on a gateway. Its own header: *"necessary, not
-sufficient... the owner's 'all' describes the owner's own standing, never a license for every caller
-claiming to act on the owner's behalf."* This design is the second half: of what an identity holds, what did
-it give to the specific **page or program** making THIS request — proven, not merely asserted by a header a
-caller controls.
+### 2.1 You stay you — this is not another login
 
-## 2. Two decisions, and why
+The identity, the namespace and the session belong to the trusted `.me` runtime (`GatewayAccessContract.md`
+§2), unchanged by any of this. Switching which app you're using, or which domain served it, is not
+re-authentication. What a grant decides is **how much an app may do with your already-open session** — a
+scope on your authority, never a second identity.
 
-### 2.1 The grant lives with the identity, not with the gateway
+### 2.2 An app can become personal, without losing its relation to the original
 
-Unchanged from v1: `daemon.gateways.<gatewayId>` is installation-scoped (`gatewayAuthority.ts`'s own header:
-"not nested under any one identity's `users.<handle>` tree"). A page grant is the person's own consent to a
-piece of software, independent of which gateway it later uses that consent against — it belongs with the
-identity, structurally next to `keychain.keys` (a per-namespace, reserved, independently-checked branch, the
-same layering `keychain.ts`'s own header already establishes: a narrow fact, checked by whoever relies on it,
-never pre-declared).
+Conversationally explored, recorded here because it shapes the storage model (§4) even though building it is
+future work: the same authored app can be layered — the original (at a version), extensions, personal
+modifications, and the namespace's own context composing into "your app running." Like tracing paper: a
+layer can be toggled, compared against the original, or the original returned to without erasing what you
+changed. This composes naturally on `.me` itself — the original app has its own node; your context anchors
+references to it plus nodes holding your own data/changes/extensions — **not a parallel versioning system**,
+relations between nodes of the same tree. What is NOT solved here: how much of that composition the runtime
+already executes, and the actual mechanics of resolving "original vs. mine vs. combined." A node grant
+(§3-§5) is the authorization primitive this would need, not the composition mechanism itself.
 
-### 2.2 The caller is identified by a credential it proves possession of — `Origin` is not that credential
+### 2.3 App and executor are two different things — correction from v2
 
-**Correction from v1, which bound the grant to `Origin` directly.** `Origin` is a header the BROWSER sets and
-enforces for a real cross-origin fetch — useful as an *additional*, defense-in-depth check that stops another
-site's page from silently reusing a grant. It is not proof of identity: any non-browser HTTP client can send
-whatever `Origin` value it likes, and nothing about the header itself is signed or otherwise unforgeable.
-Binding a grant to it alone would let anyone who can send an HTTP request with the right header claim it.
+**v2 conflated them:** a page's own generated keypair was called "the credential" as if proving possession of
+it also proved *which app* was running. It doesn't. The **executor** is this one running instance — a tab, a
+process — and its keypair proves only "the same running thing that made request 1 is making request 2,"
+nothing about lineage or which authored app (§2.2) it claims to be. The **app** is a separate, currently
+*unenforced* concept: a human-readable label recorded on the grant for the person's own benefit when
+approving (§4), not a cryptographic fact this design verifies. Establishing a real, verifiable app identity
+(so a grant could follow "this app" across restarts, across its own updates, or across the several origins
+one app can legitimately be served from) is explicitly future work — see §7's open items. Nothing here
+should be read as already solving it.
 
-The caller instead needs to **prove possession of a private key**, the same primitive `keychain.ts` already
-uses for a person's own devices, applied here to a page/program instead: when consent is granted (§4), the
-result is a record keyed by a **public key the caller generated itself** (an ephemeral Ed25519 keypair, via
-WebCrypto in the page's own JS — the private half never leaves the page, never crosses to the runtime).
-Every later request signs a fresh, nonce-bearing payload with that same key, verified the same way every
-other write in this codebase already is (`isNamespaceWriteAuthorized`'s canonicalization). `Origin` is then
-checked *as well* — a real, useful second lock — but the grant's real identity is the key, not the header.
+## 3. The record: a tree coordinate, not a gateway coordinate
 
-**v1 simplification, explicit rather than assumed:** bind the issued credential ALSO to the approved origin
-at grant time — a signature from the right key but a different `Origin` than the one recorded is refused.
-Changing origin then needs a new approval. This does not mean re-authenticating to `.me`: authenticating (who
-you are) and granting a page access (what it may do) stay separate, as they already are today — the
-identity's own session in the local runtime is unaffected by a page's grant being approved, refused, or later
-revoked.
-
-## 3. The record
-
-New reserved branch under the identity's own namespace, `pageGrants.<grantId>`, next to `keychain.keys`:
+Reserved branch under the identity's own namespace, `nodeGrants.<grantId>` — structurally next to
+`keychain.keys`, following the same per-identity, semantic-memory placement:
 
 ```ts
-export interface PageGrantRecord {
-  grantId: string;              // opaque id, this grant's own key
-  identityHash: string;         // whose consent this is
-  callerPublicKey: string;      // the credential (§2.2) -- what proves "this exact caller" on every request
-  approvedOrigin: string;       // v1 binding (§2.2); checked alongside the signature, not instead of it
-  /**
-   * Scope -- living under the identity does NOT mean authority over every gateway the identity can reach.
-   * gatewayId is required; nodePath narrows further (GatewayAccessContract.md §7's mount reference) when
-   * the grant is meant for one mounted node rather than the gateway as a whole -- omitted/'' means the
-   * gateway's own root, matching how a mount reference already denotes "the whole tree from here".
-   */
-  gatewayId: string;
-  nodePath: string;
-  /** Opaque scope strings, same vocabulary as GatewayAuthorityRecord.grants -- a subset the identity chose
-   *  to extend to this caller; never a namespace this design invents on its own. */
-  capabilities: string[];
+export interface NodeGrantRecord {
+  grantId: string;
+  identityHash: string;        // whose tree/consent this is
+  namespace: string;            // the stable namespace this grant is scoped to (normally the identity's own)
+  nodePath: string;             // dot-path under that namespace; '' denotes the whole tree (allowed, not
+                                 // encouraged -- nothing here forces a narrower default)
+  /** What the executor may do at nodePath: 'read' | 'write' for a plain semantic node; a gateway-control
+   *  node's own named capabilities (domains:write, openresty:control, ...) when nodePath denotes one --
+   *  the SAME vocabulary gatewayAuthority.ts's grants already use, reused, not duplicated. A gateway is
+   *  therefore just one KIND of node this mechanism can name, never a required, separate field. */
+  operations: string[];
+  executorPublicKey: string;    // proves "the same running instance", never "this app" (section 2.3)
+  appLabel: string;             // descriptive only, shown at consent time; not cryptographically enforced
   grantedAt: number;
   expiresAt: number | null;
-  revokedAt: number | null;     // set, never deleted -- a past grant stays a real record, §7
+  revokedAt: number | null;     // set, never deleted -- a past grant stays a real record
   nonce: string;
-  signature: string;            // by the IDENTITY (via an active keychain key) -- this is the identity's
-                                 // consent record, signed the same way grantGatewayAdmin already is
+  signature: string;            // by the identity's own active keychain key
 }
 ```
 
-`grantId` (not `origin`, per §2.2's correction) is the record's own key, so one identity can hold several
-grants for the same caller public key across different `(gatewayId, nodePath)` scopes, or several distinct
-caller keys for the same gateway (a person may run more than one trusted page).
+`gatewayId` never appears as a field. A grant whose `nodePath` happens to be `daemon.gateways.<id>` (or
+whatever coordinate the gateway's own control surface resolves to) is a grant over a gateway; nothing about
+the record type treats that as a special case.
 
-## 4. The consent flow — approved in the trusted `.me` runtime, never fabricated by the page
+## 4. Granting — approved in the trusted runtime, shown concretely
 
-**Core mechanism, not an open question (correction from v1's §5).** A page cannot grant itself anything and
-cannot manufacture an approval; the identity's own trusted local runtime (`identity-vault-design.md`'s
-runtime — where the identity is already unlocked and able to sign) is the only place a `PageGrantRecord` can
-be produced, because producing one requires the identity's own signature.
+Unchanged in spirit from v2 (§4 there), restated at the general level, with the example that made it
+concrete:
 
-The shape of the flow, at the level this design fixes (the exact transport/UI is the next, separate design
-increment — named in §8, not fully specified here to avoid adding a second layer of abstraction before this
-one is reviewed):
+> An app asks: "I want to read your services and be able to restart this gateway." The runtime lets you
+> approve, precisely: "You may read this gateway's services, but not restart it." Even the owner, who
+> personally could restart it, has not thereby let the app do it without that grant.
 
-1. The page generates its own keypair (§2.2) and **requests** capabilities — which gateway, which node (if
-   any), which capabilities, for how long — from the identity's trusted runtime. The request names what it
-   wants; it does not and cannot assert that it already has it.
-2. The runtime shows the identity a real consent screen: which page (origin, and whatever else can be shown
-   honestly — see §8's note on why origin alone is a weak identity signal even for display purposes),
-   requesting which capabilities, on which gateway/node, for how long. The identity approves, denies, or
-   narrows the request (grants a subset).
-3. On approval, the runtime constructs and signs a `PageGrantRecord` (§3) with the identity's own active
-   keychain key — the same "vigencia" check (is this signing key currently active) every other mutation in
-   this codebase already requires — and persists it.
-4. The page receives back only what it needs to use the grant later: enough to know it was approved (and
-   for what), never the identity's own signing material.
+1. The executor generates its own keypair and **requests** — namespace, node, operations, for how long, and
+   the `appLabel` it wants shown. It cannot assert it already has any of this.
+2. The runtime shows something concrete, not a generic prompt: *"`appLabel` is requesting to read this node
+   of your namespace"* — naming the actual node and operations, not a vague "wants access". The identity
+   approves, denies, or narrows to a subset.
+3. On approval, the runtime constructs and signs a `NodeGrantRecord` with an active keychain key (the same
+   vigencia check every mutation in this codebase already requires) and persists it.
+4. The executor receives back enough to use the grant later, never the identity's own signing material.
 
-A denied or ignored request produces no record at all — the same fail-closed shape `capabilitiesOf`/
-`hasPageGrant` already assume for "nothing exists here."
+The exact transport for steps 1-2 (how a page reaches the runtime across origins) stays the next, separate
+design increment (unchanged from v2 §8) — naming the requirement precisely here, not the UI/wire mechanics,
+to avoid stacking another abstraction before this one is reviewed.
 
-## 5. The authorization question
+## 5. Every signed action names its exact target and content — not just "a signature"
 
-Unchanged in shape, restated with the corrected binding:
+**Correction from v2, which said "sign a fresh payload" without specifying its shape precisely enough to rule
+out reuse.** An executor performing an action signs exactly:
 
-```
-mayAct(identity, gatewayId, nodePath, capability, callerPublicKey, signature, requestOrigin) :=
-      hasGatewayCapability(gatewayAuthorityRecordOf(gatewayId), identity, capability)        // identity holds it
-  AND record := activePageGrant(identity, gatewayId, nodePath, callerPublicKey)                // a live grant for THIS key
-  AND record.capabilities.includes(capability)                                                // covers this capability
-  AND verifySignature(record.callerPublicKey, signature, thisRequest)                          // caller proved the key
-  AND requestOrigin === record.approvedOrigin                                                  // v1 binding (§2.2)
+```json
+{ "op": "node-grant-act", "grantId": "...", "namespace": "...", "nodePath": "...",
+  "operation": "read", "target": "dashboard.status", "params": null,
+  "nonce": "...", "timestamp": 1234567890 }
 ```
 
-Always an `AND` chain, never a shortcut through any one link — an owner acting through an ungranted page has
-`capabilitiesOf` = `'all'` and no matching `activePageGrant`, so `mayAct` is `false` for everything until
-explicitly granted. A page can never end up with more than the identity itself holds, since both sides must
-independently say yes. No matching record (wrong key, wrong gateway/node, revoked, expired) is the same
-fail-closed `∅` `capabilitiesOf` already returns for an unrelated identity — never an error, never a
-different code path that could be reasoned about differently.
+verified the same way every other write in this codebase already is
+(`isNamespaceWriteAuthorized`'s canonicalization, against `record.executorPublicKey`), with the SAME
+nonce/timestamp replay window `gatewayAuthority.ts` already uses. Binding `operation`, `target` and `params`
+into what is actually signed means a signature obtained for a `read` of one path cannot be replayed as a
+`write`, and a signature for one node cannot be replayed against another — the `op` discriminator convention
+`keychain.ts`'s own header already explains ("a signature valid for one keychain operation can never be
+replayed as a different one, even when the rest of the fields happen to coincide") applied here.
 
-## 6. Granting and revoking
+Checked, in order, before any action runs: the grant exists and is not revoked/expired; `operation` is in
+`record.operations`; `target` is `nodePath` itself or a genuine sub-path of it (the SAME prefix-safety
+`semanticBranchReader.test.ts` already tests for — `"dashboard"` must not match `"dashboardX"`); the
+signature verifies against `record.executorPublicKey` over exactly that payload.
 
-Granting is §4. Revoking: the identity signs `op: "page-grant-revoke"` for a `grantId`, same conventions as
-`gatewayAuthority.ts`'s `revokeGatewayAdmin` (canonicalized, nonce-bearing, `isNamespaceWriteAuthorized`,
-replay-rejected). The record's `revokedAt` is set, never deleted — the same "kept, not removed" shape
-`gatewayAuthority.ts` doesn't currently follow for `grants` (it deletes on revoke) but which is worth
-requiring HERE specifically because §7 needs to actively act on a revocation at the moment it happens, not
-merely stop matching it on the next fresh read.
+## 6. Reusing structure never inherits authority
 
-## 7. Revocation must stop the next authorized action everywhere, not just look revoked
+**Correction from v2** (which didn't address this at all): §2.2's layering — a personal version referencing
+the original, an extension building on either — is a *structural* relation (this node points at / derives
+from that node), never an *authority* one. A grant is never implied by a reference. If your own version of an
+app references the original app's node, and you install an extension that references your version, the
+extension holds **no capability at all** until it is separately granted one — reading or acting through
+either reference still goes through §5's check against the extension's OWN grant, not something inherited by
+being "built on top." This is a principle to hold future layering work to, not something with more surface
+area to implement in the minimal walkthrough (§8) — there is nothing to copy or extend yet.
 
-**Correction from v1, which only reasoned about ordinary HTTP requests.** A closed visual session is not the
-requirement; the requirement is that no FURTHER authorized action of any kind succeeds after revocation,
-across every transport this codebase actually has:
+## 7. What this does not solve
 
-- **HTTP** (`adminGate.mjs` and any future guard built on §5): already correct by construction — §5 is
-  evaluated fresh on every request, reads the current record, so a revoked grant fails on its very next use,
-  matching the identity-level admin-session precedent exactly (no separate work needed here).
-- **WebSocket actions** (`nrpHandler.ts`'s `/nrp` channel, `attachNrpWebSocketServer`): each inbound message
-  is already dispatched fresh per `handleMessage` call (confirmed: no per-connection auth cached across
-  messages today) — a §5 check per action-requiring message closes this the same way as HTTP, PROVIDED the
-  message carries (or the connection was opened with) the caller's signature/key the same way an HTTP request
-  would. Not true automatically: today's `/nrp` connections carry no such proof at all (open item, §8).
-- **Live subscriptions** (`nrpHandler.ts`'s `connectionSubs`, a path → unsubscribe map per WebSocket): this is
-  the genuinely new requirement. A subscription opened under a since-revoked grant must be **actively torn
-  down**, not merely left to keep delivering updates until the socket happens to close. Concretely: a
-  subscription must be registered keyed by (or alongside) the `PageGrantRecord.grantId` that authorized it,
-  and revoking that grant must walk every live subscription opened under it and call its own `unsubscribe()`
-  immediately — the same registry `attachNrpWebSocketServer`'s own `close` handler already uses for the
-  unrelated case of the socket itself closing, generalized to fire on a grant's revocation too, not only on
-  disconnect. The socket itself need not close; only the subscriptions that depended on the now-gone grant
-  do, and the caller should be told why (a distinct error/notice, not silence) rather than simply stop
-  hearing updates with no explanation.
+Unchanged from v2 except as noted:
 
-## 8. Explicitly out of scope here
+- The consent-screen transport/UI (§4).
+- Proving possession on a live channel (e.g. a WebSocket) that carries no credential today — revocation
+  reaching an open connection's live subscriptions still needs that channel to carry `executorPublicKey`
+  and a fresh signature per message, same as v2's §7 already named for `/nrp`.
+- A verifiable **app identity** (§2.3) distinct from the executor — needed for §2.2's fuller vision (an app
+  followed across restarts/updates/several origins) and left explicitly unbuilt.
+- Vault B / no local runtime, non-browser callers with no runtime relationship at all — same as v2.
+- Selling or distributing apps/extensions, and their licensing — named in the conversation that shaped this
+  revision, not a question this design (an authorization primitive) answers.
+- Wiring this to the gateway's own access guard (`GatewayAccessContract.md` §9) — deliberately sequenced
+  AFTER the minimal walkthrough below is real and tested, not in parallel with it.
 
-- **The exact consent-screen transport and UI** (§4's step 2) — cross-origin communication between a
-  requesting page and the identity's trusted runtime (a redirect flow, a signed postMessage exchange, a
-  popup — each has real trade-offs) is its own design, not fixed here to avoid adding a second abstraction
-  layer before this one is reviewed. What IS fixed: the runtime alone produces the signed record; the page
-  never does.
-- **Proving possession on the `/nrp` WebSocket channel** — today's connections carry no signature at all;
-  wiring §7's WS/subscription revocation in requires that channel to carry a caller credential first, a
-  concrete follow-up, not assumed to already exist.
-- **App-identity credentials as a replacement for the origin binding** (§2.2's v1 simplification) — the
-  caller's OWN generated keypair already is a real, unforgeable identity per grant; what remains open is
-  whether one such key could legitimately represent "the same app" across several origins (this session's
-  own document/namespace model, §8 of the contract) without a separate grant per origin. Not solved here.
-- **Vault B / no local runtime** — a page grant assumes the identity's local runtime is already available to
-  sign it in §4; recovering on a device with no prior history is a separate mechanism.
-- **Non-browser callers with no page/runtime relationship at all** (a bare CLI or script never mediated by
-  any `.me` runtime) — likely closer to `GatewayAccessContract.md` §4's machine identity than to this design;
-  not reconciled here.
-- **Wiring this into `adminGate.mjs` or any route** — unchanged from v1: this document defines the shape and
-  the checks; nothing is implemented.
+## 8. Order: prove the mechanism on a plain node first, then use it for a gateway
 
-## 9. Open decisions
+Per explicit instruction: demonstrate a real grant over a `.me` node before connecting anything to the
+gateway guard.
 
-1. The consent-screen transport (§8) — which mechanism, concretely.
-2. Whether `capabilities: string[]` should be constrained to a real, shared vocabulary now (matching
-   whatever the per-route capability table under `GatewayAccessContract.md` §9 ends up naming) or stay
-   opaque strings until that table exists.
-3. Grant lifetime defaults: `expiresAt` always required vs. optional standing grants, and the renewal UX for
-   an expiring one.
-4. One caller key representing "the same app" across several origins (§8) vs. a strictly per-origin key —
-   depends on the still-nonexistent app-identity mechanism this session's document/namespace model would
-   need for its own equivalence claim to fully hold.
+1. A real monad, a real identity with a claimed namespace and an active keychain key.
+2. An executor keypair, granted `operations: ['read']` over one specific node.
+3. The executor reads that node — succeeds.
+4. The executor attempts to `write` the same node — refused (operation not granted).
+5. The executor attempts to `read` a *different* node — refused (outside `nodePath`).
+6. The identity revokes the grant.
+7. The executor repeats the same read that succeeded in step 3 — refused, immediately (no separate
+   invalidation step needed; §5's check reads the live record on every action).
+
+Only once this is real and passing does connecting it to `daemon.gateways.<gatewayId>` (a grant whose
+`nodePath` names a gateway's own control surface, `operations` drawn from its named capabilities) become the
+next step — and even then, gated on `gatewayCapabilities.ts`'s own identity-level check ALSO passing (the
+`AND` from `GatewayAccessContract.md` §9's correction: the identity must hold the capability too, a node
+grant alone is not enough there).

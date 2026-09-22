@@ -622,6 +622,18 @@ export function revokeGatewayAdmin(input: RevokeGatewayAdminInput): GatewayAutho
 
   consumeNonce(`revoke:${gatewayId}`, actingKeyId, input.nonce);
 
+  return applyGatewayAdminRevocation(record, targetIdentityHash);
+}
+
+/** The actual state change behind revokeGatewayAdmin, factored out so an ALREADY-authorized caller can
+ *  apply it without re-deriving these five field deletions. Performs NO authorization check of its own --
+ *  every caller is responsible for having verified authority first. revokeGatewayAdmin (above) is one such
+ *  caller, after its own actingKeyId/keychain-signature check; gatewayNodeGrants.ts's delegated revoke is
+ *  the other, after its own node-grant + live-capability guard -- two different authorization paths
+ *  converging on the one real mutation, so neither can drift from what "revoked" actually means on disk. */
+export function applyGatewayAdminRevocation(record: GatewayAuthorityRecord, targetIdentityHash: string): GatewayAuthorityResult<GatewayAuthorityRecord> {
+  if (targetIdentityHash === record.owner) return { ok: false, error: "CANNOT_REVOKE_OWNER" };
+
   delete record.admins[targetIdentityHash];
   delete record.grants[targetIdentityHash];
   delete record.pubkeys[targetIdentityHash];

@@ -14,7 +14,12 @@
  */
 import type express from "express";
 import { verifyExecutorAction, type ExecutorActionError } from "../claim/nodeGrants.js";
-import { verifyExecutorGatewayAction, type GatewayGuardError } from "../claim/gatewayNodeGrants.js";
+import {
+  verifyExecutorGatewayAction,
+  revokeGatewayAdminViaNodeGrant,
+  type GatewayGuardError,
+  type DelegatedActionError,
+} from "../claim/gatewayNodeGrants.js";
 import { readSemanticValueForNamespace } from "../claim/memoryStore.js";
 import { normalizeNamespaceIdentity } from "../namespace/identity.js";
 
@@ -41,6 +46,30 @@ const GATEWAY_GUARD_ERROR_STATUS: Record<GatewayGuardError, number> = {
   // gateway RIGHT NOW -- distinct from every ExecutorActionError above, which are all about the grant's
   // own state, never the granter's current standing.
   IDENTITY_CAPABILITY_MISSING: 403,
+};
+
+// Covers the full GatewayAuthorityError union (gatewayAuthority.ts's declared return type for every
+// function there, including applyGatewayAdminRevocation) even though a delegated action can only ever
+// actually produce a small subset of these -- an exhaustive Record is what keeps this in sync if that
+// function's own error surface ever grows.
+const DELEGATED_ACTION_ERROR_STATUS: Record<DelegatedActionError, number> = {
+  ...GATEWAY_GUARD_ERROR_STATUS,
+  IDENTITY_MISMATCH: 400,
+  ALREADY_BOOTSTRAPPED: 409,
+  GATEWAY_NOT_BOOTSTRAPPED: 404,
+  ACTING_KEY_NOT_FOUND: 404,
+  ACTING_KEY_REVOKED: 403,
+  PERMISSION_DENIED: 403,
+  OWNER_ONLY: 403,
+  TARGET_NOT_ADMIN: 404,
+  CANNOT_REVOKE_OWNER: 403,
+  NAMESPACE_NOT_LOCAL_TO_THIS_INSTALLATION: 403,
+  INSTALLATION_AUTHORIZATION_REQUIRED: 403,
+  INSTALLATION_AUTHORIZATION_MISMATCH: 403,
+  INSTALLATION_AUTHORIZATION_EXPIRED: 403,
+  INSTALLATION_AUTHORIZATION_CONSUMED: 403,
+  INSTALLATION_AUTHORIZATION_ALREADY_PENDING: 409,
+  INSTALLATION_AUTHORIZATION_PERSIST_FAILED: 500,
 };
 
 /** POST /api/v1/node-grants/read -- the executor proves it holds a live grant covering this exact read,
@@ -116,4 +145,36 @@ export const gatewayNodeGrantActionHandler: express.RequestHandler = (req, res) 
     return res.status(GATEWAY_GUARD_ERROR_STATUS[result.error]).json({ ok: false, error: result.error });
   }
   return res.status(200).json({ ok: true, gatewayId: result.gatewayId, operation: result.operation });
+};
+
+/** POST /api/v1/gateway/:gatewayId/node-grants/admins/:targetIdentityHash/revoke -- this file's first
+ *  CONNECTED operation (gatewayNodeGrants.ts's own header explains why a verdict-only route wasn't
+ *  enough). Checks and applies in the one call, off the one signed request; `targetIdentityHash` comes
+ *  from the URL, same convention the pre-existing identity-signed revoke route already uses, and it is
+ *  ALSO inside the signed payload (via `params`), so this URL segment cannot be swapped after signing
+ *  without invalidating the signature. */
+export const gatewayNodeGrantRevokeAdminHandler: express.RequestHandler = (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const rawNamespace = String(body.namespace || "").trim();
+  const namespace = normalizeNamespaceIdentity(rawNamespace);
+  if (!namespace) {
+    return res.status(ERROR_STATUS.NAMESPACE_REQUIRED).json({ ok: false, error: "NAMESPACE_REQUIRED" });
+  }
+
+  const gatewayId = String(req.params.gatewayId || "").trim();
+  const targetIdentityHash = String(req.params.targetIdentityHash || "").trim();
+
+  const result = revokeGatewayAdminViaNodeGrant(namespace, gatewayId, {
+    grantId: String(body.grantId || "").trim(),
+    targetIdentityHash,
+    nonce: String(body.nonce || "").trim(),
+    timestamp: Number(body.timestamp),
+    signature: String(body.signature || "").trim(),
+    signedPayload: body.signedPayload !== undefined ? String(body.signedPayload) : undefined,
+  });
+
+  if (!result.ok) {
+    return res.status(DELEGATED_ACTION_ERROR_STATUS[result.error]).json({ ok: false, error: result.error });
+  }
+  return res.status(200).json({ ok: true, record: result.value });
 };

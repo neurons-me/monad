@@ -21,7 +21,11 @@ import {
   revokeGatewayAdminHandler,
   transferGatewayOwnerHandler,
 } from "./handlers/gatewayAuthorityHandler.js";
-import { gatewayNodeGrantActionHandler, nodeGrantReadHandler } from "./handlers/nodeGrantsHandler.js";
+import {
+  gatewayNodeGrantActionHandler,
+  gatewayNodeGrantRevokeAdminHandler,
+  nodeGrantReadHandler,
+} from "./handlers/nodeGrantsHandler.js";
 import { createClaimsRouter } from "./http/claims.js";
 import { createDisclosureMiddleware } from "./http/disclosure.js";
 import { createMeshAnnounceRouter } from "./http/meshAnnounce.js";
@@ -205,6 +209,7 @@ export async function createMonadApp(options: MonadOptions = {}): Promise<MonadA
   app.post("/api/v1/gateway/:gatewayId/transfer", transferGatewayOwnerHandler);
   app.post("/api/v1/node-grants/read", nodeGrantReadHandler);
   app.post("/api/v1/gateway/:gatewayId/node-grants/act", gatewayNodeGrantActionHandler);
+  app.post("/api/v1/gateway/:gatewayId/node-grants/admins/:targetIdentityHash/revoke", gatewayNodeGrantRevokeAdminHandler);
   app.use(createMeshAnnounceRouter());
   app.use(createMeshMonadsRouter());
   app.use(createMeshResolveRouter());

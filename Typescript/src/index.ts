@@ -296,3 +296,10 @@ export {
   isInternalRequest,
   readInternalTokenFile,
 } from "./http/internalToken.js";
+
+// The canonical, kernel-backed owner/admins/grants record for a gateway installation, and the single
+// capability check over it (GatewayAccessContract.md §1/§4) -- for a module mounted INTO this same
+// monad process (netget/gateway) to consult directly, in-process, rather than through its own cache
+// or a second, hand-maintained rule list. See claim/gatewayAuthority.ts and claim/gatewayCapabilities.ts.
+export { readGatewayAuthority, type GatewayAuthorityRecord } from "./claim/gatewayAuthority.js";
+export { capabilitiesOf, hasGatewayCapability } from "./claim/gatewayCapabilities.js";

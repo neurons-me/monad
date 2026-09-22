@@ -7,7 +7,10 @@
  * question answered from tree state, never a hardcoded list. Not yet wired into adminGate.mjs (that
  * needs every route reclassified onto a named capability, a separate, larger change) and not yet
  * reachable from netget.site's Lua side at all (still a loopback-only decision, a second, unrelated
- * rulebook -- see docs/GatewayAccessContract.md §5, §9).
+ * rulebook -- see docs/GatewayAccessContract.md §5, §9). It is also, on its own, only NECESSARY, not
+ * SUFFICIENT: this answers what an IDENTITY holds, never what a given CALLER acting as that identity
+ * was itself granted -- see claim/gatewayCapabilities.ts's own header for why "owner: 'all'" describes
+ * the owner's own standing, not a blanket license for every page claiming to act on the owner's behalf.
  */
 import { afterEach, describe, expect, it } from "vitest";
 import fs from "fs";

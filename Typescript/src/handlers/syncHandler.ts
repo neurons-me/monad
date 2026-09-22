@@ -10,6 +10,7 @@ import { getClaim } from "../claim/records.js";
 import { isNamespaceWriteAuthorized } from "../claim/replay.js";
 import { isKeychainReservedPath } from "../claim/keychain.js";
 import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
+import { isNodeGrantReservedPath } from "../claim/nodeGrants.js";
 import { isGatewayRoutingRecordPath, isInternalRequest } from "../http/internalToken.js";
 import { isForeignNamespaceCollapsingToRoot } from "../kernel/manager.js";
 
@@ -96,6 +97,13 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
     const reservedGatewayEvent = rawEvents.find(
       (event) => event && typeof event === "object" && isGatewayAuthorityReservedPath(String((event as Record<string, unknown>).path || "")),
     );
+    // Same reasoning, for the node-grants branch (claim/nodeGrants.ts).
+    const reservedNodeGrantEvent = rawEvents.find(
+      (event) => event && typeof event === "object" && isNodeGrantReservedPath(String((event as Record<string, unknown>).path || "")),
+    );
+    if (reservedNodeGrantEvent) {
+      return res.status(403).json({ error: "NODE_GRANT_PATH_REQUIRES_NODE_GRANT_API" });
+    }
     if (reservedGatewayEvent) {
       return res.status(403).json({ error: "GATEWAY_PATH_REQUIRES_GATEWAY_API" });
     }

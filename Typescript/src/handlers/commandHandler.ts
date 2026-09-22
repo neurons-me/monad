@@ -4,6 +4,7 @@ import { claimNamespace, getClaim, openNamespace } from "../claim/records.js";
 import { getMemoriesForNamespace, isNamespaceWriteAuthorized, recordMemory } from "../claim/replay.js";
 import { isKeychainReservedPath } from "../claim/keychain.js";
 import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
+import { isNodeGrantReservedPath } from "../claim/nodeGrants.js";
 import { isGatewayRoutingRecordPath, isInternalRequest } from "../http/internalToken.js";
 import { saveSnapshot } from "../kernel/manager.js";
 import { notify as notifyPathChanged } from "../kernel/pathNotify.js";
@@ -213,6 +214,12 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
   // generic surface (see kernel/manager.ts's isForeignNamespaceCollapsingToRoot()).
   if (isGatewayAuthorityReservedPath(candidatePath)) {
     return res.status(403).json(createErrorEnvelope(target, { error: "GATEWAY_PATH_REQUIRES_GATEWAY_API" }));
+  }
+  // nodeGrants.* -- same reasoning again: only claim/nodeGrants.ts's own signed, replay-protected
+  // functions (an active keychain key's signature, checked fresh) may mutate a grant record; a valid
+  // claim signature on this generic surface must not be able to hand-edit or fabricate one.
+  if (isNodeGrantReservedPath(candidatePath)) {
+    return res.status(403).json(createErrorEnvelope(target, { error: "NODE_GRANT_PATH_REQUIRES_NODE_GRANT_API" }));
   }
 
   // The gateway's routing records decide where a hostname's traffic goes. An

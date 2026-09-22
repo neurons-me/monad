@@ -15,9 +15,17 @@ import { htmlShell, wantsHtml } from "../http/shell.js";
 import type { NamespaceProviderBoot } from "../http/provider.js";
 
 export type LedgerHandlerConfig = {
-  buildRequestProviderBoot: (req: express.Request, namespace: string) => NamespaceProviderBoot | null;
+  buildRequestProviderBoot: (req: express.Request, namespace: string, nodePath?: string) => NamespaceProviderBoot | null;
   onBridgeRequest: express.RequestHandler;
 };
+
+// Same mechanism GET /__provider?nodePath= already reads: an injected boot can describe this
+// interface as mounted at an interior node too, the same way a fetched one can -- see
+// GatewayAccessContract.md §7. Read here rather than inferring it from the request's own path, which
+// stays a separate fact (the SPA's client route, resolveRequestSurfaceRoute) never conflated with it.
+function resolveRequestNodePath(req: express.Request): string {
+  return String((req.query as any)?.nodePath || "").trim();
+}
 
 export type LedgerHandlers = {
   root: express.RequestHandler;
@@ -42,7 +50,7 @@ export function createLedgerHandlers(config: LedgerHandlerConfig): LedgerHandler
     if (wantsHtml(req)) {
       const namespace = resolveNamespace(req);
       res.setHeader("Content-Type", "text/html; charset=utf-8");
-      return res.status(200).send(htmlShell({ providerBoot: config.buildRequestProviderBoot(req, namespace) }));
+      return res.status(200).send(htmlShell({ providerBoot: config.buildRequestProviderBoot(req, namespace, resolveRequestNodePath(req)) }));
     }
     return next();
   };
@@ -121,7 +129,7 @@ export function createLedgerHandlers(config: LedgerHandlerConfig): LedgerHandler
     if (wantsHtml(req)) {
       const namespace = resolveNamespace(req);
       res.setHeader("Content-Type", "text/html; charset=utf-8");
-      return res.status(200).send(htmlShell({ providerBoot: config.buildRequestProviderBoot(req, namespace) }));
+      return res.status(200).send(htmlShell({ providerBoot: config.buildRequestProviderBoot(req, namespace, resolveRequestNodePath(req)) }));
     }
     return createPathResolverHandler()(req, res);
   };

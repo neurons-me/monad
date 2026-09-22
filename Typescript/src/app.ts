@@ -105,8 +105,8 @@ export async function createMonadApp(options: MonadOptions = {}): Promise<MonadA
     displayName: config.nodeDisplayName,
   };
 
-  function buildRequestProviderBoot(req: express.Request, namespace: string): NamespaceProviderBoot | null {
-    return buildProviderBoot(req, namespace, surfaceConfig);
+  function buildRequestProviderBoot(req: express.Request, namespace: string, nodePath?: string): NamespaceProviderBoot | null {
+    return buildProviderBoot(req, namespace, surfaceConfig, nodePath);
   }
 
   const bridgeHandler = createBridgeHandler({

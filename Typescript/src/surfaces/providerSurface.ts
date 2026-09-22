@@ -96,6 +96,12 @@ export function createProviderSurface(config: ProviderSurfaceConfig): ExpressRou
   router.get("/__provider/resolve", async (req, res) => {
     const namespace = String((req.query as any)?.namespace || "").trim() || resolveNamespace(req);
     const rawPath = String((req.query as any)?.path || "").trim();
+    // The mount reference's node path (GatewayAccessContract.md §7): when this interface is mounted at
+    // an interior node, a "relative" read composes UNDER that node, the same way a file path composes
+    // under its own directory -- "title" at nodePath "dashboard/status" reads
+    // "dashboard/status/title" under the namespace, never the namespace's own root "title". This is
+    // what makes nodePath load-bearing for reads, not just a label the boot carries.
+    const nodePath = String((req.query as any)?.nodePath || "").trim();
     const route = resolveRequestSurfaceRoute(req);
     const target = normalizeHttpRequestToMeTarget(req);
 
@@ -107,7 +113,8 @@ export function createProviderSurface(config: ProviderSurfaceConfig): ExpressRou
       }));
     }
 
-    const resolved = await resolveNamespacePathValue(namespace, rawPath);
+    const composedPath = nodePath ? `${nodePath}/${rawPath}` : rawPath;
+    const resolved = await resolveNamespacePathValue(namespace, composedPath);
     if (!resolved.found) {
       return res.status(404).json(createErrorEnvelope(target, {
         namespace, path: resolved.path || rawPath, route, error: "PATH_NOT_FOUND",

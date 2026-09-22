@@ -51,6 +51,8 @@ async function discoveredBoot(base: string, host: string, nodePath?: string) {
 }
 
 describe("mount reference: injected boot and GET /__provider describe the same place", () => {
+  // Interior-node parity between injection and discovery, and nodePath's effect on reads, are
+  // covered in mountReferenceInjectionParity.test.ts.
   it("at the namespace's own root: same namespace, rootNamespace, handle, empty nodePath", async () => {
     const base = await start("acme.test");
 
@@ -74,7 +76,7 @@ describe("mount reference: injected boot and GET /__provider describe the same p
     expect(discovered.handle).toBe("jabellae");
   });
 
-  it("discovery alone can additionally resolve an interior node -- injection has no such need (the page IS its own root)", async () => {
+  it("discovery can resolve an interior node the same way an injected boot can (mountReferenceInjectionParity.test.ts)", async () => {
     const base = await start("acme.test");
     const atRoot = await discoveredBoot(base, "acme.test");
     const atNode = await discoveredBoot(base, "acme.test", "dashboard/status");

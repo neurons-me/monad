@@ -349,4 +349,53 @@ describe("connected operation: delegated revoke-admin actually mutates gateway-a
     expect(res.status).not.toBe(200);
     expect(readGatewayAuthority(GATEWAY_ID)!.admins[victim.identityHash]).toBe(true);
   });
+
+  it("no lost update under REAL concurrent requests -- two different targets revoked at the same time both land", async () => {
+    const { origin, stateDir } = await start();
+    const owner = await claimIdentity(origin, "acowner7", "acowner-secret-7");
+    authorizeInstallation(stateDir, GATEWAY_ID, owner);
+    const ownerKey = await freshKeypair();
+    const ownerKeyId = await registerKey(origin, owner, ownerKey, "owner device");
+    await bootstrapGateway(origin, owner, ownerKeyId, ownerKey);
+    const admin = await claimIdentity(origin, "acadmin7", "acadmin-secret-7");
+    await grantGatewayAdmin(origin, owner.namespace, ownerKeyId, ownerKey, admin, [REVOKE_ADMIN_CAPABILITY]);
+    const adminKey = await freshKeypair();
+    const adminKeyId = await registerKey(origin, admin, adminKey, "admin device");
+
+    const victimA = await claimIdentity(origin, "acvictima7", "acvictima-secret-7");
+    const victimB = await claimIdentity(origin, "acvictimb7", "acvictimb-secret-7");
+    await grantGatewayAdmin(origin, owner.namespace, ownerKeyId, ownerKey, victimA, ["logs:read"]);
+    await grantGatewayAdmin(origin, owner.namespace, ownerKeyId, ownerKey, victimB, ["logs:read"]);
+    expect(readGatewayAuthority(GATEWAY_ID)!.admins[victimA.identityHash]).toBe(true);
+    expect(readGatewayAuthority(GATEWAY_ID)!.admins[victimB.identityHash]).toBe(true);
+
+    const executor = await freshKeypair();
+    const grantId = crypto.randomUUID();
+    await grantNode(admin, adminKey, adminKeyId, grantId, `daemon.gateways.${GATEWAY_ID}`, [REVOKE_ADMIN_CAPABILITY], executor.publicKeyRaw);
+
+    // Two DIFFERENT mutating requests, dispatched together (Promise.all -- both fetch() calls in flight
+    // at the same time, not one awaited before the other starts), against the SAME grant, SAME record.
+    // If checking and applying were not effectively atomic per request (e.g. a naive
+    // read-modify-write over two independently-held copies of the record), one revoke could silently
+    // overwrite/lose the other's mutation. Node's single-threaded event loop plus the fact that neither
+    // this handler nor anything it calls ever awaits (grepped: zero `await` in the whole check->persist
+    // chain) means each request's JS execution runs to completion before the next one starts -- this
+    // test exercises that guarantee against the real HTTP server, not just asserts it from reading the
+    // source.
+    const [signedA, signedB] = await Promise.all([
+      signRevokeAdminAct(executor, admin.namespace, grantId, victimA.identityHash),
+      signRevokeAdminAct(executor, admin.namespace, grantId, victimB.identityHash),
+    ]);
+    const [resA, resB] = await Promise.all([
+      postRevokeAdminAction(origin, admin.namespace, victimA.identityHash, signedA),
+      postRevokeAdminAction(origin, admin.namespace, victimB.identityHash, signedB),
+    ]);
+    expect(resA.status, JSON.stringify(resA.json)).toBe(200);
+    expect(resB.status, JSON.stringify(resB.json)).toBe(200);
+
+    // BOTH mutations landed -- neither request's write was lost to the other's.
+    const record = readGatewayAuthority(GATEWAY_ID)!;
+    expect(record.admins[victimA.identityHash]).toBeUndefined();
+    expect(record.admins[victimB.identityHash]).toBeUndefined();
+  });
 });

@@ -2,13 +2,21 @@
  * nodeGrants.test.ts — the minimal walkthrough page-grants-design.md §8 asks for BEFORE connecting
  * anything to the gateway guard: a real identity grants a real executor `read` over one real node, the
  * executor reads it, cannot write it, cannot read a different node, the identity revokes the grant, and
- * the same read that worked before is refused immediately afterwards.
+ * the same read that worked before is refused immediately afterwards. Plus the sharper checks a follow-up
+ * review asked for before going further: the signature genuinely binds namespace+node+operation+content+
+ * replay-protection (not just operation vs. target, §5); a grant can never exceed what its granting key
+ * currently holds (a revoked granting key cannot grant, even retroactively-looking); the node boundary
+ * really does distinguish a descendant (covered) from a mere prefix-sharing sibling (not covered); the
+ * reserved-path guard blocks `nodeGrants.*` on BOTH generic write surfaces (`POST /`, `POST /api/v1/commit`),
+ * not just one of them. And the first real caller-facing surface: `POST /api/v1/node-grants/read`, the
+ * executor's own signature checked fresh against the live grant before any data is returned.
  *
- * Real HTTP server (for the identity claim + keychain key, which are HTTP-only operations already), real
- * Ed25519 signing for both the granting identity and the executor (its own, separately generated keypair --
- * proving app/executor are two different credentials, design doc §2.3), real semantic-memory reads/writes.
- * nodeGrants.ts's own functions are called directly (no HTTP surface for them exists yet -- this proves the
- * authorization mechanism itself, not a wire format nothing has reviewed). Same rigor as
+ * Real HTTP server throughout (identity claim, keychain key, keychain revoke, the two generic write
+ * surfaces, and the new node-grants read route), real Ed25519 signing for both the granting identity and
+ * the executor (its own, separately generated keypair -- proving app/executor are two different
+ * credentials, design doc §2.3), real semantic-memory reads/writes. `grantNodeAccess`/`revokeNodeAccess`/
+ * `verifyExecutorAction` are still called directly (no HTTP surface for granting/revoking exists yet, by
+ * design -- see nodeGrantsHandler.ts's own header). Same rigor as
  * gatewayAuthority.test.ts/gatewayCapabilities.test.ts: no mocks for anything security-relevant.
  */
 import { afterEach, describe, expect, it } from "vitest";
@@ -98,6 +106,26 @@ async function registerKey(origin: string, identity: Awaited<ReturnType<typeof c
   const res = await post(origin, "/api/v1/keychain/keys", { namespace: identity.namespace, identityHash: identity.identityHash, newKey, nonce, timestamp, signature });
   if (res.status !== 201) throw new Error(`registerKey failed: ${res.status} ${JSON.stringify(res.json)}`);
   return res.json.key.keyId as string;
+}
+/** A SECOND keychain key, vouched for by an already-active admin key -- needed to then revoke that second
+ *  key without hitting CANNOT_REVOKE_LAST_ADMIN (keychain.ts won't let the last admin revoke itself). */
+async function registerSecondKey(origin: string, identity: Awaited<ReturnType<typeof claimIdentity>>, actingKeyId: string, actingKey: Awaited<ReturnType<typeof freshKeypair>>, key: Awaited<ReturnType<typeof freshKeypair>>, label: string) {
+  const nonce = randomNonce();
+  const timestamp = Date.now();
+  const newKey = { publicKey: key.publicKeyRaw, label };
+  const signedFields = { op: "keychain-register", namespace: identity.namespace, newKey, nonce, timestamp, actingKeyId };
+  const signature = await actingKey.sign(normalizeProofMessage(signedFields));
+  const res = await post(origin, "/api/v1/keychain/keys", { namespace: identity.namespace, actingKeyId, newKey, nonce, timestamp, signature });
+  if (res.status !== 201) throw new Error(`registerSecondKey failed: ${res.status} ${JSON.stringify(res.json)}`);
+  return res.json.key.keyId as string;
+}
+async function revokeKey(origin: string, identity: Awaited<ReturnType<typeof claimIdentity>>, actingKeyId: string, actingKey: Awaited<ReturnType<typeof freshKeypair>>, targetKeyId: string) {
+  const nonce = randomNonce();
+  const timestamp = Date.now();
+  const signedFields = { op: "keychain-revoke", namespace: identity.namespace, actingKeyId, targetKeyId, nonce, timestamp };
+  const signature = await actingKey.sign(normalizeProofMessage(signedFields));
+  const res = await post(origin, `/api/v1/keychain/keys/${targetKeyId}/revoke`, { namespace: identity.namespace, actingKeyId, nonce, timestamp, signature });
+  if (res.status !== 200) throw new Error(`revokeKey failed: ${res.status} ${JSON.stringify(res.json)}`);
 }
 
 async function grant(
@@ -265,5 +293,167 @@ describe("nodeGrants: the minimal walkthrough (design doc §8)", () => {
     // The genuine read, with its own real signature, still works.
     const genuineRead = verifyExecutorAction(owner.namespace, { grantId, operation: "read", target: "dashboard.status", params: null, nonce, timestamp, signature: readSignature });
     expect(genuineRead.ok).toBe(true);
+  });
+
+  it("the signature binds params too -- tampering the content invalidates it, and a used nonce cannot be replayed verbatim", async () => {
+    const origin = await start();
+    const owner = await claimIdentity(origin, "owner4", "owner-secret-nodegrants-4");
+    const ownerKey = await freshKeypair();
+    const ownerKeyId = await registerKey(origin, owner, ownerKey, "owner device");
+    const executor = await freshKeypair();
+    const grantId = crypto.randomUUID();
+    const granted = await grant(owner, ownerKey, ownerKeyId, grantId, "dashboard.status", ["write"], executor.publicKeyRaw);
+    expect(granted.ok).toBe(true);
+
+    // Sign a write with params {data:'A'}, then submit the SAME signature with params {data:'B'} --
+    // content is part of the signed payload (design §5: "operation, target AND params"), so this must fail.
+    const nonce = randomNonce();
+    const timestamp = Date.now();
+    const record = readNodeGrant(owner.namespace, grantId)!;
+    const signedForA = { op: "node-grant-act", grantId, namespace: owner.namespace, nodePath: record.nodePath, operation: "write", target: "dashboard.status", params: { data: "A" }, nonce, timestamp };
+    const signatureForA = await executor.sign(normalizeProofMessage(signedForA));
+
+    const tamperedParams = verifyExecutorAction(owner.namespace, { grantId, operation: "write", target: "dashboard.status", params: { data: "B" }, nonce, timestamp, signature: signatureForA });
+    expect(tamperedParams.ok).toBe(false);
+    if (!tamperedParams.ok) expect(tamperedParams.error).toBe("PROOF_INVALID");
+
+    // The genuine, untampered call with that same nonce succeeds once...
+    const first = verifyExecutorAction(owner.namespace, { grantId, operation: "write", target: "dashboard.status", params: { data: "A" }, nonce, timestamp, signature: signatureForA });
+    expect(first.ok).toBe(true);
+
+    // ...and replaying the EXACT same request a second time is rejected as a replay, not silently re-accepted.
+    const replayed = verifyExecutorAction(owner.namespace, { grantId, operation: "write", target: "dashboard.status", params: { data: "A" }, nonce, timestamp, signature: signatureForA });
+    expect(replayed.ok).toBe(false);
+    if (!replayed.ok) expect(replayed.error).toBe("REPLAY_REJECTED");
+  });
+
+  it("a grant is bounded by the granting key's CURRENT standing -- a since-revoked granting key cannot grant", async () => {
+    const origin = await start();
+    const owner = await claimIdentity(origin, "owner5", "owner-secret-nodegrants-5");
+    const adminKey = await freshKeypair();
+    const adminKeyId = await registerKey(origin, owner, adminKey, "admin device");
+    const secondKey = await freshKeypair();
+    const secondKeyId = await registerSecondKey(origin, owner, adminKeyId, adminKey, secondKey, "second device");
+    await revokeKey(origin, owner, adminKeyId, adminKey, secondKeyId);
+
+    const executor = await freshKeypair();
+    const grantId = crypto.randomUUID();
+    // secondKey is now revoked -- it can no longer sign anything on this identity's behalf, including a
+    // node grant, even though it was perfectly valid a moment ago. "Currently" is load-bearing.
+    const result = await grant(owner, secondKey, secondKeyId, grantId, "dashboard.status", ["read"], executor.publicKeyRaw);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("GRANTING_KEY_REVOKED");
+    expect(readNodeGrant(owner.namespace, grantId)).toBeNull();
+
+    // The still-active admin key can grant the same thing without issue -- the rejection above was about
+    // that specific key's standing, not about the namespace or the mechanism being broken.
+    const grantId2 = crypto.randomUUID();
+    const okResult = await grant(owner, adminKey, adminKeyId, grantId2, "dashboard.status", ["read"], executor.publicKeyRaw);
+    expect(okResult.ok).toBe(true);
+  });
+
+  it("the node boundary distinguishes a genuine descendant (covered) from a sibling that only shares a prefix (not covered)", async () => {
+    const origin = await start();
+    const owner = await claimIdentity(origin, "owner6", "owner-secret-nodegrants-6");
+    const ownerKey = await freshKeypair();
+    const ownerKeyId = await registerKey(origin, owner, ownerKey, "owner device");
+    appendSemanticMemory({ namespace: owner.namespace, path: "dashboard.status.detail", data: "DEEP OK" });
+    appendSemanticMemory({ namespace: owner.namespace, path: "dashboard.statusExtra", data: "SIBLING" });
+    const executor = await freshKeypair();
+    const grantId = crypto.randomUUID();
+    const granted = await grant(owner, ownerKey, ownerKeyId, grantId, "dashboard.status", ["read"], executor.publicKeyRaw);
+    expect(granted.ok).toBe(true);
+
+    // A genuine descendant of the granted node -- covered.
+    const descendantRead = await act(owner, executor, grantId, "read", "dashboard.status.detail");
+    expect(descendantRead.ok, JSON.stringify(descendantRead)).toBe(true);
+
+    // A sibling that merely shares the granted node's name as a text prefix, with no '.' boundary --
+    // must NOT be treated as inside "dashboard.status". This is exactly the bug class nodePathCovers's
+    // own unit test above guards against, proven here through the live action path too.
+    const siblingRead = await act(owner, executor, grantId, "read", "dashboard.statusExtra");
+    expect(siblingRead.ok).toBe(false);
+    if (!siblingRead.ok) expect(siblingRead.error).toBe("NOT_GRANTED");
+  });
+
+  it("the reserved-path guard rejects nodeGrants.* on BOTH generic write surfaces, not just one, before any signature is even checked", async () => {
+    const origin = await start();
+    const owner = await claimIdentity(origin, "owner7", "owner-secret-nodegrants-7");
+
+    // POST / (rootCommandHandler, commandHandler.ts). The reserved-path check runs before namespace
+    // resolution or signature verification (commandHandler.ts's own ordering), so an entirely unsigned
+    // request targeting the reserved branch is enough to prove the guard itself, without coupling this
+    // test to the generic write path's separate canonicalization/signing contract.
+    const rootWrite = await post(origin, "/", { path: "nodeGrants.forged", data: { grantId: "forged", operations: ["read", "write"] } });
+    expect(rootWrite.status).toBe(403);
+    expect(rootWrite.json?.error).toBe("NODE_GRANT_PATH_REQUIRES_NODE_GRANT_API");
+
+    // POST /api/v1/commit (syncHandler.ts) -- the OTHER generic write surface, same guard, same rejection,
+    // same reasoning: checked before any auth material is required.
+    const commitWrite = await post(origin, "/api/v1/commit", { events: [{ namespace: owner.namespace, path: "nodeGrants.forged2", data: { grantId: "forged2" } }] });
+    expect(commitWrite.status).toBe(403);
+    expect(commitWrite.json?.error).toBe("NODE_GRANT_PATH_REQUIRES_NODE_GRANT_API");
+
+    // Neither forged write actually landed.
+    expect(readNodeGrant(owner.namespace, "forged")).toBeNull();
+    expect(readNodeGrant(owner.namespace, "forged2")).toBeNull();
+  });
+});
+
+describe("nodeGrants: the real HTTP read surface (POST /api/v1/node-grants/read)", () => {
+  it("an authorized executor reads real data over HTTP, using only its own key -- never the identity's", async () => {
+    const origin = await start();
+    const owner = await claimIdentity(origin, "owner8", "owner-secret-nodegrants-8");
+    const ownerKey = await freshKeypair();
+    const ownerKeyId = await registerKey(origin, owner, ownerKey, "owner device");
+    appendSemanticMemory({ namespace: owner.namespace, path: "dashboard.status", data: "ALL SYSTEMS OK" });
+    const executor = await freshKeypair();
+    const grantId = crypto.randomUUID();
+    const granted = await grant(owner, ownerKey, ownerKeyId, grantId, "dashboard.status", ["read"], executor.publicKeyRaw);
+    expect(granted.ok).toBe(true);
+
+    const nonce = randomNonce();
+    const timestamp = Date.now();
+    const record = readNodeGrant(owner.namespace, grantId)!;
+    const signedFields = { op: "node-grant-act", grantId, namespace: owner.namespace, nodePath: record.nodePath, operation: "read", target: "dashboard.status", params: null, nonce, timestamp };
+    const signature = await executor.sign(normalizeProofMessage(signedFields));
+
+    const res = await post(origin, "/api/v1/node-grants/read", { namespace: owner.namespace, grantId, target: "dashboard.status", nonce, timestamp, signature });
+    expect(res.status, JSON.stringify(res.json)).toBe(200);
+    expect(res.json).toEqual({ ok: true, target: "dashboard.status", value: "ALL SYSTEMS OK" });
+  });
+
+  it("HTTP read: refused without a valid grant, and refused again immediately after revocation -- never returns data either way", async () => {
+    const origin = await start();
+    const owner = await claimIdentity(origin, "owner9", "owner-secret-nodegrants-9");
+    const ownerKey = await freshKeypair();
+    const ownerKeyId = await registerKey(origin, owner, ownerKey, "owner device");
+    appendSemanticMemory({ namespace: owner.namespace, path: "dashboard.status", data: "SECRET-ISH VALUE" });
+    const executor = await freshKeypair();
+    const grantId = crypto.randomUUID();
+
+    // No grant exists yet at all.
+    const nonceBefore = randomNonce();
+    const timestampBefore = Date.now();
+    const beforeSignedFields = { op: "node-grant-act", grantId, namespace: owner.namespace, nodePath: "dashboard.status", operation: "read", target: "dashboard.status", params: null, nonce: nonceBefore, timestamp: timestampBefore };
+    const beforeSignature = await executor.sign(normalizeProofMessage(beforeSignedFields));
+    const beforeGrant = await post(origin, "/api/v1/node-grants/read", { namespace: owner.namespace, grantId, target: "dashboard.status", nonce: nonceBefore, timestamp: timestampBefore, signature: beforeSignature });
+    expect(beforeGrant.status).toBe(404);
+    expect(beforeGrant.json?.value).toBeUndefined();
+
+    const granted = await grant(owner, ownerKey, ownerKeyId, grantId, "dashboard.status", ["read"], executor.publicKeyRaw);
+    expect(granted.ok).toBe(true);
+    const revoked = await revoke(owner, ownerKey, ownerKeyId, grantId);
+    expect(revoked.ok).toBe(true);
+
+    // The grant exists but is already revoked by the time the executor's HTTP read arrives.
+    const nonceAfter = randomNonce();
+    const timestampAfter = Date.now();
+    const afterSignedFields = { op: "node-grant-act", grantId, namespace: owner.namespace, nodePath: "dashboard.status", operation: "read", target: "dashboard.status", params: null, nonce: nonceAfter, timestamp: timestampAfter };
+    const afterSignature = await executor.sign(normalizeProofMessage(afterSignedFields));
+    const afterRevoke = await post(origin, "/api/v1/node-grants/read", { namespace: owner.namespace, grantId, target: "dashboard.status", nonce: nonceAfter, timestamp: timestampAfter, signature: afterSignature });
+    expect(afterRevoke.status).toBe(404);
+    expect(afterRevoke.json?.value).toBeUndefined();
+    expect(afterRevoke.json?.error).toBe("GRANT_NOT_FOUND");
   });
 });

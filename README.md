@@ -26,8 +26,6 @@ A **monad** is a daemon: it holds a live `.me` kernel, answers for a namespace o
 
 ## ⚡ Quick Start your Monads
 
-A monad is a daemon: a process you run that holds a live `.me` kernel, answers for a namespace over HTTP, and registers itself on the mesh so other monads and users can find it.
-
 **Clone**
 
 ```bash

@@ -18,7 +18,7 @@
 # monad
 > *A federated semantic compute runtime.*
 
-A **monad** is a daemon: it holds a live `.me` kernel, answers for a namespace over HTTP, and registers itself on the mesh so other monads and users can find it — talk to it through [`me.whatever(what)`](https://neurons-me.github.io/me.whatever.what.html) syntax.
+A **monad** is a daemon: it holds a live `.me` kernel, answers for a namespace over HTTP, and registers itself on the mesh so other monads and users can find it — talks through [`me.whatever(what)`](https://neurons-me.github.io/me.whatever.what.html) syntax.
 
 `me://Everything.is.just.a.hash.of.a.knowledge.unit`
 
@@ -35,7 +35,7 @@ cd monad/
 
 **Choose a runtime**
 
-🔷 **TypeScript** — the only runtime that exists today. Stable, 2.1.1.
+🔷 **TypeScript** — the only **stable runtime** that exists today. 
 
 ```bash
 cd Typescript
@@ -43,9 +43,7 @@ npm install
 npm run test
 ```
 
-🦀 **Rust** — not available yet. 🐍 **Python** — not available yet.
-
-**Run it.** A monad needs a seed — the 64-hex key its namespace identity and every derived secret trace back to. Same seed, same namespace, every time.
+**Run it.** A **monad** needs a seed — the 64-hex key its cryptographic identity and every derived secret trace back to.
 
 ```bash
 SEED="Tetragramaton" npm run dev
@@ -56,6 +54,8 @@ Or the compiled build:
 ```bash
 SEED="Tetragramaton" node dist/server.js
 ```
+
+Which namespace it answers for is a separate setting, `ME_NAMESPACE` — not derived from the seed. Leave it unset and it falls back to your machine's hostname.
 
 **Talk to it.** Two ways in, same tree either way.
 

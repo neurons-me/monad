@@ -18,11 +18,9 @@
 # monad
 > *A federated semantic compute runtime.*
 
-The passing state which involves and represents a multiplicity in the unity is what is called perception [**(distintion).**](https://suign.github.io/AxiomOfDistinction.html)
+A **monad** is a daemon: it holds a live `.me` kernel, answers for a namespace over HTTP, and registers itself on the mesh so other monads and users can find it — talk to it through [`me.whatever(what)`](https://neurons-me.github.io/me.whatever.what.html) syntax.
 
-A **monad** talks through `.me` as **[me.whatever(what)](https://neurons-me.github.io/me.whatever.what.html)** **syntax** - [Learn more.](https://neurons-me.github.io/me.whatever.what.html)
-
-#### `me://Everything.is.just.a.hash.of.a.knowledge.unit`
+`me://Everything.is.just.a.hash.of.a.knowledge.unit`
 
 ------
 

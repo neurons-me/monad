@@ -18,36 +18,21 @@
 # monad
 > *A federated semantic compute runtime.*
 
-The passing state which involves and represents a multiplicity in the unity… is what is called perception (distintion).
+The passing state which involves and represents a multiplicity in the unity is what is called perception [**(distintion).**](https://suign.github.io/AxiomOfDistinction.html)
 
-A monad is a running instance of the neurons.me stack — a daemon that holds a `.me` kernel, exposes it over HTTP, resolves namespace paths, and registers itself on the mesh so other monads and users can find it.
+A **monad** talks through `.me` as **[me.whatever(what)](https://neurons-me.github.io/me.whatever.what.html)** **syntax** - [Learn more.](https://neurons-me.github.io/me.whatever.what.html)
 
-### `me://Everything.is.just.a.hash.of.a.knowledge.unit`
+#### `me://Everything.is.just.a.hash.of.a.knowledge.unit`
 
 ------
 
-### Clone Git Repository
+## ⚡ Quick Start your Monads
 
-```bash
-git clone https://github.com/neurons-me/monad.git
-cd monad/
-```
+Run this on any machine, and that machine becomes a live monad — reachable at a namespace, resolving paths over HTTP, and visible to every other monad and user on the mesh. Clone the repo, pick a runtime:
 
-##### Select your language:
+**🔷 TypeScript, 🦀 Rust, 🐍 Python**
 
-|     | Source                        | Status           | Documentation                                             |
-| ----------- | ----------------------------- | ---------------- | --------------------------------------------------------- |
-| **Typescript** | `cd Typescript && npm install` | **Stable 2.1.1** | [TypeDocs ⟡](https://neurons-me.github.io/monad/Typescript/) |
-| **Python**  | ` - `               | Not Available    | [Python Docs](https://neurons-me.github.io/monad/Python/)       |
-| **Rust**    | ` - `             | Not Available    | [Rust Docs](https://neurons-me.github.io/monad/Rust/)   |
-
-**Example:**
-
-```bash
-cd Typescript
-npm install
-npm run test
-```
+<a href="https://neurons-me.github.io/QuickStart.Monads.html" target="_blank" rel="noopener noreferrer">Full walkthrough →</a>
 
 **Then run providing your local seed:**
 
@@ -60,8 +45,6 @@ If you want to run the compiled build:
 ```bash
 SEED="Tetragramaton" node dist/server.js
 ```
-
-Run this on any machine, and that machine can host one or many **monads** tuned into the same **namespace.**
 
 ------
 

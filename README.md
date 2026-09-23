@@ -28,23 +28,64 @@ A **monad** talks through `.me` as **[me.whatever(what)](https://neurons-me.gith
 
 ## ⚡ Quick Start your Monads
 
-Run this on any machine, and that machine becomes a live monad — reachable at a namespace, resolving paths over HTTP, and visible to every other monad and user on the mesh. Clone the repo, pick a runtime:
+A monad is a daemon: a process you run that holds a live `.me` kernel, answers for a namespace over HTTP, and registers itself on the mesh so other monads and users can find it.
 
-**🔷 TypeScript, 🦀 Rust, 🐍 Python**
+**Clone**
 
-<a href="https://neurons-me.github.io/QuickStart.Monads.html" target="_blank" rel="noopener noreferrer">Full walkthrough →</a>
+```bash
+git clone https://github.com/neurons-me/monad.git
+cd monad/
+```
 
-**Then run providing your local seed:**
+**Choose a runtime**
+
+🔷 **TypeScript** — the only runtime that exists today. Stable, 2.1.1.
+
+```bash
+cd Typescript
+npm install
+npm run test
+```
+
+🦀 **Rust** — not available yet. 🐍 **Python** — not available yet.
+
+**Run it.** A monad needs a seed — the 64-hex key its namespace identity and every derived secret trace back to. Same seed, same namespace, every time.
 
 ```bash
 SEED="Tetragramaton" npm run dev
 ```
 
-If you want to run the compiled build:
+Or the compiled build:
 
 ```bash
 SEED="Tetragramaton" node dist/server.js
 ```
+
+**Talk to it.** Two ways in, same tree either way.
+
+Over the wire, from any app, any device, any language:
+
+```
+GET /profile/name
+Host: username.cleaker.me
+```
+
+```
+"username" // that's it
+```
+
+In-process, writing directly against the kernel it holds:
+
+```ts
+me["@"]("jabellae");            // your digital identity
+me.profile.name("José Abella"); // declare meaning
+
+me("profile.name"); // "José Abella" — resolve meaning
+```
+
+**One tree, many monads.** Run this on any machine, and that machine can host one or many monads, all tuned to the same namespace. Adding another one never changes the namespace — only which monad is currently answering for it, decided by **subtractive synthesis**: no central coordinator picks a monad in advance; the mesh holds every registered monad for the namespace and subtracts the dead ones, routing to whichever survives.
+
+Full walkthrough — env vars, the compiled build, the subtractive-synthesis mechanism in full: <a href="https://neurons-me.github.io/QuickStart.Monads.html" target="_blank" rel="noopener noreferrer">Quick Start your Monads →</a>
 
 ------
 
@@ -103,15 +144,6 @@ lisa@127.0.0.1:8161                    Monad instance + endpoint
 
 All target `username.cleaker.me/profile`. 
 > ***The selected monad only changes execution, not meaning.***
-**When an app asks:**
-
-```
-GET /profile/name
-Host: username.cleaker.me
-```
-
-It gets back: `"username"`
-*That's it.*
 
 ------
 
@@ -133,7 +165,7 @@ There are three things working together:
 - **Want to understand the protocol?** → [NRP - Namespace Resolution Protocol](https://neurons-me.github.io/NRP/)
 - **Want to build an app on top of this?** → [this.me on npm](https://npmjs.com/package/this.me)
 - **Want to understand the big picture?** → [neurons.me](https://neurons.me/)
-- **Subtractive Synthesiser** → subtractive synthesis
+- **How does the mesh pick a live monad?** → [Subtractive Synthesis](https://neurons-me.github.io/monad/Typescript/typedocs/Subtractive-Synthesis.html)
 
 ------
 

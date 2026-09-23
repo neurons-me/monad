@@ -135,7 +135,7 @@ It gets back: `"username"`
 ## The pieces:
 There are three things working together:
 
-**[.me](https://suign.github.io/)** — the kernel. Knows how to store, encrypt, and derive your data from a single seed.
+**[.me](https://neurons-me.github.io/.me/)** — the kernel. Knows how to store, encrypt, and derive your data from a single seed.
 
 **[monads](https://neurons-me.github.io/monad/)** — active agents that can serve, resolve, execute, and coordinate.
 
@@ -147,7 +147,7 @@ There are three things working together:
 
 ## Where to go from here:
 - **Want to run it?** → [Typescript docs](https://neurons-me.github.io/monad/Typescript/)
-- **Want to understand the protocol?** → [NRP - Namespace Resolution Protocol](https://claude.ai/docs/en/Namespace Resolution Protocol.md)
+- **Want to understand the protocol?** → [NRP - Namespace Resolution Protocol](https://neurons-me.github.io/NRP/)
 - **Want to build an app on top of this?** → [this.me on npm](https://npmjs.com/package/this.me)
 - **Want to understand the big picture?** → [neurons.me](https://neurons.me/)
 - **Subtractive Synthesiser** → subtractive synthesis
@@ -156,7 +156,7 @@ There are three things working together:
 
 [Github Home](https://neurons-me.github.io)
 
-**MIT —** [neurons.me](https://neurons-me)
+**MIT —** [neurons.me](https://neurons.me)
 
 **Author:** [suiGn](https://suign.github.io/)
 

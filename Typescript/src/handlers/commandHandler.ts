@@ -5,8 +5,8 @@ import { extractLegacyWritePath, getMemoriesForNamespace, getNamespaceChainHead,
 import { isKeychainReservedPath } from "../claim/keychain.js";
 import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
 import { isNetgetReservedPath } from "../claim/netget.js";
-import { isGatewayRoutingRecordPath, isInternalRequest } from "../http/internalToken.js";
-import { saveSnapshot } from "../kernel/manager.js";
+import { isGatewayRoutingRecordPath, isInternalRequest, isSurfaceTelemetryReservedPath } from "../http/internalToken.js";
+import { isForeignUsersPrefixWrite, saveSnapshot } from "../kernel/manager.js";
 import { notify as notifyPathChanged } from "../kernel/pathNotify.js";
 import { createEnvelope, createErrorEnvelope } from "../http/envelope.js";
 import { normalizeHttpRequestToMeTarget } from "../http/meTarget.js";
@@ -213,6 +213,19 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
   // checks need the same normalization, not their own separate logic.
   const normalizedCandidatePath = candidatePath.replace(/\//g, ".").split(".").filter(Boolean).join(".");
 
+  // The namespace this request resolved to (Host header) may itself
+  // legitimately BE this monad's own root -- kernelPathFor never prefixes
+  // its writes in that case. Left unguarded, that means the root claim's
+  // own valid signature could write a path like "users.alice.profile.email"
+  // and land in exactly the kernel storage Alice's OWN claim resolves to --
+  // forging her data with only the root's signature, never hers. Proven
+  // live before this guard existed (rootWriteDirectionCheck.test.ts).
+  // Checked before every other guard: this is about WHERE the write lands
+  // physically, independent of which reserved branch (if any) it also is.
+  if (isForeignUsersPrefixWrite(namespace, normalizedCandidatePath)) {
+    return res.status(403).json(createErrorEnvelope(target, { error: "CANNOT_WRITE_ANOTHER_NAMESPACES_STORAGE" }));
+  }
+
   // keychain.* must only ever be mutated through the dedicated, validated
   // keychain API (permission/vigencia/replay checks, correct keyId
   // derivation) -- never through this generic namespace-write surface,
@@ -242,6 +255,17 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
   // this function does its own slash/dot normalization internally already.
   if (isGatewayRoutingRecordPath(candidatePath) && !isInternalRequest(req)) {
     return res.status(403).json(createErrorEnvelope(target, { error: "GATEWAY_ROUTING_RECORDS_REQUIRE_INTERNAL_CALLER" }));
+  }
+
+  // surface.* is this monad's own telemetry, written only by this process
+  // itself (hostTelemetryLedger.ts, usageLedger.ts) -- and the exact prefix
+  // getNamespaceChainHead() excludes from anti-replay head computation. An
+  // external signed write here would never move that excluded head, so its
+  // signed body would stay valid to replay forever; reserving the path to
+  // internal callers closes that by refusing the write in the first place,
+  // not just by excluding it from the head.
+  if (isSurfaceTelemetryReservedPath(candidatePath) && !isInternalRequest(req)) {
+    return res.status(403).json(createErrorEnvelope(target, { error: "SURFACE_TELEMETRY_REQUIRES_INTERNAL_CALLER" }));
   }
 
   // netget.* is this namespace's own physical-resource declaration (domains,

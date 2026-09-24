@@ -11,8 +11,8 @@ import { getNamespaceChainHead, isNamespaceWriteAuthorized } from "../claim/repl
 import { isKeychainReservedPath } from "../claim/keychain.js";
 import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
 import { isNetgetReservedPath } from "../claim/netget.js";
-import { isGatewayRoutingRecordPath, isInternalRequest } from "../http/internalToken.js";
-import { isForeignNamespaceCollapsingToRoot } from "../kernel/manager.js";
+import { isGatewayRoutingRecordPath, isInternalRequest, isSurfaceTelemetryReservedPath } from "../http/internalToken.js";
+import { isForeignNamespaceCollapsingToRoot, isForeignUsersPrefixWrite } from "../kernel/manager.js";
 
 // This used to be a fully open write: any POST here landed in
 // appendSemanticMemory() with zero identity check, regardless of who the
@@ -83,6 +83,21 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
 
     if (!rawEvents.length) return res.status(400).json({ error: "No events provided" });
 
+    // Same guard as rootCommandHandler (POST /): an event whose own
+    // `namespace` resolves to this monad's root (kernelPathFor never
+    // prefixes such a write) with a `path` reaching into users.<label>.*
+    // lands in a DIFFERENT namespace's own storage, forgeable with only the
+    // root claim's signature. Checked per-event, since each event carries
+    // its own namespace -- distinct from callerNamespace below.
+    const forgedUsersEvent = rawEvents.find((event) => {
+      if (!event || typeof event !== "object") return false;
+      const record = event as Record<string, unknown>;
+      return isForeignUsersPrefixWrite(String(record.namespace || ""), String(record.path || ""));
+    });
+    if (forgedUsersEvent) {
+      return res.status(403).json({ error: "CANNOT_WRITE_ANOTHER_NAMESPACES_STORAGE" });
+    }
+
     // Same reserved-path guard as rootCommandHandler (POST /) -- keychain.*
     // is only ever mutated through claim/keychain.ts's own validated
     // functions, never through a generic commit, even by the target
@@ -106,6 +121,18 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
     );
     if (routingEvent && !isInternalRequest(req)) {
       return res.status(403).json({ error: "GATEWAY_ROUTING_RECORDS_REQUIRE_INTERNAL_CALLER" });
+    }
+    // surface.* is this monad's own telemetry (hostTelemetryLedger.ts,
+    // usageLedger.ts) and the exact prefix getNamespaceChainHead() excludes
+    // from anti-replay head computation -- an external signed commit event
+    // here would never move that excluded head, so it would stay valid to
+    // replay forever. Reserved to internal callers for the same reason as
+    // the gateway routing records above.
+    const surfaceEvent = rawEvents.find(
+      (event) => event && typeof event === "object" && isSurfaceTelemetryReservedPath(String((event as Record<string, unknown>).path || "")),
+    );
+    if (surfaceEvent && !isInternalRequest(req)) {
+      return res.status(403).json({ error: "SURFACE_TELEMETRY_REQUIRES_INTERNAL_CALLER" });
     }
 
     // Reject before any authorization check runs, not just before the

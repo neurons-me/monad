@@ -345,4 +345,17 @@ describe("POST /api/v1/commit", () => {
     // deleting it.
     expect(replay.status).toBe(201);
   });
+
+  // Deliberately never implemented, kept failing-visible (vitest reports
+  // .todo entries as pending, never green) rather than folded into a
+  // passing assertion -- a review specifically asked that this gap not
+  // read as "fine" just because the test above is green. Blanket-rejecting
+  // any commit event whose namespace differs from the caller's own (the
+  // simpler alternative fix) was considered and rejected: this file's own
+  // "owner keeps writing group metadata"/"member writes a non-reserved
+  // field" tests above already exercise the shared-group-root case as real,
+  // working, pre-existing functionality -- rejecting it outright would be a
+  // regression, not a fix. The real fix is per-event (or joint-namespace-
+  // set) head binding.
+  it.todo("close the multi-namespace-event replay gap: per-event expectedHeadHash, bound to that event's own target namespace, not just callerNamespace");
 });

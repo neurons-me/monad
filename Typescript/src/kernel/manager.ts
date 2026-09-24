@@ -314,6 +314,36 @@ export function isForeignNamespaceCollapsingToRoot(namespace: string): boolean {
 }
 
 /**
+ * True when `path` would land under a DIFFERENT namespace's own isolated
+ * kernel storage (users.<label>.*) than the one `namespace` itself resolves
+ * to. Only meaningful when `namespace` resolves to literal kernel ROOT
+ * (namespaceToKernelPrefix(namespace) === "") -- a write from such a
+ * namespace is never further prefixed (kernelPathFor returns `path`
+ * unchanged), so a `path` value that itself starts with "users.<label>."
+ * reaches directly into that OTHER label's own storage, using only the
+ * root claim's own signature, never that user's.
+ *
+ * Proven exploitable live, not hypothesized: a root-claim-signed write with
+ * `path: "users.alice.profile.email"` overwrote Alice's own real
+ * profile.email, confirmed by a real HTTP round trip (claim, sign, POST,
+ * re-read) before this guard existed. This is the mirror-image gap of
+ * isForeignNamespaceCollapsingToRoot above: that one stops a namespace that
+ * should NOT be root from claiming root storage; this one stops the
+ * namespace that legitimately IS root from reaching, via a crafted path,
+ * into storage that belongs to a namespace that is NOT root.
+ *
+ * Namespaces that already resolve to users.<label> themselves are
+ * unaffected -- kernelPathFor's own prefixing already confines their
+ * writes there; this guard exists only for whoever resolves to the empty
+ * prefix.
+ */
+export function isForeignUsersPrefixWrite(namespace: string, pathInput: string): boolean {
+  if (namespaceToKernelPrefix(namespace) !== "") return false;
+  const p = String(pathInput || "").trim();
+  return p === "users" || /^users\.[^.]+(\.|$)/.test(p);
+}
+
+/**
  * True when `constant` is one of the namespace strings THIS PROCESS itself
  * is explicitly bound to -- never anything a caller/request can supply.
  *

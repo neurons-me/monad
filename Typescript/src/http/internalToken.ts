@@ -82,3 +82,20 @@ export function isGatewayRoutingRecordPath(pathInput: string): boolean {
   while (/^users\.[^.]+\./.test(p)) p = p.replace(/^users\.[^.]+\./, "");
   return p === "domains" || p.startsWith("domains.") || p === "domainIndex" || p.startsWith("domainIndex.");
 }
+
+/**
+ * surface.* is this process's own operational telemetry (hostTelemetryLedger.ts's
+ * surface.host.*, usageLedger.ts's surface.usage.*) -- written on an interval/
+ * per-request basis by the monad itself, never something an external caller
+ * should write directly. It is also the exact prefix replay.ts's
+ * getNamespaceChainHead() excludes from anti-replay head computation
+ * (Surface-Identity-Claims.md §7.8): a write there never moves that excluded
+ * head, so if an external, signed write to it were ever accepted, that same
+ * signed body would stay valid to replay indefinitely -- the exclusion and
+ * this reservation have to hold together, neither is sufficient alone.
+ */
+export function isSurfaceTelemetryReservedPath(pathInput: string): boolean {
+  let p = String(pathInput || "").trim().replace(/\//g, ".").split(".").filter(Boolean).join(".");
+  while (/^users\.[^.]+\./.test(p)) p = p.replace(/^users\.[^.]+\./, "");
+  return p === "surface" || p.startsWith("surface.");
+}

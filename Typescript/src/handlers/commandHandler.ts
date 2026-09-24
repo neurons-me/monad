@@ -4,6 +4,7 @@ import { claimNamespace, getClaim, openNamespace } from "../claim/records.js";
 import { extractLegacyWritePath, getMemoriesForNamespace, getNamespaceChainHead, isNamespaceWriteAuthorized, recordMemory } from "../claim/replay.js";
 import { isKeychainReservedPath } from "../claim/keychain.js";
 import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
+import { isNetgetReservedPath } from "../claim/netget.js";
 import { isGatewayRoutingRecordPath, isInternalRequest } from "../http/internalToken.js";
 import { saveSnapshot } from "../kernel/manager.js";
 import { notify as notifyPathChanged } from "../kernel/pathNotify.js";
@@ -181,18 +182,6 @@ export const rootCompatHandler: express.RequestHandler = (req, res, next) => {
   if (op === "open") return openRequestHandler(req, res, next);
   return next();
 };
-
-// netget.* is reserved for this namespace's own physical-resource config
-// (domains, ports, certs, delegates -- see Surface-Identity-Claims.md
-// §7.1/§7.7 in the cleaker repo's typedocs). Unlike isKeychainReservedPath()/
-// isGatewayAuthorityReservedPath() above, this is not routed to a dedicated
-// API -- once claimed, it's ordinary namespace data. Kept local to this file
-// (not its own module) since nothing else references it yet; extract if a
-// second call site needs it.
-function isNetgetReservedPath(pathInput: string): boolean {
-  const path = String(pathInput || "").trim();
-  return path === "netget" || path.startsWith("netget.");
-}
 
 // POST / — write surface only; claim/open live at POST /claims and POST /claims/open
 export const rootCommandHandler: express.RequestHandler = async (req, res) => {

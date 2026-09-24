@@ -104,6 +104,32 @@ async function claimTestIdentity(origin: string, username: string, secret: strin
   return { namespace, identityHash, sign };
 }
 
+type Identity = Awaited<ReturnType<typeof claimTestIdentity>>;
+
+async function fetchHead(origin: string, namespace: string): Promise<string> {
+  const res = await fetch(`${origin}/api/v1/write-head?namespace=${encodeURIComponent(namespace)}`);
+  const json = await res.json();
+  return json.expectedHeadHash;
+}
+
+// Signs and posts a commit for `caller`'s own namespace, fetching the
+// current chain head fresh before signing every time -- see
+// syncHandler.ts's commitHandler and Surface-Identity-Claims.md §7.7.
+// `overrides` lets a specific test assert something other than the caller's
+// own real identityHash/namespace (e.g. impersonation attempts) while still
+// getting a correctly-fetched head for the real underlying claim.
+async function commit(
+  origin: string,
+  caller: Identity,
+  events: unknown[],
+  overrides: Record<string, unknown> = {},
+) {
+  const expectedHeadHash = await fetchHead(origin, caller.namespace);
+  const signedFields = { events, identityHash: caller.identityHash, namespace: caller.namespace, expectedHeadHash, ...overrides };
+  const signature = await caller.sign(normalizeProofMessage(signedFields));
+  return post(origin, "/api/v1/commit", { ...signedFields, signature });
+}
+
 describe("POST /api/v1/commit", () => {
   let server: Server;
   let origin: string;
@@ -129,10 +155,7 @@ describe("POST /api/v1/commit", () => {
       { namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: caller.identityHash },
       { namespace: ROOT_NAMESPACE, path: "groups.book-club.name", data: "Book Club" },
     ];
-    const signedFields = { events, identityHash: caller.identityHash, namespace: caller.namespace };
-    const signature = await caller.sign(normalizeProofMessage(signedFields));
-
-    const res = await post(origin, "/api/v1/commit", { ...signedFields, signature });
+    const res = await commit(origin, caller, events);
     expect(res.status).toBe(201);
     expect(res.json.ok).toBe(true);
   });
@@ -161,10 +184,7 @@ describe("POST /api/v1/commit", () => {
   it("rejects a valid signature asserting a different identityHash than the claim holds", async () => {
     const caller = await claimTestIdentity(origin, "carol", "carol-secret");
     const events = [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.name", data: "Book Club" }];
-    const signedFields = { events, identityHash: "not-carol", namespace: caller.namespace };
-    const signature = await caller.sign(normalizeProofMessage(signedFields));
-
-    const res = await post(origin, "/api/v1/commit", { ...signedFields, signature });
+    const res = await commit(origin, caller, events, { identityHash: "not-carol" });
     expect(res.status).toBe(403);
     expect(res.json.error).toBe("IDENTITY_MISMATCH");
   });
@@ -172,10 +192,7 @@ describe("POST /api/v1/commit", () => {
   it("rejects a real signer writing created_by as someone else's namespace", async () => {
     const caller = await claimTestIdentity(origin, "dave", "dave-secret");
     const events = [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.created_by", data: "attacker.cleaker.me" }];
-    const signedFields = { events, identityHash: caller.identityHash, namespace: caller.namespace };
-    const signature = await caller.sign(normalizeProofMessage(signedFields));
-
-    const res = await post(origin, "/api/v1/commit", { ...signedFields, signature });
+    const res = await commit(origin, caller, events);
     expect(res.status).toBe(403);
     expect(res.json.error).toBe("ATTRIBUTION_MISMATCH");
   });
@@ -183,94 +200,69 @@ describe("POST /api/v1/commit", () => {
   it("rejects a real signer writing member.<username> for a different username", async () => {
     const caller = await claimTestIdentity(origin, "erin", "erin-secret");
     const events = [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.member.attacker", data: caller.namespace }];
-    const signedFields = { events, identityHash: caller.identityHash, namespace: caller.namespace };
-    const signature = await caller.sign(normalizeProofMessage(signedFields));
-
-    const res = await post(origin, "/api/v1/commit", { ...signedFields, signature });
+    const res = await commit(origin, caller, events);
     expect(res.status).toBe(403);
     expect(res.json.error).toBe("ATTRIBUTION_MISMATCH");
   });
 
   it("rejects a stranger self-joining an already-owned group", async () => {
     const owner = await claimTestIdentity(origin, "frank", "frank-secret");
-    const bootstrap = { events: [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: owner.identityHash }], identityHash: owner.identityHash, namespace: owner.namespace };
-    const bootstrapRes = await post(origin, "/api/v1/commit", { ...bootstrap, signature: await owner.sign(normalizeProofMessage(bootstrap)) });
+    const bootstrapRes = await commit(origin, owner, [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: owner.identityHash }]);
     expect(bootstrapRes.status).toBe(201);
 
     const stranger = await claimTestIdentity(origin, "gina", "gina-secret");
     const events = [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.member.gina", data: stranger.namespace }];
-    const signedFields = { events, identityHash: stranger.identityHash, namespace: stranger.namespace };
-    const signature = await stranger.sign(normalizeProofMessage(signedFields));
-
-    const res = await post(origin, "/api/v1/commit", { ...signedFields, signature });
+    const res = await commit(origin, stranger, events);
     expect(res.status).toBe(403);
     expect(res.json.error).toBe("GROUP_AUTHORIZATION_REQUIRED");
   });
 
   it("lets the owner keep writing group metadata after bootstrap", async () => {
     const owner = await claimTestIdentity(origin, "hank", "hank-secret");
-    const bootstrap = { events: [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: owner.identityHash }], identityHash: owner.identityHash, namespace: owner.namespace };
-    const bootstrapRes = await post(origin, "/api/v1/commit", { ...bootstrap, signature: await owner.sign(normalizeProofMessage(bootstrap)) });
+    const bootstrapRes = await commit(origin, owner, [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: owner.identityHash }]);
     expect(bootstrapRes.status).toBe(201);
 
     const events = [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.name", data: "Renamed Book Club" }];
-    const signedFields = { events, identityHash: owner.identityHash, namespace: owner.namespace };
-    const signature = await owner.sign(normalizeProofMessage(signedFields));
-
-    const res = await post(origin, "/api/v1/commit", { ...signedFields, signature });
+    const res = await commit(origin, owner, events);
     expect(res.status).toBe(201);
     expect(res.json.ok).toBe(true);
   });
 
   it("rejects a non-member rewriting group metadata", async () => {
     const owner = await claimTestIdentity(origin, "ivy", "ivy-secret");
-    const bootstrap = { events: [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: owner.identityHash }], identityHash: owner.identityHash, namespace: owner.namespace };
-    const bootstrapRes = await post(origin, "/api/v1/commit", { ...bootstrap, signature: await owner.sign(normalizeProofMessage(bootstrap)) });
+    const bootstrapRes = await commit(origin, owner, [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: owner.identityHash }]);
     expect(bootstrapRes.status).toBe(201);
 
     const stranger = await claimTestIdentity(origin, "jack", "jack-secret");
     const events = [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.name", data: "Hijacked" }];
-    const signedFields = { events, identityHash: stranger.identityHash, namespace: stranger.namespace };
-    const signature = await stranger.sign(normalizeProofMessage(signedFields));
-
-    const res = await post(origin, "/api/v1/commit", { ...signedFields, signature });
+    const res = await commit(origin, stranger, events);
     expect(res.status).toBe(403);
     expect(res.json.error).toBe("GROUP_AUTHORIZATION_REQUIRED");
   });
 
   it("lets a member with an explicit scope grant write a non-reserved field", async () => {
     const owner = await claimTestIdentity(origin, "kate", "kate-secret");
-    const bootstrap = { events: [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: owner.identityHash }], identityHash: owner.identityHash, namespace: owner.namespace };
-    expect((await post(origin, "/api/v1/commit", { ...bootstrap, signature: await owner.sign(normalizeProofMessage(bootstrap)) })).status).toBe(201);
+    expect((await commit(origin, owner, [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: owner.identityHash }])).status).toBe(201);
 
     const member = await claimTestIdentity(origin, "leo", "leo-secret");
-    const grant = { events: [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.grants.leo", data: ["notes:write"] }], identityHash: owner.identityHash, namespace: owner.namespace };
-    expect((await post(origin, "/api/v1/commit", { ...grant, signature: await owner.sign(normalizeProofMessage(grant)) })).status).toBe(201);
+    expect((await commit(origin, owner, [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.grants.leo", data: ["notes:write"] }])).status).toBe(201);
 
     const events = [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.notes.entry1", data: "hello" }];
-    const signedFields = { events, identityHash: member.identityHash, namespace: member.namespace };
-    const signature = await member.sign(normalizeProofMessage(signedFields));
-
-    const res = await post(origin, "/api/v1/commit", { ...signedFields, signature });
+    const res = await commit(origin, member, events);
     expect(res.status).toBe(201);
     expect(res.json.ok).toBe(true);
   });
 
   it("rejects a member without a matching scope writing that same field", async () => {
     const owner = await claimTestIdentity(origin, "mona", "mona-secret");
-    const bootstrap = { events: [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: owner.identityHash }], identityHash: owner.identityHash, namespace: owner.namespace };
-    expect((await post(origin, "/api/v1/commit", { ...bootstrap, signature: await owner.sign(normalizeProofMessage(bootstrap)) })).status).toBe(201);
+    expect((await commit(origin, owner, [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.owner", data: owner.identityHash }])).status).toBe(201);
 
     // "nora" is registered (has a grants entry, so isMember() is true) but was never granted notes:write.
     const member = await claimTestIdentity(origin, "nora", "nora-secret");
-    const register = { events: [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.grants.nora", data: [] }], identityHash: owner.identityHash, namespace: owner.namespace };
-    expect((await post(origin, "/api/v1/commit", { ...register, signature: await owner.sign(normalizeProofMessage(register)) })).status).toBe(201);
+    expect((await commit(origin, owner, [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.grants.nora", data: [] }])).status).toBe(201);
 
     const events = [{ namespace: ROOT_NAMESPACE, path: "groups.book-club.notes.entry1", data: "hijacked note" }];
-    const signedFields = { events, identityHash: member.identityHash, namespace: member.namespace };
-    const signature = await member.sign(normalizeProofMessage(signedFields));
-
-    const res = await post(origin, "/api/v1/commit", { ...signedFields, signature });
+    const res = await commit(origin, member, events);
     expect(res.status).toBe(403);
     expect(res.json.error).toBe("GROUP_AUTHORIZATION_REQUIRED");
   });
@@ -279,20 +271,78 @@ describe("POST /api/v1/commit", () => {
     const first = await claimTestIdentity(origin, "oscar", "oscar-secret");
     const second = await claimTestIdentity(origin, "petra", "petra-secret");
 
-    const claimAs = async (caller: { identityHash: string; namespace: string; sign: (m: string) => Promise<string> }) => {
-      const signedFields = {
-        events: [{ namespace: ROOT_NAMESPACE, path: "groups.concurrency-club.owner", data: caller.identityHash }],
-        identityHash: caller.identityHash,
-        namespace: caller.namespace,
-      };
-      const signature = await caller.sign(normalizeProofMessage(signedFields));
-      return post(origin, "/api/v1/commit", { ...signedFields, signature });
-    };
+    // first/second are two different identities' own namespaces -- their
+    // chain heads are independent, so this race is entirely about
+    // checkGroupAuthorization's own concurrency safety for "who becomes
+    // owner of groups.concurrency-club", not about the STALE_HEAD mechanism
+    // (which never sees a collision here, by construction).
+    const claimAs = (caller: Identity) =>
+      commit(origin, caller, [{ namespace: ROOT_NAMESPACE, path: "groups.concurrency-club.owner", data: caller.identityHash }]);
 
     const [resA, resB] = await Promise.all([claimAs(first), claimAs(second)]);
     const statuses = [resA.status, resB.status].sort();
     expect(statuses).toEqual([201, 403]);
     const rejected = resA.status === 403 ? resA : resB;
     expect(rejected.json.error).toBe("GROUP_AUTHORIZATION_REQUIRED");
+  });
+
+  // The two gaps a review found in commitHandler after rootCommandHandler
+  // (POST /) already had both fixes: this endpoint had the keychain.*/
+  // daemon.gateways.*/routing-record guards, but neither the netget.*
+  // guard nor chain-head binding (Surface-Identity-Claims.md §7.7).
+  it("rejects an unsigned commit event targeting netget.delegates for a never-claimed namespace", async () => {
+    const caller = await claimTestIdentity(origin, "quinn", "quinn-secret");
+    const unclaimedTarget = "never-claimed.cleaker.me";
+    const res = await commit(origin, caller, [
+      { namespace: unclaimedTarget, path: "netget.delegates", data: { attacker: { publicKey: "attacker-key", scopes: ["serve"] } } },
+    ]);
+    expect(res.status).toBe(403);
+    expect(res.json.error).toBe("NETGET_PATH_REQUIRES_CLAIM");
+  });
+
+  it("resending the exact same signed commit fails when its event targets the caller's OWN namespace", async () => {
+    const caller = await claimTestIdentity(origin, "riley", "riley-secret");
+    const events = [{ namespace: caller.namespace, path: "profile.note", data: "hello" }];
+    const expectedHeadHash = await fetchHead(origin, caller.namespace);
+    const signedFields = { events, identityHash: caller.identityHash, namespace: caller.namespace, expectedHeadHash };
+    const signature = await caller.sign(normalizeProofMessage(signedFields));
+    const body = { ...signedFields, signature };
+
+    const first = await post(origin, "/api/v1/commit", body);
+    expect(first.status).toBe(201);
+
+    const replay = await post(origin, "/api/v1/commit", body);
+    expect(replay.status).toBe(409);
+    expect(replay.json.error).toBe("STALE_HEAD");
+  });
+
+  // KNOWN, NOT-YET-CLOSED GAP -- documented here rather than silently
+  // passing. expectedHeadHash is bound to callerNamespace (the identity
+  // whose claim signs the commit), read fresh right before signing. When
+  // an event's own `namespace` differs from callerNamespace (the shared-
+  // group-root case this whole file exists to test), writing to THAT
+  // namespace never moves callerNamespace's own head -- so replaying an
+  // old commit whose events target a namespace other than the caller's own
+  // is NOT rejected. Closing this needs per-event (or joint-namespace-set)
+  // head binding, a harder design than this pass attempted; flagging it
+  // explicitly rather than letting the passing test above imply more than
+  // it proves.
+  it("KNOWN GAP: replaying a commit whose event targets a namespace OTHER than the caller's own is not yet rejected", async () => {
+    const caller = await claimTestIdentity(origin, "sana", "sana-secret");
+    const events = [{ namespace: ROOT_NAMESPACE, path: "groups.replay-gap-club.owner", data: caller.identityHash }];
+    const expectedHeadHash = await fetchHead(origin, caller.namespace);
+    const signedFields = { events, identityHash: caller.identityHash, namespace: caller.namespace, expectedHeadHash };
+    const signature = await caller.sign(normalizeProofMessage(signedFields));
+    const body = { ...signedFields, signature };
+
+    const first = await post(origin, "/api/v1/commit", body);
+    expect(first.status).toBe(201);
+
+    const replay = await post(origin, "/api/v1/commit", body);
+    // Documents the gap: this is 201 (accepted again), not the 409 it
+    // should eventually be. If this assertion starts failing, the gap has
+    // been closed -- update this test to expect 409/STALE_HEAD instead of
+    // deleting it.
+    expect(replay.status).toBe(201);
   });
 });

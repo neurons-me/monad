@@ -116,8 +116,15 @@ async function claimNamespaceAs(origin: string, namespace: string, identityHash:
 
 type Identity = Awaited<ReturnType<typeof claimNamespaceAs>>;
 
+async function fetchHead(origin: string, namespace: string): Promise<string> {
+  const res = await fetch(`${origin}/api/v1/write-head?namespace=${encodeURIComponent(namespace)}`);
+  const json = await res.json();
+  return json.expectedHeadHash;
+}
+
 async function commit(origin: string, caller: Identity, events: Array<{ namespace: string; path: string; data: unknown }>) {
-  const signedFields = { events, identityHash: caller.identityHash, namespace: caller.namespace };
+  const expectedHeadHash = await fetchHead(origin, caller.namespace);
+  const signedFields = { events, identityHash: caller.identityHash, namespace: caller.namespace, expectedHeadHash };
   const signature = await caller.sign(normalizeProofMessage(signedFields));
   return post(origin, "/api/v1/commit", { ...signedFields, signature });
 }

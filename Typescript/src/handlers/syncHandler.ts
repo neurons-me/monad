@@ -7,9 +7,10 @@ import {
 import { checkGroupAuthorization } from "../claim/groupAuthorization.js";
 import { checkAppAuthorization } from "../claim/appAuthorization.js";
 import { getClaim } from "../claim/records.js";
-import { isNamespaceWriteAuthorized } from "../claim/replay.js";
+import { getNamespaceChainHead, isNamespaceWriteAuthorized } from "../claim/replay.js";
 import { isKeychainReservedPath } from "../claim/keychain.js";
 import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
+import { isNetgetReservedPath } from "../claim/netget.js";
 import { isGatewayRoutingRecordPath, isInternalRequest } from "../http/internalToken.js";
 import { isForeignNamespaceCollapsingToRoot } from "../kernel/manager.js";
 
@@ -126,6 +127,27 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
       return res.status(403).json({ error: "FOREIGN_NAMESPACE_REJECTED", detail: "This namespace does not resolve to the monad's real root or a sub-identity of it -- it cannot be used as a write target here." });
     }
 
+    // Same reasoning as rootCommandHandler's own netget.* guard
+    // (Surface-Identity-Claims.md §7.1/§7.7): an unclaimed namespace has no
+    // claim to check a signature against, so without this, a commit event
+    // could write netget.delegates (or any other netget.* path) for any
+    // never-claimed namespace completely unsigned -- meshAnnounce.ts would
+    // read it as a real delegation. Checked per-EVENT against that event's
+    // own `namespace` field, not just the caller's claimed namespace: a
+    // commit is explicitly allowed to target a namespace other than the
+    // caller's own (the shared-root group case this file's header comment
+    // describes), so the netget guard has to follow the same per-event
+    // namespace, not assume it matches callerNamespace below.
+    const unclaimedNetgetEvent = rawEvents.find((event) => {
+      if (!event || typeof event !== "object") return false;
+      const record = event as Record<string, unknown>;
+      if (!isNetgetReservedPath(String(record.path || ""))) return false;
+      return !getClaim(String(record.namespace || "").trim().toLowerCase());
+    });
+    if (unclaimedNetgetEvent) {
+      return res.status(403).json({ error: "NETGET_PATH_REQUIRES_CLAIM" });
+    }
+
     const callerIdentityHash = String(body.identityHash || "").trim();
     const callerNamespace = String(body.namespace || "").trim().toLowerCase();
     if (!callerIdentityHash || !callerNamespace || !String(body.signature || "").trim()) {
@@ -141,7 +163,7 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
     }
 
     const signedFields: Record<string, unknown> = { events: rawEvents };
-    for (const key of ["identityHash", "namespace", "signature", "signedPayload"]) {
+    for (const key of ["identityHash", "namespace", "signature", "signedPayload", "expectedHeadHash"]) {
       if (body[key] !== undefined) signedFields[key] = body[key];
     }
     const authorized = isNamespaceWriteAuthorized({
@@ -151,6 +173,26 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
     });
     if (!authorized) {
       return res.status(403).json({ error: "PROOF_INVALID" });
+    }
+
+    // isNamespaceWriteAuthorized() above only proves "the claim holder
+    // signed exactly this body" -- same gap rootCommandHandler had before
+    // Surface-Identity-Claims.md §7.7's fix: nothing bound WHEN. A
+    // previously-valid signed commit could otherwise be replayed at any
+    // later time (e.g. a stale signed grant silently un-revoking a
+    // delegate). `namespace` is already effectively bound here (it's a
+    // required field, always part of signedFields above, unlike
+    // rootCommandHandler's namespace-from-Host-header gap) -- only the
+    // temporal binding was missing. No fallback for a body missing
+    // expectedHeadHash, for the same reason rootCommandHandler has none.
+    const expectedHeadHash = getNamespaceChainHead(callerNamespace, claim);
+    const bodyExpectedHeadHash = String(body.expectedHeadHash || "").trim();
+    if (bodyExpectedHeadHash !== expectedHeadHash) {
+      return res.status(409).json({
+        error: "STALE_HEAD",
+        detail: "This namespace's state has changed since the commit was signed (or the signed body never named the current head). Re-read the current head and re-sign.",
+        expectedHeadHash,
+      });
     }
 
     const attributionError = findAttributionMismatch(rawEvents, callerNamespace);

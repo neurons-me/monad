@@ -324,11 +324,27 @@ export function getMemoriesForNamespace(namespace: string): ReplayMemory[] {
  * re-claim by the very same identity still produces a fresh initial head,
  * since createdAt is set fresh at claim time.
  */
+// Operational/telemetry writes (hostTelemetryLedger.ts's surface.host.*,
+// usageLedger.ts's surface.usage.*) land under this namespace's own memory
+// sequence whenever this namespace happens to BE the monad's own self
+// identity (a real, common case -- e.g. a surface claiming its own
+// namespace per Surface-Identity-Claims.md §7.3), and both fire on an
+// interval/per-request basis, independent of anything a real client
+// actually wrote. Confirmed live: excluding this before computing the
+// chain head is not defensive-only -- without it, a legitimate claimed
+// write for the monad's own root namespace failed with a spurious
+// STALE_HEAD whenever a queued usage/telemetry write landed between the
+// client's read of the head and its signed write reaching the server,
+// which a request-per-second usage ledger makes near-certain, not rare.
+const CHAIN_HEAD_EXCLUDED_PREFIX = "surface.";
+
 export function getNamespaceChainHead(
   namespace: string,
   claim: { identityHash: string; createdAt: number },
 ): string {
-  const memories = getMemoriesForNamespace(namespace);
+  const memories = getMemoriesForNamespace(namespace).filter(
+    (memory) => !String(memory.path || "").startsWith(CHAIN_HEAD_EXCLUDED_PREFIX),
+  );
   const last = memories[memories.length - 1];
   if (last?.hash) return last.hash;
   return crypto

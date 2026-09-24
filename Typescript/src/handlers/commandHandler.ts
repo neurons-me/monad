@@ -1,7 +1,7 @@
 import type express from "express";
 import { claimRequestHandler, openRequestHandler } from "../http/claims.js";
 import { claimNamespace, getClaim, openNamespace } from "../claim/records.js";
-import { getMemoriesForNamespace, isNamespaceWriteAuthorized, recordMemory } from "../claim/replay.js";
+import { extractLegacyWritePath, getMemoriesForNamespace, isNamespaceWriteAuthorized, recordMemory } from "../claim/replay.js";
 import { isKeychainReservedPath } from "../claim/keychain.js";
 import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
 import { isGatewayRoutingRecordPath, isInternalRequest } from "../http/internalToken.js";
@@ -182,6 +182,18 @@ export const rootCompatHandler: express.RequestHandler = (req, res, next) => {
   return next();
 };
 
+// netget.* is reserved for this namespace's own physical-resource config
+// (domains, ports, certs, delegates -- see Surface-Identity-Claims.md
+// §7.1/§7.7 in the cleaker repo's typedocs). Unlike isKeychainReservedPath()/
+// isGatewayAuthorityReservedPath() above, this is not routed to a dedicated
+// API -- once claimed, it's ordinary namespace data. Kept local to this file
+// (not its own module) since nothing else references it yet; extract if a
+// second call site needs it.
+function isNetgetReservedPath(pathInput: string): boolean {
+  const path = String(pathInput || "").trim();
+  return path === "netget" || path.startsWith("netget.");
+}
+
 // POST / — write surface only; claim/open live at POST /claims and POST /claims/open
 export const rootCommandHandler: express.RequestHandler = async (req, res) => {
   const body = req.body;
@@ -193,6 +205,24 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
 
   const namespace = resolveNamespace(req);
   const timestamp = Date.now();
+  const claim = getClaim(namespace);
+
+  // The path this write actually targets, resolved the SAME way
+  // recordMemory() -> normalizeLegacyReplayMemory() resolves it (checking a
+  // nested body.payload.path before body.expression) -- every guard below
+  // must read the path through this one shared function, not its own
+  // ad hoc copy, or a request shaped to slip past the guard can still land
+  // on the reserved location once the real writer resolves it independently.
+  const candidatePath = extractLegacyWritePath(body);
+  // kernelWrite() (memoryStore.ts) turns a dotted path into a "/"-joined
+  // me:// URI (kpath.split(".").join("/")) before it ever reaches the
+  // kernel -- so "netget.delegates" and a literal "netget/delegates" from
+  // the caller land on the EXACT same physical location, and a
+  // startsWith("netget.")-style check that only recognizes the dotted form
+  // misses the slash form entirely. isGatewayRoutingRecordPath below
+  // already normalizes for exactly this reason; the other reserved-path
+  // checks need the same normalization, not their own separate logic.
+  const normalizedCandidatePath = candidatePath.replace(/\//g, ".").split(".").filter(Boolean).join(".");
 
   // keychain.* must only ever be mutated through the dedicated, validated
   // keychain API (permission/vigencia/replay checks, correct keyId
@@ -200,8 +230,7 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
   // even by the namespace's own claim holder. See keychain.ts's
   // isKeychainReservedPath() for why: this surface would otherwise let a
   // valid claim signature silently overwrite the registry by hand.
-  const candidatePath = String((body as Record<string, unknown>).path || (body as Record<string, unknown>).expression || "").trim();
-  if (isKeychainReservedPath(candidatePath)) {
+  if (isKeychainReservedPath(normalizedCandidatePath)) {
     return res.status(403).json(createErrorEnvelope(target, { error: "KEYCHAIN_PATH_REQUIRES_KEYCHAIN_API" }));
   }
   // daemon.gateways.* must only ever be mutated through the dedicated,
@@ -211,19 +240,38 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
   // storage, and a namespace that legitimately resolves to this monad's
   // own configured root writes UNPREFIXED at literal kernel root via this
   // generic surface (see kernel/manager.ts's isForeignNamespaceCollapsingToRoot()).
-  if (isGatewayAuthorityReservedPath(candidatePath)) {
+  if (isGatewayAuthorityReservedPath(normalizedCandidatePath)) {
     return res.status(403).json(createErrorEnvelope(target, { error: "GATEWAY_PATH_REQUIRES_GATEWAY_API" }));
   }
 
   // The gateway's routing records decide where a hostname's traffic goes. An
   // unclaimed namespace takes an unsigned write, so without this anyone reaching
   // the monad could add or repoint a domain. Only the machine's own callers
-  // (the gateway module, the netget CLI) hold the internal token.
+  // (the gateway module, the netget CLI) hold the internal token. Reads the
+  // path via extractLegacyWritePath()'s already-resolved candidatePath, not
+  // its own re-derivation, for the same reason the other guards do now --
+  // this function does its own slash/dot normalization internally already.
   if (isGatewayRoutingRecordPath(candidatePath) && !isInternalRequest(req)) {
     return res.status(403).json(createErrorEnvelope(target, { error: "GATEWAY_ROUTING_RECORDS_REQUIRE_INTERNAL_CALLER" }));
   }
 
-  const claim = getClaim(namespace);
+  // netget.* is this namespace's own physical-resource declaration (domains,
+  // ports, certs, delegates -- Surface-Identity-Claims.md §7.1/§7.7), meant
+  // to be ordinary namespace tree data once claimed, gated by nothing more
+  // than the same signature check every other write to that namespace
+  // already gets below. But an UNCLAIMED namespace has no claim to check a
+  // signature against at all -- the `if (claim)` block below is simply
+  // skipped -- so without this guard, anyone could write netget.delegates
+  // (or any other netget.* path) for any never-claimed namespace completely
+  // unsigned, and meshAnnounce.ts's isNamespaceUsableByIdentity() would read
+  // a resulting delegates entry as a real delegation. Unlike the two guards
+  // above, this one is conditional on claim state, not unconditional: once
+  // the namespace is claimed, netget.* writes fall through to the ordinary
+  // signature check like any other namespace data -- no dedicated API
+  // needed for it, unlike keychain.*/daemon.gateways.*.
+  if (isNetgetReservedPath(normalizedCandidatePath) && !claim) {
+    return res.status(403).json(createErrorEnvelope(target, { error: "NETGET_PATH_REQUIRES_CLAIM" }));
+  }
 
   if (claim) {
     const authorized = isNamespaceWriteAuthorized({

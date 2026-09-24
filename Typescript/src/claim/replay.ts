@@ -168,15 +168,43 @@ function semanticRowToReplayMemory(row: SemanticMemoryRow): ReplayMemory {
   );
 }
 
+/**
+ * The exact path a write of this body targets -- checks a nested
+ * `body.payload.path` before falling back to the OUTER `body.expression`,
+ * matching normalizeLegacyReplayMemory()'s own resolution precisely (it now
+ * calls this function directly, rather than duplicating the logic).
+ *
+ * Reserved-path guards (commandHandler.ts's keychain, gateway-authority, and
+ * netget reserved-path checks) MUST read the path this same way. Reading it differently
+ * -- e.g. only checking the outer `body.path`/`body.expression`, ignoring a
+ * nested `payload` object -- lets a caller shape a request that passes the
+ * guard while still writing to the reserved location, since this function
+ * (via normalizeLegacyReplayMemory) resolves the ACTUAL write target
+ * independently of whatever the guard checked. One shared function, used by
+ * every guard and the writer, makes that divergence structurally
+ * impossible instead of an easy-to-violate "keep two copies in sync"
+ * obligation. Confirmed as a real (not hypothetical) bypass before this fix:
+ * `{ payload: { path: "netget.delegates", value } }` read `path: undefined,
+ * expression: undefined` under the old body.path||body.expression guard
+ * logic, while this function (and the real writer) read
+ * `netget.delegates` from the nested payload.
+ */
+export function extractLegacyWritePath(body: unknown): string {
+  if (!isPlainObject(body)) return "";
+  const record = body as Record<string, unknown>;
+  const source = isPlainObject(record.payload) ? (record.payload as Record<string, unknown>) : record;
+  return String(
+    (typeof source.path === "string" && source.path) ||
+      (typeof record.expression === "string" && record.expression) ||
+      "",
+  ).trim();
+}
+
 function normalizeLegacyReplayMemory(input: unknown): ReplayMemory | null {
   if (!isPlainObject(input)) return null;
 
   const source = isPlainObject(input.payload) ? input.payload : input;
-  const path = String(
-    (typeof source.path === "string" && source.path) ||
-      (typeof input.expression === "string" && input.expression) ||
-      "",
-  ).trim();
+  const path = extractLegacyWritePath(input);
   if (!path) return null;
 
   const operator = normalizeOperator(source.operator);

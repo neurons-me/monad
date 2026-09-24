@@ -93,6 +93,12 @@ async function nrpRead(origin: string, host: string, dotPath: string) {
   return json?.target?.value;
 }
 
+async function fetchWriteHead(origin: string, namespace: string): Promise<string> {
+  const res = await fetch(`${origin}/api/v1/write-head?namespace=${encodeURIComponent(namespace)}`);
+  const json = await res.json();
+  return json.expectedHeadHash;
+}
+
 async function claimNamespaceAs(origin: string, namespace: string, identityHash: string, secret: string) {
   const branchSeed = await deriveBranchProofSeed(secret, namespace);
   const { privateKey, publicKey } = await importEd25519SigningKey(branchSeed);
@@ -178,8 +184,14 @@ describe("netget.* reserved-path authorization on rootCommandHandler", () => {
 
   it("once the namespace is claimed, a correctly signed write to netget.delegates succeeds", async () => {
     const owner = await claimNamespaceAs(origin, UNCLAIMED_SUB_NAMESPACE, "owner-identity", "owner-secret");
+    const expectedHeadHash = await fetchWriteHead(origin, UNCLAIMED_SUB_NAMESPACE);
 
-    const signedFields = { path: "netget.delegates", value: { aabbcc: { publicKey: "delegate-key", scopes: ["serve"] } } };
+    const signedFields = {
+      path: "netget.delegates",
+      value: { aabbcc: { publicKey: "delegate-key", scopes: ["serve"] } },
+      namespace: UNCLAIMED_SUB_NAMESPACE,
+      expectedHeadHash,
+    };
     const canonicalBody = toStableJson(signedFields);
     const signature = await owner.sign(canonicalBody);
 

@@ -1,7 +1,7 @@
 import type express from "express";
 import { claimRequestHandler, openRequestHandler } from "../http/claims.js";
 import { claimNamespace, getClaim, openNamespace } from "../claim/records.js";
-import { extractLegacyWritePath, getMemoriesForNamespace, isNamespaceWriteAuthorized, recordMemory } from "../claim/replay.js";
+import { extractLegacyWritePath, getMemoriesForNamespace, getNamespaceChainHead, isNamespaceWriteAuthorized, recordMemory } from "../claim/replay.js";
 import { isKeychainReservedPath } from "../claim/keychain.js";
 import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
 import { isGatewayRoutingRecordPath, isInternalRequest } from "../http/internalToken.js";
@@ -282,6 +282,33 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
     if (!authorized) {
       return res.status(403).json(createErrorEnvelope(target, { error: "NAMESPACE_WRITE_FORBIDDEN" }));
     }
+
+    // isNamespaceWriteAuthorized() only ever proves "the claim holder signed
+    // exactly this body" -- nothing before this bound WHICH namespace or
+    // WHEN. Both are real gaps (Surface-Identity-Claims.md §7.7): (a) the
+    // same signed body, replayed later, was still valid -- a stale signed
+    // grant could silently un-revoke a delegate; (b) one key holding claims
+    // on two namespaces could have a write meant for one replayed against
+    // the other, since nothing in the signature tied it to either. Requiring
+    // the signed body to name the target namespace AND the chain head it was
+    // signed against (getNamespaceChainHead) closes both: a signature is now
+    // valid for exactly one write, in one namespace, at one moment.
+    //
+    // No fallback for a body missing these fields -- accepting the old
+    // (unbound) signed-body shape "for now" would leave this gap open for
+    // any caller that simply doesn't send them. Every real signer (GUI's
+    // createCleakerSession.ts, the curl walkthrough in the docs) was updated
+    // in the same change that added this check.
+    const expectedHeadHash = getNamespaceChainHead(namespace, claim);
+    const bodyNamespace = String((body as Record<string, unknown>).namespace || "").trim();
+    const bodyExpectedHeadHash = String((body as Record<string, unknown>).expectedHeadHash || "").trim();
+    if (bodyNamespace !== namespace || bodyExpectedHeadHash !== expectedHeadHash) {
+      return res.status(409).json(createErrorEnvelope(target, {
+        error: "STALE_HEAD",
+        detail: "This namespace's state has changed since the write was signed (or the signed body never named this namespace/head). Re-read the current head and re-sign.",
+        expectedHeadHash,
+      }));
+    }
   }
 
   const blockIdentityHash = claim
@@ -341,5 +368,31 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
     path: entry?.path || String((body as any).expression || "").trim(),
     operator: entry?.operator ?? null,
     timestamp: entry?.timestamp || timestamp,
+  }));
+};
+
+// GET /api/v1/write-head?namespace=... — the chain head a signer must bind
+// into a write's signed body (namespace + expectedHeadHash, see
+// rootCommandHandler's own check above and Surface-Identity-Claims.md
+// §7.7). A successful write's own response already carries its new
+// `memoryHash` as the next head, so a client mid-session can chain off that
+// directly -- this endpoint exists for a session's first write (or after any
+// externally-caused change) when there's no prior write response to read it
+// from. Requires an existing claim: an unclaimed namespace has no signed
+// writes to protect, and returning a head for one would just be extra
+// surface for no purpose.
+export const writeHeadHandler: express.RequestHandler = (req, res) => {
+  const namespace = normalizeClaimableNamespace(String(req.query.namespace || ""));
+  const target = normalizeHttpRequestToMeTarget(req);
+  if (!namespace) {
+    return res.status(400).json(createErrorEnvelope(target, { error: "NAMESPACE_REQUIRED" }));
+  }
+  const claim = getClaim(namespace);
+  if (!claim) {
+    return res.status(404).json(createErrorEnvelope(target, { error: "CLAIM_NOT_FOUND" }));
+  }
+  return res.json(createEnvelope(target, {
+    namespace,
+    expectedHeadHash: getNamespaceChainHead(namespace, claim),
   }));
 };

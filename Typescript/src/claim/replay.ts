@@ -304,6 +304,39 @@ export function getMemoriesForNamespace(namespace: string): ReplayMemory[] {
   return [...merged.values()].sort((a, b) => a.timestamp - b.timestamp);
 }
 
+/**
+ * The current chain head for a namespace's memory sequence -- the hash a
+ * signer must bind into a write's signed payload (Surface-Identity-Claims.md
+ * §7.7's anti-replay fix) so the server can reject any write whose signature
+ * was computed against a state that has since moved. The signature itself
+ * still only ever proves "the claim holder authorized This Exact body" --
+ * this is what turns that into "authorized it for THIS namespace, at THIS
+ * moment", closing both a same-namespace replay (a stale signed grant
+ * silently un-revoking a delegate) and a cross-namespace replay (the same
+ * key, claiming two namespaces, replaying a write meant for one against the
+ * other -- nothing in the signed body itself bound it to either before this).
+ *
+ * The empty-chain case (no writes yet) deliberately does NOT return a fixed
+ * constant (e.g. ""): a fixed initial head would let the very FIRST signed
+ * write for a namespace be replayed after that namespace's state resets back
+ * to empty (a legitimate scenario -- re-claiming after data loss, or a test
+ * fixture). Binding it to the claim's own identityHash AND createdAt means a
+ * re-claim by the very same identity still produces a fresh initial head,
+ * since createdAt is set fresh at claim time.
+ */
+export function getNamespaceChainHead(
+  namespace: string,
+  claim: { identityHash: string; createdAt: number },
+): string {
+  const memories = getMemoriesForNamespace(namespace);
+  const last = memories[memories.length - 1];
+  if (last?.hash) return last.hash;
+  return crypto
+    .createHash("sha256")
+    .update(`genesis:${claim.identityHash}:${claim.createdAt}`)
+    .digest("hex");
+}
+
 export function isNamespaceWriteAuthorized(input: NamespaceWriteAuthInput): boolean {
   const claimIdentityHash = String(input.claimIdentityHash || "").trim();
   if (!claimIdentityHash) return false;

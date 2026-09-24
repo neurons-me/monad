@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import { bootstrapMonad, type MonadBootstrapResult, type MonadOptions } from "./bootstrap.js";
 import { createBridgeHandler } from "./handlers/bridgeHandler.js";
-import { meCommandHandler, rootCommandHandler, rootCompatHandler } from "./handlers/commandHandler.js";
+import { meCommandHandler, rootCommandHandler, rootCompatHandler, writeHeadHandler } from "./handlers/commandHandler.js";
 import { explainRequestHandler, inspectRequestHandler } from "./handlers/explainHandler.js";
 import { createLedgerHandlers } from "./handlers/ledgerHandler.js";
 import { commitHandler, syncEventsHandler, namespaceOwnerHandler } from "./handlers/syncHandler.js";
@@ -191,6 +191,7 @@ export async function createMonadApp(options: MonadOptions = {}): Promise<MonadA
   app.post("/api/v1/commit", commitHandler);
   app.get("/api/v1/sync", syncEventsHandler);
   app.get("/api/v1/namespace-owner", namespaceOwnerHandler);
+  app.get("/api/v1/write-head", writeHeadHandler);
   app.get("/api/v1/keychain/keys", listKeychainKeysHandler);
   app.get("/api/v1/keychain/keys/:keyId", getKeychainKeyHandler);
   app.post("/api/v1/keychain/keys", registerKeychainKeyHandler);

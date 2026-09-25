@@ -233,11 +233,28 @@ describe("sign-up claim flow -- POST /claims as the genesis write, no separate u
     });
     assert.equal(claimRes.status, 201, JSON.stringify(await claimRes.clone().json().catch(() => ({}))));
 
+    // The claim proof itself -- captured exactly as useCleakerAuth.ts's
+    // real sign-up flow builds it, with a real, non-null challenge (a
+    // canonicalJson string, not proveKernelNamespace()'s null default) --
+    // must NOT be replayable as an open, even from the right key, even
+    // immediately after the claim it was made for. Before the "open:"
+    // prefix requirement this would have succeeded: same ClaimProof shape,
+    // same verification pipeline, and the claim's own challenge string
+    // trivially "looked like" an unused open nonce.
+    const claimReplayedAsOpenRes = await fetch(`${base}/claims/signIn`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ namespace: userNamespace, proof: claimProof }),
+    });
+    const claimReplayedAsOpenJson: any = await claimReplayedAsOpenRes.json().catch(() => ({}));
+    assert.equal(claimReplayedAsOpenRes.status, 400, JSON.stringify(claimReplayedAsOpenJson));
+    assert.equal(claimReplayedAsOpenJson?.target?.error ?? claimReplayedAsOpenJson?.error, "NONCE_REQUIRED");
+
     // Open with a real proof from the SAME key the claim used -- the
     // claim/open pipeline reuses the identical this.me ClaimProof shape
     // (see monad's claim/records.ts openNamespace() for why), with a real
     // per-open nonce carried in the proof's own `challenge` field.
-    const openProof = await node.prove({ rootNamespace: ROOT_NAMESPACE, challenge: "reopen-nonce-1" });
+    const openProof = await node.prove({ rootNamespace: ROOT_NAMESPACE, challenge: "open:reopen-nonce-1" });
     const openRes = await fetch(`${base}/claims/signIn`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -265,7 +282,7 @@ describe("sign-up claim flow -- POST /claims as the genesis write, no separate u
     // proves verification actually checks against THIS namespace's own
     // record.publicKey, not just that the message names the right namespace.
     const wrongKeyNode = deriveCleakerNode(username, "a completely different password", ROOT_NAMESPACE) as any;
-    const wrongKeyProof = await wrongKeyNode.prove({ rootNamespace: ROOT_NAMESPACE, challenge: "reopen-nonce-2" });
+    const wrongKeyProof = await wrongKeyNode.prove({ rootNamespace: ROOT_NAMESPACE, challenge: "open:reopen-nonce-2" });
     assert.equal(wrongKeyProof.namespace, userNamespace); // same target, different key underneath
     assert.notEqual(wrongKeyProof.publicKey, openProof.publicKey);
     const wrongKeyRes = await fetch(`${base}/claims/signIn`, {

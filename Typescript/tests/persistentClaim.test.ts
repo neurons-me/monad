@@ -177,7 +177,7 @@ describe("persistent claims", () => {
     expect(verifyPersistentClaim(namespace)).toBe(true);
 
     // Opening with a real proof from the SAME key the claim recorded succeeds.
-    const openProof = await buildProof(keypair, namespace, identityHash, "open-nonce-1");
+    const openProof = await buildProof(keypair, namespace, identityHash, "open:open-nonce-1");
     const opened = await openNamespace({ namespace, proof: openProof });
     expect(opened.ok).toBe(true);
 
@@ -185,7 +185,7 @@ describe("persistent claims", () => {
     // otherwise well-formed proof) is rejected.
     const invalidSigResult = await openNamespace({
       namespace,
-      proof: { ...(await buildProof(keypair, namespace, identityHash, "open-nonce-2")), signature: toBase64Url(crypto.randomBytes(64)) },
+      proof: { ...(await buildProof(keypair, namespace, identityHash, "open:open-nonce-2")), signature: toBase64Url(crypto.randomBytes(64)) },
     });
     expect(invalidSigResult).toEqual({ ok: false, error: "CLAIM_VERIFICATION_FAILED" });
 
@@ -193,7 +193,7 @@ describe("persistent claims", () => {
     // verification actually checks against record.publicKey, not just that
     // "some" valid proof was attached.
     const otherKeypair = await generateEd25519Keypair();
-    const wrongKeyProof = await buildProof(otherKeypair, namespace, identityHash, "open-nonce-3");
+    const wrongKeyProof = await buildProof(otherKeypair, namespace, identityHash, "open:open-nonce-3");
     const wrongKeyResult = await openNamespace({ namespace, proof: wrongKeyProof });
     expect(wrongKeyResult).toEqual({ ok: false, error: "CLAIM_VERIFICATION_FAILED" });
 
@@ -201,6 +201,40 @@ describe("persistent claims", () => {
     // rejected — a repeated nonce, not silently re-verified.
     const replayed = await openNamespace({ namespace, proof: openProof });
     expect(replayed).toEqual({ ok: false, error: "NONCE_REUSED" });
+  });
+
+  it("rejects a captured CLAIM proof replayed as an open, even from the right key within the window", async () => {
+    // The specific gap review caught: proveKernelNamespace()'s challenge:
+    // null default is only true for cleaker's OWN claimRemote() -- a real
+    // production caller (useCleakerAuth.ts's sign-up flow) signs a real,
+    // non-null challenge on its CLAIM proof too (a canonicalJson string
+    // binding it to /claims specifically). Before the "open:" prefix
+    // requirement, that non-null challenge would trivially satisfy "looks
+    // like an unused open nonce" -- meaning a claim response observed in
+    // transit (e.g. network logging, a browser extension) could be
+    // replayed as a real open within the 60s window, handing back real
+    // memories a claim's own response never includes.
+    const namespace = uniqueNamespace();
+    const identityHash = uniqueIdentityHash();
+    const keypair = await generateEd25519Keypair();
+
+    // A claim proof with a real, non-null challenge -- exactly what
+    // useCleakerAuth.ts's real /claims call signs (not cleaker's own
+    // null-challenge claimRemote() shape).
+    const claimProofWithChallenge = await buildProof(keypair, namespace, identityHash, "canonicalJson-style-challenge-not-a-nonce");
+    const claimed = await claimNamespace({ namespace, identityHash, proof: claimProofWithChallenge });
+    assert.equal(claimed.ok, true);
+
+    // Replaying that EXACT claim proof as an open must fail -- it has no
+    // "open:" prefix, so it is never even treated as a candidate nonce.
+    const replayedAsOpen = await openNamespace({ namespace, proof: claimProofWithChallenge });
+    assert.deepEqual(replayedAsOpen, { ok: false, error: "NONCE_REQUIRED" });
+
+    // A genuinely "open:"-prefixed proof from the same key still works --
+    // confirms the rejection above is about the prefix, not the key/namespace.
+    const realOpenProof = await buildProof(keypair, namespace, identityHash, "open:the-real-thing");
+    const realOpen = await openNamespace({ namespace, proof: realOpenProof });
+    assert.equal(realOpen.ok, true);
   });
 
   it("preserves an explicit namespace public key and still signs the passport locally", async () => {

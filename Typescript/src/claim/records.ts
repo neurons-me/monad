@@ -377,10 +377,24 @@ export async function openNamespace(input: NamespaceOpenInput): Promise<OpenName
   const proofTimestamp = normalizeProofTimestamp(proof, payload);
   if (!enforceOpenChallengeWindow(proofTimestamp)) return { ok: false, error: "PROOF_TIMESTAMP_INVALID" };
 
-  // A genuine claim proof always has challenge: null (proveKernelNamespace's
-  // own hardcoded value) -- so this also structurally rejects a captured
-  // claim proof being replayed here as an open.
-  const nonce = String(payload.challenge || "").trim();
+  // Domain-separated, not just "any non-null challenge" -- a claim proof's
+  // own challenge is NOT reliably null. useCleakerAuth.ts's sign-up flow
+  // (the real production /claims caller) signs a real, non-null challenge
+  // of its own (a canonicalJson string binding the claim to its
+  // destination) -- proveKernelNamespace()'s hardcoded null is only true
+  // for cleaker's OWN claimRemote() path, not every caller. Without this
+  // prefix, a captured claim proof from that flow would verify as a valid
+  // OPEN too (identical message shape, identical verification pipeline,
+  // and its own challenge string trivially satisfies "looks like an unused
+  // nonce") within the 60s window -- and open() hands back real memories,
+  // which a claim's own response never does. The prefix is the whole fix:
+  // every OPEN_NONCE_PREFIX is a distinct wire convention this function
+  // alone recognizes, so nothing signed for a different purpose (a claim,
+  // a future third use of prove()) can satisfy it by coincidence.
+  const OPEN_NONCE_PREFIX = "open:";
+  const rawChallenge = String(payload.challenge || "").trim();
+  if (!rawChallenge.startsWith(OPEN_NONCE_PREFIX)) return { ok: false, error: "NONCE_REQUIRED" };
+  const nonce = rawChallenge.slice(OPEN_NONCE_PREFIX.length);
   if (!nonce) return { ok: false, error: "NONCE_REQUIRED" };
   if (!claimOpenNonce(namespace, nonce, proofTimestamp)) return { ok: false, error: "NONCE_REUSED" };
 

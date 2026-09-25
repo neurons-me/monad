@@ -61,7 +61,7 @@ async function testVerified() {
     throw new Error(`claim failed with ${claim.error}`);
   }
 
-  const openProof = await buildProof(keypair, namespace, identityHash, "verified-nonce");
+  const openProof = await buildProof(keypair, namespace, identityHash, "open:verified-nonce");
   const opened = await openNamespace({ namespace, proof: openProof });
   assert.equal(opened.ok, true, "open should succeed with a real proof from the claimed key");
   if (!opened.ok) {
@@ -105,7 +105,7 @@ async function testClaimMaterializesRootUserPointer() {
   assert.deepEqual(pointer.data, { __ptr: namespace });
 
   const afterClaimCount = rootMemories.length;
-  const openProof = await buildProof(keypair, namespace, identityHash, "root-pointer-nonce");
+  const openProof = await buildProof(keypair, namespace, identityHash, "open:root-pointer-nonce");
   const opened = await openNamespace({ namespace, proof: openProof });
   assert.equal(opened.ok, true, "open should succeed after claim");
   if (!opened.ok) {
@@ -130,7 +130,7 @@ async function testFailed() {
   // A proof from a DIFFERENT keypair -- well-formed, just not the one the
   // claim recorded -- must fail verification, not merely "not match a secret".
   const wrongKeypair = await generateEd25519Keypair();
-  const wrongKeyProof = await buildProof(wrongKeypair, namespace, identityHash, "failed-nonce");
+  const wrongKeyProof = await buildProof(wrongKeypair, namespace, identityHash, "open:failed-nonce");
   const opened = await openNamespace({ namespace, proof: wrongKeyProof });
   assert.equal(opened.ok, false, "open should fail with a proof from the wrong key");
   if (opened.ok) {
@@ -151,7 +151,7 @@ async function testNonceReused() {
     throw new Error(`claim failed with ${claim.error}`);
   }
 
-  const openProof = await buildProof(keypair, namespace, identityHash, "reused-nonce");
+  const openProof = await buildProof(keypair, namespace, identityHash, "open:reused-nonce");
 
   const firstOpen = await openNamespace({ namespace, proof: openProof });
   assert.equal(firstOpen.ok, true, "first open with a fresh nonce should succeed");

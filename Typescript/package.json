@@ -11,6 +11,9 @@
     "monad.ai": "./dist/src/cli/monads.js",
     "monads": "./dist/src/cli/monads.js"
   },
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",

@@ -7,6 +7,13 @@ env/*.keys.json
 # runs — was never actually covered by env/*.keys.json above (different path
 # shape) and had been silently committed since the repo's first commit.
 env/claims/.keys/*.private.pem
+# Real local namespace-claim records (public keys, identity hashes,
+# signatures) and this machine's own self-identity config — no private
+# keys, but real dev-machine data that had been committed since the
+# repo's first commit. Untracked going forward, not scrubbed from
+# history (see git log for the reasoning).
+env/claims/*.json
+env/self.json
 *.local
 .env*
 .DS_Store

@@ -262,14 +262,19 @@ function resolveClaimKeys(input: {
     };
   }
 
-  const generated = generateEd25519Keypair();
-  return {
-    namespacePublicKey: buildPublicKeyRecord(generated.publicPem, generated.alg, "generated"),
-    proofKey: buildPublicKeyRecord(generated.publicPem, generated.alg, "generated"),
-    proofPrivateKeyPem: generated.privatePem,
-    proofPrivateKeyPath: getPersistentClaimPrivateKeyPath(input.namespace),
-    persistPrivateKey: true,
-  };
+  // Neither a client-supplied key NOR a previously-stored one for this
+  // namespace: there is nothing to build the namespace's own identity key
+  // (namespacePublicKey) from. This used to fall through to
+  // generateEd25519Keypair() here, minting and holding the private key on
+  // this process's own disk -- a namespace "claimed" that way was never
+  // actually sovereign: only the server could ever produce a signature for
+  // it, matching neither the claimer's password nor any recovery phrase.
+  // Already unreachable from claimNamespace()'s real call path today (a
+  // proof is mandatory there, and a valid proof always yields a publicKey
+  // before this function is ever called) -- this throw makes that a
+  // structural guarantee instead of an accident of today's call order, so
+  // a future change to claimNamespace() can't silently resurrect it.
+  throw new Error("CLAIM_KEY_REQUIRED");
 }
 
 export function buildPersistentClaimBundle(input: {

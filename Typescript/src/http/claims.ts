@@ -133,7 +133,6 @@ export const claimRequestHandler: express.RequestHandler = async (req, res) => {
 
   const out = await claimNamespace({
     namespace,
-    secret: String(body.secret || ""),
     identityHash: String(body.identityHash || "").trim(),
     publicKey: String(body.publicKey || "").trim() || null,
     privateKey: String(body.privateKey || "").trim() || null,
@@ -145,9 +144,9 @@ export const claimRequestHandler: express.RequestHandler = async (req, res) => {
       out.error === "NAMESPACE_TAKEN"
         ? 409
         : out.error === "NAMESPACE_REQUIRED"
-            || out.error === "SECRET_REQUIRED"
             || out.error === "CLAIM_KEY_INVALID"
             || out.error === "CLAIM_KEYPAIR_MISMATCH"
+            || out.error === "CLAIM_KEY_REQUIRED"
             || out.error === "PROOF_MESSAGE_INVALID"
             || out.error === "PROOF_NAMESPACE_MISMATCH"
             || out.error === "PROOF_TIMESTAMP_INVALID"
@@ -184,25 +183,28 @@ export const claimRequestHandler: express.RequestHandler = async (req, res) => {
   }));
 };
 
-export const openRequestHandler: express.RequestHandler = (req, res) => {
+export const openRequestHandler: express.RequestHandler = async (req, res) => {
   const target = normalizeHttpRequestToMeTarget(req);
   const body = req.body ?? {};
-  const out = openNamespace({
+  const out = await openNamespace({
     namespace: String(body.namespace || ""),
-    secret: String(body.secret || ""),
-    identityHash: String(body.identityHash || "").trim(),
+    proof: (body.proof && typeof body.proof === "object") ? body.proof : null,
   });
 
   if (!out.ok) {
     const status =
       out.error === "CLAIM_NOT_FOUND"
         ? 404
-        : out.error === "CLAIM_VERIFICATION_FAILED" || out.error === "IDENTITY_MISMATCH"
+        : out.error === "CLAIM_VERIFICATION_FAILED" || out.error === "CLAIM_KEY_UNAVAILABLE" || out.error === "NONCE_REUSED"
           ? 403
         : out.error === "NAMESPACE_REQUIRED"
-            || out.error === "SECRET_REQUIRED"
-            || out.error === "IDENTITY_HASH_REQUIRED"
+            || out.error === "PROOF_MESSAGE_INVALID"
+            || out.error === "PROOF_NAMESPACE_MISMATCH"
+            || out.error === "PROOF_TIMESTAMP_INVALID"
+            || out.error === "NONCE_REQUIRED"
           ? 400
+          : out.error === "PROOF_REQUIRED"
+            ? 403
           : 500;
     return res.status(status).json(createErrorEnvelope(target, { error: out.error }));
   }
@@ -223,7 +225,7 @@ export const openRequestHandler: express.RequestHandler = (req, res) => {
     proofId: computeProofId({
       namespace: out.record.namespace,
       identityHash: out.record.identityHash,
-      noise: out.noise,
+      openedAt,
       memories,
     }),
     openedAt,
@@ -240,7 +242,6 @@ export const openRequestHandler: express.RequestHandler = (req, res) => {
     identityHash: out.record.identityHash,
     createdAt: openedClaim.claimedAt || out.record.createdAt,
     profile: openedClaim.profile,
-    noise: out.noise,
     memories,
     openedAt,
   }));

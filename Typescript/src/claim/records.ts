@@ -1,8 +1,7 @@
 import crypto from "crypto";
 import { normalizeProofMessage, verifyEd25519Signature } from "this.me";
-import { getKernel } from "../kernel/manager.js";
+import { getKernel, getRootNamespace } from "../kernel/manager.js";
 import { saveSnapshot } from "../kernel/manager.js";
-import { decryptNoise, deriveSecretCommitment, deriveUnlockKey, encryptNoise } from "./derive.js";
 import { buildPersistentClaimBundle, writePersistentClaimBundle } from "./manager.js";
 import { hasReservedHandleLabel, normalizeNamespaceIdentity, normalizeNamespaceRootName, parseNamespaceIdentityParts } from "../namespace/identity.js";
 import { appendSemanticMemory } from "./memoryStore.js";
@@ -203,7 +202,6 @@ export function getClaim(namespace: string): ClaimRecord | undefined {
 
 export async function claimNamespace(input: NamespaceClaimInput): Promise<ClaimNamespaceResult> {
   const namespace = normalizeNamespace(input.namespace);
-  const secret = String(input.secret || "");
   const resolved = await resolveClaimIdentity(input);
   const identityHash = resolved.ok ? resolved.identityHash : "";
   // input.publicKey is a distinct, optional concept from the proof's own
@@ -219,16 +217,11 @@ export async function claimNamespace(input: NamespaceClaimInput): Promise<ClaimN
   // www.<root> is the root's own front door and api.<root> its service address:
   // never a person's handle, so never claimable as one -- whoever asks.
   if (hasReservedHandleLabel(namespace)) return { ok: false, error: "RESERVED_HANDLE" };
-  if (!secret) return { ok: false, error: "SECRET_REQUIRED" };
   if (!resolved.ok) return { ok: false, error: resolved.error };
 
   const exists = getClaim(namespace);
   if (exists) return { ok: false, error: "NAMESPACE_TAKEN" };
 
-  const noise = crypto.randomBytes(32).toString("hex");
-  const secretCommitment = deriveSecretCommitment(namespace, secret);
-  const unlockKey = deriveUnlockKey(namespace, secret);
-  const encryptedNoise = encryptNoise(noise, unlockKey);
   const now = Date.now();
   let persistentClaim: PersistentClaimSummary;
 
@@ -244,8 +237,6 @@ export async function claimNamespace(input: NamespaceClaimInput): Promise<ClaimN
     const record: ClaimRecord = {
       namespace,
       identityHash,
-      secretCommitment,
-      encryptedNoise,
       publicKey: bundle.summary.claim.publicKey.key,
       createdAt: now,
       updatedAt: now,
@@ -261,36 +252,150 @@ export async function claimNamespace(input: NamespaceClaimInput): Promise<ClaimN
     const code = error instanceof Error ? error.message : String(error);
     if (code === "CLAIM_KEYPAIR_MISMATCH") return { ok: false, error: "CLAIM_KEYPAIR_MISMATCH" };
     if (code === "CLAIM_KEY_INVALID") return { ok: false, error: "CLAIM_KEY_INVALID" };
+    if (code === "CLAIM_KEY_REQUIRED") return { ok: false, error: "CLAIM_KEY_REQUIRED" };
     return { ok: false, error: "CLAIM_PERSIST_FAILED" };
   }
 
   const record = getClaim(namespace)!;
-  return { ok: true, noise, persistentClaim, record };
+  return { ok: true, persistentClaim, record };
 }
 
-export function openNamespace(input: NamespaceOpenInput): OpenNamespaceResult {
+// Reopening a namespace no longer trusts a shared secret at all -- it is
+// authorized exactly the way a write is: a real Ed25519 signature, verified
+// against the claim's own record.publicKey (this.me/prove()'s own signing
+// key, the same key every write already gets checked against). Two things
+// this closes that a shared secret never could: (1) possessing the
+// password already means possessing the signing key (deriveCompoundSeed is
+// the SAME one-way function feeding both) -- a second, independent
+// "recovery secret" sent over the wire on every open added a leak with no
+// corresponding security gain; (2) a recovery-phrase-derived identity
+// signs with the SAME recovered key it always would, so recovery is
+// unaffected by removing the secret path.
+//
+// The proof is the SAME shape claimNamespace() already verifies
+// (ClaimProof: message/signature/publicKey/timestamp, parsed by
+// parseClaimProofPayload into {identityHash, expression, namespace,
+// rootNamespace, challenge, timestamp}) -- produced by calling this.me's
+// own prove() a second time, the exact way cleaker's proveKernelNamespace()
+// already does for claim, just with a real per-open nonce as `challenge`
+// instead of claim's hardcoded null. Reusing this shape (rather than a
+// bespoke {op, namespace, audience, nonce, timestamp} message, which
+// this.me's prove() has no way to produce -- its message shape is fixed)
+// means no new low-level signing code is needed anywhere this is called
+// from. Two of its existing fields do the job review's design asked for
+// under different names:
+//   - `rootNamespace` IS the audience binding: checked against THIS
+//     process's own getRootNamespace(), never trusted from the payload,
+//     so a signature made for one monad can't be replayed against a
+//     different one serving the same namespace (e.g. a netget mesh
+//     delegate) -- the two would reconstruct a different rootNamespace.
+//   - `challenge` carries the anti-replay nonce (claimed via
+//     claimOpenNonce below); a genuine claim proof always has
+//     challenge: null (proveKernelNamespace's own hardcoded value), so it
+//     can never itself be replayed as an open -- NONCE_REQUIRED rejects it.
+//
+// Short on purpose (open happens on every login, not once like a claim) --
+// this is also the nonce store's retention window below, so the exposure
+// from a process restart mid-window (the in-memory nonce set is lost on
+// restart, so a signed-and-already-used open message could be replayed
+// once more before it ages out) stays bounded to roughly this long, not
+// indefinitely. Documented here rather than "fixed" because fixing it
+// (persisting nonces) trades an already-small, time-boxed window for
+// unbounded disk growth -- not a clearly better trade.
+const OPEN_CHALLENGE_MAX_AGE_MS = 60 * 1000;
+
+function enforceOpenChallengeWindow(timestamp: number): boolean {
+  return Math.abs(Date.now() - timestamp) <= OPEN_CHALLENGE_MAX_AGE_MS;
+}
+
+// namespace -> (nonce -> expiresAt). Process-local, in-memory, never
+// persisted -- see OPEN_CHALLENGE_MAX_AGE_MS's own comment for why that's
+// an accepted, bounded gap rather than a bug. There is no equivalent store
+// to reuse from the write path: writes bind to a rotating chain head
+// (getNamespaceChainHead in replay.ts), which only works because a write
+// actually moves the head: opening a namespace doesn't write anything, so
+// the same identical signed message would otherwise verify every time.
+const usedOpenNonces = new Map<string, Map<string, number>>();
+
+function pruneExpiredOpenNonces(namespace: string, now: number): void {
+  const nonces = usedOpenNonces.get(namespace);
+  if (!nonces) return;
+  for (const [nonce, expiresAt] of nonces) {
+    if (expiresAt <= now) nonces.delete(nonce);
+  }
+  if (nonces.size === 0) usedOpenNonces.delete(namespace);
+}
+
+// Returns false when `nonce` was already used (within its still-live
+// window) for `namespace` -- the caller must treat that as a rejected
+// replay, not retry or ignore it. Claims the nonce as a side effect only
+// when returning true, so a rejected attempt never consumes it.
+function claimOpenNonce(namespace: string, nonce: string, timestamp: number): boolean {
+  const now = Date.now();
+  pruneExpiredOpenNonces(namespace, now);
+  let nonces = usedOpenNonces.get(namespace);
+  if (nonces?.has(nonce)) return false;
+  if (!nonces) {
+    nonces = new Map();
+    usedOpenNonces.set(namespace, nonces);
+  }
+  nonces.set(nonce, now + OPEN_CHALLENGE_MAX_AGE_MS);
+  return true;
+}
+
+/** Test-only: clears the in-memory open-nonce store between test cases/files. */
+export function resetOpenNonceStoreForTests(): void {
+  usedOpenNonces.clear();
+}
+
+export async function openNamespace(input: NamespaceOpenInput): Promise<OpenNamespaceResult> {
   const namespace = normalizeNamespace(input.namespace);
-  const secret = String(input.secret || "");
-  const identityHash = String(input.identityHash || "").trim();
+  const proof = input.proof;
 
   if (!namespace) return { ok: false, error: "NAMESPACE_REQUIRED" };
-  if (!secret) return { ok: false, error: "SECRET_REQUIRED" };
-  if (!identityHash) return { ok: false, error: "IDENTITY_HASH_REQUIRED" };
+  if (!proof) return { ok: false, error: "PROOF_REQUIRED" };
 
   const record = getClaim(namespace);
   if (!record) return { ok: false, error: "CLAIM_NOT_FOUND" };
-  if (identityHash !== record.identityHash) return { ok: false, error: "IDENTITY_MISMATCH" };
+  // A claim persisted before this session's proof-mandatory fix could have
+  // no client-held key at all (the server generated and held one on the
+  // caller's behalf -- see claim/manager.ts's resolveClaimKeys, and the
+  // fallback branches removed there in the same change as this function).
+  // Such a namespace cannot be reopened by anyone via a real signature; it
+  // was never sovereign in the sense this scheme requires, and re-claiming
+  // it is the only way forward, not something this function can paper over.
+  if (!record.publicKey) return { ok: false, error: "CLAIM_KEY_UNAVAILABLE" };
 
-  const secretCommitment = deriveSecretCommitment(namespace, secret);
-  if (!record.secretCommitment || secretCommitment !== record.secretCommitment) {
+  const payload = parseClaimProofPayload(proof);
+  if (!payload) return { ok: false, error: "PROOF_MESSAGE_INVALID" };
+  if (payload.namespace !== namespace) return { ok: false, error: "PROOF_NAMESPACE_MISMATCH" };
+  // Audience binding, see this function's own header comment.
+  if (normalizeNamespaceRootName(payload.rootNamespace) !== getRootNamespace()) {
+    return { ok: false, error: "PROOF_NAMESPACE_MISMATCH" };
+  }
+
+  const proofTimestamp = normalizeProofTimestamp(proof, payload);
+  if (!enforceOpenChallengeWindow(proofTimestamp)) return { ok: false, error: "PROOF_TIMESTAMP_INVALID" };
+
+  // A genuine claim proof always has challenge: null (proveKernelNamespace's
+  // own hardcoded value) -- so this also structurally rejects a captured
+  // claim proof being replayed here as an open.
+  const nonce = String(payload.challenge || "").trim();
+  if (!nonce) return { ok: false, error: "NONCE_REQUIRED" };
+  if (!claimOpenNonce(namespace, nonce, proofTimestamp)) return { ok: false, error: "NONCE_REUSED" };
+
+  const verified = await verifyEd25519Signature(String(proof.publicKey || ""), proof.message, String(proof.signature || ""));
+  if (!verified) return { ok: false, error: "CLAIM_VERIFICATION_FAILED" };
+
+  let provenPem: string;
+  try {
+    provenPem = rawEd25519PublicKeyToPem(String(proof.publicKey || ""));
+  } catch {
     return { ok: false, error: "CLAIM_VERIFICATION_FAILED" };
   }
+  // The proof is a genuinely valid signature -- but from WHOSE key? Must be
+  // the exact key this namespace's claim recorded, not merely "a" valid key.
+  if (provenPem !== record.publicKey) return { ok: false, error: "CLAIM_VERIFICATION_FAILED" };
 
-  try {
-    const unlockKey = deriveUnlockKey(namespace, secret);
-    const noise = decryptNoise(record.encryptedNoise, unlockKey);
-    return { ok: true, record, noise };
-  } catch {
-    return { ok: false, error: "NOISE_DECRYPT_FAILED" };
-  }
+  return { ok: true, record };
 }

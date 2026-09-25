@@ -7,24 +7,26 @@ export type NamespaceClaimProof = {
 
 export type NamespaceClaimInput = {
   namespace: string;
-  secret: string;
   identityHash?: string;
   publicKey?: string | null;
   privateKey?: string | null;
   proof?: NamespaceClaimProof | null;
 };
 
+// { namespace, proof }: proof is a real this.me ClaimProof (the same shape
+// claimNamespace() verifies), produced by calling prove() a second time
+// with a real nonce as `challenge` instead of claim's hardcoded null. See
+// records.ts's openNamespace() for why this shape is reused instead of a
+// bespoke one, and how its rootNamespace/challenge fields double as the
+// audience binding and anti-replay nonce.
 export type NamespaceOpenInput = {
   namespace: string;
-  secret: string;
-  identityHash: string;
+  proof?: NamespaceClaimProof | null;
 };
 
 export type ClaimRecord = {
   namespace: string;
   identityHash: string;
-  secretCommitment: string;
-  encryptedNoise: string;
   publicKey?: string | null;
   createdAt: number;
   updatedAt: number;
@@ -62,17 +64,17 @@ export type PersistentClaimSummary = {
 };
 
 export type ClaimNamespaceResult =
-  | { ok: true; record: ClaimRecord; noise: string; persistentClaim: PersistentClaimSummary }
+  | { ok: true; record: ClaimRecord; persistentClaim: PersistentClaimSummary }
   | {
       ok: false;
       error:
         | "NAMESPACE_REQUIRED"
-        | "SECRET_REQUIRED"
         | "PROOF_REQUIRED"
         | "NAMESPACE_TAKEN"
         | "RESERVED_HANDLE"
         | "CLAIM_KEY_INVALID"
         | "CLAIM_KEYPAIR_MISMATCH"
+        | "CLAIM_KEY_REQUIRED"
         | "PROOF_INVALID"
         | "PROOF_MESSAGE_INVALID"
         | "PROOF_NAMESPACE_MISMATCH"
@@ -81,15 +83,18 @@ export type ClaimNamespaceResult =
     };
 
 export type OpenNamespaceResult =
-  | { ok: true; record: ClaimRecord; noise: string }
+  | { ok: true; record: ClaimRecord }
   | {
       ok: false;
       error:
         | "NAMESPACE_REQUIRED"
-        | "SECRET_REQUIRED"
-        | "IDENTITY_HASH_REQUIRED"
+        | "PROOF_REQUIRED"
+        | "PROOF_MESSAGE_INVALID"
+        | "PROOF_NAMESPACE_MISMATCH"
+        | "PROOF_TIMESTAMP_INVALID"
+        | "NONCE_REQUIRED"
+        | "NONCE_REUSED"
         | "CLAIM_NOT_FOUND"
-        | "IDENTITY_MISMATCH"
-        | "CLAIM_VERIFICATION_FAILED"
-        | "NOISE_DECRYPT_FAILED";
+        | "CLAIM_KEY_UNAVAILABLE"
+        | "CLAIM_VERIFICATION_FAILED";
     };

@@ -15,26 +15,40 @@
  * WHY CRYPTOGRAPHIC CLAIMS?
  * Without crypto, anyone could claim any namespace by just writing to disk.
  * With cryptographic claims:
- *   - Only the holder of the private key + secret can "open" (re-authenticate) the namespace
+ *   - Only the holder of the private key can "open" (re-authenticate) the namespace
  *   - The daemon can verify its own claim file hasn't been tampered with
  *   - Different devices can hold different keypairs while sharing a namespace
  *
- * HOW TO "OPEN" A NAMESPACE:
- * After claiming, you can re-authenticate with:
- *   openNamespace({ namespace, secret, identityHash }) → { ok: true }
- *   Wrong secret → { ok: false, error: "CLAIM_VERIFICATION_FAILED" }
+ * HOW TO "OPEN" A NAMESPACE (rewritten this session -- no more shared secret):
+ * openNamespace({ namespace, proof }) verifies `proof` as a real this.me
+ * ClaimProof -- the SAME shape claimNamespace() itself verifies -- from the
+ * SAME key the claim recorded, with a real per-open nonce carried in the
+ * proof's own `challenge` field. `rootNamespace` (also inside the proof)
+ * doubles as the audience binding: checked against the server's own
+ * getRootNamespace(), never trusted from the payload -- that is what stops
+ * a signature made for one monad from being replayed against another
+ * serving the same namespace. A shared "secret" is gone entirely: it used
+ * to be the exact same material the signing key itself derives from
+ * (deriveCompoundSeed), so sending it over the wire on every open leaked
+ * key-deriving material for no corresponding security gain -- see
+ * typedocs/Architecture/Identity-Namespace-Recovery-Audit.md §12 item 7.
  *
- * WHAT WE TEST (3 cases):
- *   1. Happy path: claim, verify, open, reject wrong secret
- *   2. Supplied public key: client provides their own key, daemon adds its proof key
- *   3. Keypair mismatch: public + private keys from different pairs → rejected
+ * WHAT WE TEST:
+ *   1. Happy path: claim, verify, open with a real signature, reject an
+ *      invalid one, reject one from a different keypair, reject a repeated
+ *      nonce.
+ *   2. Supplied public key: client provides their own key, daemon adds its
+ *      proof key.
+ *   3. Keypair mismatch: public + private keys from different pairs → rejected.
  */
 
 import crypto from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { claimNamespace, openNamespace } from "../src/claim/records";
+import { normalizeProofMessage } from "this.me";
+import { claimNamespace, openNamespace, resetOpenNonceStoreForTests } from "../src/claim/records";
+import { getRootNamespace } from "../src/kernel/manager";
 import {
   getPersistentClaimPath,
   loadPersistentClaim,
@@ -52,6 +66,35 @@ function uniqueIdentityHash() {
   return crypto.randomBytes(32).toString("hex");
 }
 
+// A real Ed25519 keypair the test controls end to end -- generated once,
+// used to BOTH sign the claim proof (so record.publicKey is this key) and
+// later sign an open challenge with it (or, for the negative cases,
+// deliberately NOT with it). buildClaimProof (helpers/claimProof.ts)
+// generates its own throwaway keypair internally and never exposes the
+// private key, which is fine for tests that only claim -- these tests also
+// need to open afterward with the SAME key, so they build the proof by hand.
+async function generateEd25519Keypair(): Promise<CryptoKeyPair> {
+  return crypto.webcrypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as Promise<CryptoKeyPair>;
+}
+
+function toBase64Url(bytes: ArrayBuffer): string {
+  return Buffer.from(bytes).toString("base64url");
+}
+
+// Builds a real ClaimProof from a keypair this test fully controls.
+// `challenge: null` (the default) matches claimNamespace()'s own shape;
+// pass a nonce string to build an OPEN proof instead -- same function,
+// since the server verifies both through the identical pipeline.
+async function buildProof(keypair: CryptoKeyPair, namespace: string, identityHash: string, challenge: string | null = null) {
+  const rootNamespace = getRootNamespace();
+  const timestamp = Date.now();
+  const publicKeyRaw = toBase64Url(await crypto.webcrypto.subtle.exportKey("raw", keypair.publicKey));
+  const payload = { identityHash, expression: "test-expression", namespace, rootNamespace, challenge, timestamp };
+  const message = normalizeProofMessage(payload);
+  const signature = toBase64Url(await crypto.webcrypto.subtle.sign("Ed25519", keypair.privateKey, new TextEncoder().encode(message)));
+  return { message, signature, publicKey: publicKeyRaw, timestamp };
+}
+
 describe("persistent claims", () => {
   // Each test gets a fresh temporary directory for claim files.
   // Without this, a claim from test A would already exist when test B runs,
@@ -62,6 +105,7 @@ describe("persistent claims", () => {
   beforeEach(() => {
     claimDir = fs.mkdtempSync(path.join(os.tmpdir(), "monad-claims-"));
     process.env.MONAD_CLAIM_DIR = claimDir;
+    resetOpenNonceStoreForTests();
   });
 
   afterEach(() => {
@@ -71,6 +115,7 @@ describe("persistent claims", () => {
       process.env.MONAD_CLAIM_DIR = originalClaimDir;
     }
     fs.rmSync(claimDir, { recursive: true, force: true });
+    resetOpenNonceStoreForTests();
   });
 
   it("creates a signed persistent claim and stores it on disk", async () => {
@@ -109,12 +154,9 @@ describe("persistent claims", () => {
 
     const namespace = uniqueNamespace();
     const identityHash = uniqueIdentityHash();
-    const out = await claimNamespace({
-      namespace,
-      secret: "luna",
-      identityHash,
-      proof: await buildClaimProof({ namespace, identityHash }),
-    });
+    const keypair = await generateEd25519Keypair();
+    const claimProof = await buildProof(keypair, namespace, identityHash);
+    const out = await claimNamespace({ namespace, identityHash, proof: claimProof });
 
     expect(out.ok).toBe(true);
     if (!out.ok) return;
@@ -134,24 +176,31 @@ describe("persistent claims", () => {
     // The claim file signature must verify correctly
     expect(verifyPersistentClaim(namespace)).toBe(true);
 
-    // Opening with the correct credentials should succeed
-    const opened = openNamespace({
-      namespace,
-      secret: "luna",
-      identityHash: out.record.identityHash,
-    });
+    // Opening with a real proof from the SAME key the claim recorded succeeds.
+    const openProof = await buildProof(keypair, namespace, identityHash, "open-nonce-1");
+    const opened = await openNamespace({ namespace, proof: openProof });
     expect(opened.ok).toBe(true);
 
-    // Opening with a wrong secret must fail
-    const rejected = openNamespace({
+    // An invalid signature (garbage bytes, still base64url-shaped, on an
+    // otherwise well-formed proof) is rejected.
+    const invalidSigResult = await openNamespace({
       namespace,
-      secret: "sol", // wrong secret
-      identityHash: out.record.identityHash,
+      proof: { ...(await buildProof(keypair, namespace, identityHash, "open-nonce-2")), signature: toBase64Url(crypto.randomBytes(64)) },
     });
-    expect(rejected).toEqual({
-      ok: false,
-      error: "CLAIM_VERIFICATION_FAILED",
-    });
+    expect(invalidSigResult).toEqual({ ok: false, error: "CLAIM_VERIFICATION_FAILED" });
+
+    // A well-formed proof from a DIFFERENT keypair is rejected — proves
+    // verification actually checks against record.publicKey, not just that
+    // "some" valid proof was attached.
+    const otherKeypair = await generateEd25519Keypair();
+    const wrongKeyProof = await buildProof(otherKeypair, namespace, identityHash, "open-nonce-3");
+    const wrongKeyResult = await openNamespace({ namespace, proof: wrongKeyProof });
+    expect(wrongKeyResult).toEqual({ ok: false, error: "CLAIM_VERIFICATION_FAILED" });
+
+    // Replaying the EXACT same proof that already succeeded above is
+    // rejected — a repeated nonce, not silently re-verified.
+    const replayed = await openNamespace({ namespace, proof: openProof });
+    expect(replayed).toEqual({ ok: false, error: "NONCE_REUSED" });
   });
 
   it("preserves an explicit namespace public key and still signs the passport locally", async () => {
@@ -181,7 +230,6 @@ describe("persistent claims", () => {
     const identityHash = uniqueIdentityHash();
     const out = await claimNamespace({
       namespace,
-      secret: "sol",
       identityHash,
       publicKey: supplied, // client's own public key
       proof: await buildClaimProof({ namespace, identityHash }),
@@ -216,7 +264,6 @@ describe("persistent claims", () => {
     const identityHash = uniqueIdentityHash();
     const out = await claimNamespace({
       namespace,
-      secret: "estrella",
       identityHash,
       publicKey: a.publicKey.export({ type: "spki", format: "pem" }).toString(),   // from A
       privateKey: b.privateKey.export({ type: "pkcs8", format: "pem" }).toString(), // from B (!)

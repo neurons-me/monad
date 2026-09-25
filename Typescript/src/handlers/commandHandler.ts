@@ -27,8 +27,9 @@ import {
 function claimStatusCode(error: string): number {
   if (error === "NAMESPACE_TAKEN") return 409;
   if (
-    error === "NAMESPACE_REQUIRED" || error === "SECRET_REQUIRED"
+    error === "NAMESPACE_REQUIRED"
     || error === "CLAIM_KEY_INVALID"
+    || error === "CLAIM_KEY_REQUIRED"
     || error === "CLAIM_KEYPAIR_MISMATCH" || error === "PROOF_MESSAGE_INVALID"
     || error === "PROOF_NAMESPACE_MISMATCH" || error === "PROOF_TIMESTAMP_INVALID"
   ) return 400;
@@ -38,11 +39,12 @@ function claimStatusCode(error: string): number {
 
 function openStatusCode(error: string): number {
   if (error === "CLAIM_NOT_FOUND") return 404;
-  if (error === "CLAIM_VERIFICATION_FAILED" || error === "IDENTITY_MISMATCH") return 403;
+  if (error === "CLAIM_VERIFICATION_FAILED" || error === "CLAIM_KEY_UNAVAILABLE" || error === "NONCE_REUSED") return 403;
   if (
-    error === "NAMESPACE_REQUIRED" || error === "SECRET_REQUIRED"
-    || error === "IDENTITY_HASH_REQUIRED"
+    error === "NAMESPACE_REQUIRED" || error === "NONCE_REQUIRED"
+    || error === "PROOF_MESSAGE_INVALID" || error === "PROOF_NAMESPACE_MISMATCH" || error === "PROOF_TIMESTAMP_INVALID"
   ) return 400;
+  if (error === "PROOF_REQUIRED") return 403;
   return 500;
 }
 
@@ -90,7 +92,6 @@ export const meCommandHandler: express.RequestHandler = async (req, res) => {
   if (operation === "claim") {
     const out = await claimNamespace({
       namespace,
-      secret: String(body.secret || ""),
       identityHash: String(body.identityHash || "").trim(),
       publicKey: String(body.publicKey || "").trim() || null,
       privateKey: String(body.privateKey || "").trim() || null,
@@ -108,10 +109,9 @@ export const meCommandHandler: express.RequestHandler = async (req, res) => {
     }));
   }
 
-  const out = openNamespace({
+  const out = await openNamespace({
     namespace,
-    secret: String(body.secret || ""),
-    identityHash: String(body.identityHash || "").trim(),
+    proof: (body.proof && typeof body.proof === "object") ? body.proof as any : null,
   });
 
   if (!out.ok) return res.status(openStatusCode(out.error)).json(createErrorEnvelope(target, { error: out.error }));
@@ -122,7 +122,7 @@ export const meCommandHandler: express.RequestHandler = async (req, res) => {
     proofId: computeProofId({
       namespace: out.record.namespace,
       identityHash: out.record.identityHash,
-      noise: out.noise,
+      openedAt,
       memories,
     }),
     openedAt,
@@ -137,7 +137,6 @@ export const meCommandHandler: express.RequestHandler = async (req, res) => {
     audit,
     namespace: out.record.namespace,
     identityHash: out.record.identityHash,
-    noise: out.noise,
     memories,
     openedAt,
   }));
@@ -155,7 +154,6 @@ const rootCompatClaimHandler: express.RequestHandler = async (req, res) => {
 
   const out = await claimNamespace({
     namespace,
-    secret: String(body.secret || ""),
     identityHash: String(body.identityHash || "").trim(),
     publicKey: String(body.publicKey || "").trim() || null,
     privateKey: String(body.privateKey || "").trim() || null,

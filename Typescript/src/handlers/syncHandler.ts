@@ -272,7 +272,7 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
 // inside it, so the UI needs this to decide whether to show edit tools
 // *before* the caller attempts a write, not just react to a 403 afterward.
 // Deliberately returns only a boolean, never the claim record itself
-// (publicKey, secretCommitment, etc.) -- identityHash is already a public
+// (publicKey, etc.) -- identityHash is already a public
 // fingerprint (shown in the UI, meant to be shared), so confirming a
 // namespace/identityHash pair leaks nothing that wasn't already public.
 export const namespaceOwnerHandler: express.RequestHandler = async (req, res) => {

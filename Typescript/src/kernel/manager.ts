@@ -356,9 +356,54 @@ export function isForeignNamespaceCollapsingToRoot(namespace: string): boolean {
  */
 export function isForeignUsersPrefixWrite(namespace: string, canonicalPath: string): boolean {
   if (namespaceToKernelPrefix(namespace) !== "") return false;
+  return ownerLabelOfCanonicalPath(canonicalPath) !== null;
+}
+
+/**
+ * owner(p) from the formal model reviewed this session: which namespace a
+ * canonical path belongs to. Returns the owning LABEL ("alice"), or null
+ * when `canonicalPath` belongs to the installation root itself -- combine
+ * a non-null result with a root namespace string (getRootNamespace(), or
+ * whatever root a caller holds) to get the full owning namespace, the way
+ * ownerOfCanonicalPath() below does.
+ *
+ * This is the exact regex isForeignUsersPrefixWrite() has used since it
+ * was proven necessary by a live root-into-Alice's-storage forgery
+ * (see that function's own doc comment) -- extracted here as its own named
+ * primitive rather than duplicated, so the write guard and the pure
+ * ownership model can never drift apart. Two things this makes explicit
+ * that a naive reimplementation could get wrong (both named in review):
+ *
+ * 1. Segment-boundary matching, not text-prefix matching. "users.alice"
+ *    must never be treated as owning "users.alicex.*" -- the label is
+ *    captured as a full dot-delimited segment (`[^.]+` bounded by a
+ *    following dot or end-of-string), so "alice" and "alicex" can never
+ *    collide just because one is a textual prefix of the other.
+ * 2. A path that doesn't match the users.<label> shape at all belongs to
+ *    root -- explicitly (the null branch below), never left as an
+ *    implicit "whatever fell through". Every path lives in some tree.
+ *
+ * The bare pointer itself ("users.alice", nothing beneath it) resolves to
+ * "alice", not root -- unchanged from the guard's original behavior. That
+ * pointer is written internally by the claim mechanism itself
+ * (materializeProjectedNamespaceClaim in claim/records.ts, via a direct
+ * appendSemanticMemory call, never through the signed generic write
+ * surface), so nothing legitimate needs root's signature to reach it
+ * there; keeping it "foreign" costs nothing and avoids opening a new,
+ * separately-unreviewed write path for something that today has none.
+ */
+export function ownerLabelOfCanonicalPath(canonicalPath: string): string | null {
   const p = String(canonicalPath || "").trim();
   const label = NON_ROOT_KERNEL_PREFIX_LABEL;
-  return p === label || new RegExp(`^${label}\\.[^.]+(\\.|$)`).test(p);
+  if (p === label) return null;
+  const m = new RegExp(`^${label}\\.([^.]+)(?:\\.|$)`).exec(p);
+  return m ? m[1] : null;
+}
+
+/** owner(p), fully resolved: ownerLabelOfCanonicalPath() plus the root namespace it's relative to. */
+export function ownerOfCanonicalPath(rootNamespace: string, canonicalPath: string): string {
+  const label = ownerLabelOfCanonicalPath(canonicalPath);
+  return label ? `${label}.${rootNamespace}` : rootNamespace;
 }
 
 /**

@@ -190,3 +190,102 @@ describe("root claim's own signature cannot reach into users.<other>.* kernel st
     expect(aliceRereadJson?.target?.value).toBe("alice@real.example");
   });
 });
+
+describe("reading through the root namespace cannot reach users.<other>.* content either", () => {
+  let server: Server;
+  let origin: string;
+  let runtimeRoot: string;
+
+  beforeEach(async () => {
+    resetKernelStateForTests();
+    const started = await startServer();
+    server = started.server;
+    origin = started.origin;
+    runtimeRoot = started.runtimeRoot;
+  });
+
+  afterEach(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    resetKernelStateForTests();
+    fs.rmSync(runtimeRoot, { recursive: true, force: true });
+  });
+
+  it("GET users.alice.profile.email via the root host does not return alice's real value", async () => {
+    const alice = await claimNamespaceAs(origin, ALICE_NAMESPACE, "alice-identity", "alice-secret");
+    const aliceHead = await fetchWriteHead(origin, ALICE_NAMESPACE);
+    const aliceFields = { path: "profile.email", value: "alice-secret-email@real.example", namespace: ALICE_NAMESPACE, expectedHeadHash: aliceHead };
+    const aliceBody = toStableJson(aliceFields);
+    await postRoot(origin, { "x-forwarded-host": ALICE_NAMESPACE }, { ...aliceFields, signedPayload: aliceBody, signature: await alice.sign(aliceBody) });
+
+    // No claim needed to read -- just ask the ROOT host for alice's deep path.
+    const leakAttempt = await fetch(`${origin}/users.alice.profile.email`, { headers: { "x-forwarded-host": ROOT_NAMESPACE }, cache: "no-store" });
+    const leakJson = await leakAttempt.json().catch(() => null);
+    expect(leakAttempt.status).toBe(404);
+    expect(leakJson?.target?.value).toBeUndefined();
+
+    // Alice's own read, through her own namespace, still works normally.
+    const legit = await fetch(`${origin}/profile.email`, { headers: { "x-forwarded-host": ALICE_NAMESPACE }, cache: "no-store" });
+    const legitJson = await legit.json();
+    expect(legitJson?.target?.value).toBe("alice-secret-email@real.example");
+  });
+});
+
+describe("malformed write paths are rejected outright, before any other guard", () => {
+  let server: Server;
+  let origin: string;
+  let runtimeRoot: string;
+
+  beforeEach(async () => {
+    resetKernelStateForTests();
+    const started = await startServer();
+    server = started.server;
+    origin = started.origin;
+    runtimeRoot = started.runtimeRoot;
+  });
+
+  afterEach(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    resetKernelStateForTests();
+    fs.rmSync(runtimeRoot, { recursive: true, force: true });
+  });
+
+  const MALFORMED_PATHS = [
+    "me://self:write/profile.email",
+    "profile..email",
+    "profile//email",
+    ".profile.email",
+    "profile.email.",
+    "profile.%2e%2e.email",
+  ];
+
+  for (const badPath of MALFORMED_PATHS) {
+    it(`rejects path ${JSON.stringify(badPath)} with 400 MALFORMED_WRITE_PATH`, async () => {
+      const write = await postRoot(
+        origin,
+        { "x-forwarded-host": ROOT_NAMESPACE },
+        { path: badPath, value: "irrelevant" },
+      );
+      expect(write.status).toBe(400);
+      expect(write.json.error).toBe("MALFORMED_WRITE_PATH");
+    });
+  }
+
+  it("rejects the same shapes via POST /api/v1/commit (commitHandler), per-event", async () => {
+    const root = await claimNamespaceAs(origin, ROOT_NAMESPACE, "root-identity", "root-secret");
+    const events = [{ namespace: ROOT_NAMESPACE, path: "profile..email", data: "irrelevant" }];
+    const signedFields = { events, identityHash: root.identityHash, namespace: ROOT_NAMESPACE };
+    const signature = await root.sign(normalizeProofMessage(signedFields));
+    const res = await post(origin, "/api/v1/commit", { ...signedFields, signature });
+    expect(res.status).toBe(400);
+    expect(res.json.error).toBe("MALFORMED_WRITE_PATH");
+  });
+
+  it("a normal, well-formed path is not rejected by the malformed-path check", async () => {
+    const alice = await claimNamespaceAs(origin, ALICE_NAMESPACE, "alice-identity", "alice-secret");
+    const aliceHead = await fetchWriteHead(origin, ALICE_NAMESPACE);
+    const fields = { path: "profile.email", value: "alice@real.example", namespace: ALICE_NAMESPACE, expectedHeadHash: aliceHead };
+    const body = toStableJson(fields);
+    const write = await postRoot(origin, { "x-forwarded-host": ALICE_NAMESPACE }, { ...fields, signedPayload: body, signature: await alice.sign(body) });
+    expect(write.status).toBe(200);
+  });
+});

@@ -245,6 +245,13 @@ export function getRootNamespace(): string {
   return normalizeNamespaceRootName(explicit) || "unknown";
 }
 
+// The only non-root shape namespaceToKernelPrefix() can ever produce --
+// shared with isForeignUsersPrefixWrite() below so the two can never drift
+// apart. A compound namespace (<prefix>.<root>) always projects to
+// `${NON_ROOT_KERNEL_PREFIX_LABEL}.<prefix>`; the bare root always projects
+// to "" (this function's other return value). There is no third shape.
+const NON_ROOT_KERNEL_PREFIX_LABEL = "users";
+
 export function namespaceToKernelPrefix(namespace: string): string {
   let parsed: ReturnType<typeof parseNamespaceExpression>;
   try {
@@ -256,7 +263,7 @@ export function namespaceToKernelPrefix(namespace: string): string {
   const root = getRootNamespace();
   const constant = normalizeNamespaceRootName(parsed.constant);
   if (constant !== root) return "";
-  if (parsed.prefix) return `users.${parsed.prefix}`;
+  if (parsed.prefix) return `${NON_ROOT_KERNEL_PREFIX_LABEL}.${parsed.prefix}`;
 
   // Root namespace — operate at kernel root.
   return "";
@@ -314,14 +321,24 @@ export function isForeignNamespaceCollapsingToRoot(namespace: string): boolean {
 }
 
 /**
- * True when `path` would land under a DIFFERENT namespace's own isolated
- * kernel storage (users.<label>.*) than the one `namespace` itself resolves
- * to. Only meaningful when `namespace` resolves to literal kernel ROOT
- * (namespaceToKernelPrefix(namespace) === "") -- a write from such a
- * namespace is never further prefixed (kernelPathFor returns `path`
- * unchanged), so a `path` value that itself starts with "users.<label>."
- * reaches directly into that OTHER label's own storage, using only the
- * root claim's own signature, never that user's.
+ * True when `canonicalPath` (already run through replay.ts's
+ * canonicalizeWritePath -- callers must not pass a raw, un-normalized path;
+ * see that function's own doc comment for why) would land under a
+ * DIFFERENT namespace's own isolated kernel storage than the one
+ * `namespace` itself resolves to. Only meaningful when `namespace` resolves
+ * to literal kernel ROOT (namespaceToKernelPrefix(namespace) === "") -- a
+ * write from such a namespace is never further prefixed (kernelPathFor
+ * returns the path unchanged), so a path that itself starts with
+ * `${NON_ROOT_KERNEL_PREFIX_LABEL}.<label>.` reaches directly into that
+ * OTHER label's own storage, using only the root claim's own signature,
+ * never that user's.
+ *
+ * Deliberately reuses NON_ROOT_KERNEL_PREFIX_LABEL -- the same constant
+ * namespaceToKernelPrefix() itself builds its one non-root return shape
+ * from -- rather than an independently-hardcoded "users." string. There is
+ * structurally only one non-root prefix shape that function can ever
+ * produce; this guard is defined in terms of that same constant so the two
+ * can never quietly drift apart if that shape is ever extended.
  *
  * Proven exploitable live, not hypothesized: a root-claim-signed write with
  * `path: "users.alice.profile.email"` overwrote Alice's own real
@@ -337,10 +354,11 @@ export function isForeignNamespaceCollapsingToRoot(namespace: string): boolean {
  * writes there; this guard exists only for whoever resolves to the empty
  * prefix.
  */
-export function isForeignUsersPrefixWrite(namespace: string, pathInput: string): boolean {
+export function isForeignUsersPrefixWrite(namespace: string, canonicalPath: string): boolean {
   if (namespaceToKernelPrefix(namespace) !== "") return false;
-  const p = String(pathInput || "").trim();
-  return p === "users" || /^users\.[^.]+(\.|$)/.test(p);
+  const p = String(canonicalPath || "").trim();
+  const label = NON_ROOT_KERNEL_PREFIX_LABEL;
+  return p === label || new RegExp(`^${label}\\.[^.]+(\\.|$)`).test(p);
 }
 
 /**

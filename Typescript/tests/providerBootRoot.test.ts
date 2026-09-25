@@ -6,6 +6,19 @@
  * that composes a handle's namespace from "the namespace it was told" got jabellae.jabellae.cleaker.me
  * at a handle host. So the boot also carries the ROOT the monad serves and the handle (if any),
  * and a client composes from those.
+ *
+ * Uses "providerboot.test" as its own root namespace, deliberately not
+ * shared with any other test file -- requestedNamespace.test.ts used to
+ * share the literal string "acme.test" with this file, and mutates
+ * process.env.ME_NAMESPACE globally in its own beforeAll (restored in
+ * afterAll, but real global state for the window in between). Vitest's
+ * module isolation resets each file's own module graph, but never resets
+ * process.env between files running in the same forked process -- a real,
+ * confirmed-plausible mechanism for the one-off cross-file flake a review
+ * asked to be investigated (not just documented) rather than run past.
+ * Using a namespace no other test file references removes the shared
+ * resource outright, regardless of the exact scheduling that would have
+ * triggered it.
  */
 import { afterEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
@@ -48,24 +61,24 @@ async function bootFor(base: string, host: string) {
 
 describe("the boot names the root as well as the address's own namespace", () => {
   it("at the root, at www and at a handle host", async () => {
-    const base = await start("acme.test");
+    const base = await start("providerboot.test");
 
-    const root = await bootFor(base, "acme.test");
-    expect([root.namespace, root.rootNamespace, root.handle]).toEqual(["acme.test", "acme.test", null]);
+    const root = await bootFor(base, "providerboot.test");
+    expect([root.namespace, root.rootNamespace, root.handle]).toEqual(["providerboot.test", "providerboot.test", null]);
 
-    const www = await bootFor(base, "www.acme.test");
-    expect([www.namespace, www.rootNamespace, www.handle]).toEqual(["acme.test", "acme.test", null]);
+    const www = await bootFor(base, "www.providerboot.test");
+    expect([www.namespace, www.rootNamespace, www.handle]).toEqual(["providerboot.test", "providerboot.test", null]);
 
-    const handle = await bootFor(base, "jabellae.acme.test");
-    expect(handle.namespace).toBe("jabellae.acme.test");
-    expect(handle.rootNamespace).toBe("acme.test");
+    const handle = await bootFor(base, "jabellae.providerboot.test");
+    expect(handle.namespace).toBe("jabellae.providerboot.test");
+    expect(handle.rootNamespace).toBe("providerboot.test");
     expect(handle.handle).toBe("jabellae");
   });
 
   it("is the same root whatever host the page came from, and a stranger host is not made a handle of it", async () => {
-    const base = await start("acme.test");
-    for (const host of ["acme.test", "www.acme.test", "ana.acme.test", "someone-else.example"]) {
-      expect((await bootFor(base, host)).rootNamespace, host).toBe("acme.test");
+    const base = await start("providerboot.test");
+    for (const host of ["providerboot.test", "www.providerboot.test", "ana.providerboot.test", "someone-else.example"]) {
+      expect((await bootFor(base, host)).rootNamespace, host).toBe("providerboot.test");
     }
     expect((await bootFor(base, "someone-else.example")).handle).toBeNull();
   });

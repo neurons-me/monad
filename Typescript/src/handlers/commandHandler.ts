@@ -1,7 +1,7 @@
 import type express from "express";
 import { claimRequestHandler, openRequestHandler } from "../http/claims.js";
 import { claimNamespace, getClaim, openNamespace } from "../claim/records.js";
-import { extractLegacyWritePath, getMemoriesForNamespace, getNamespaceChainHead, isNamespaceWriteAuthorized, recordMemory } from "../claim/replay.js";
+import { canonicalizeWritePath, extractLegacyWritePath, getMemoriesForNamespace, getNamespaceChainHead, isMalformedWritePath, isNamespaceWriteAuthorized, recordMemory } from "../claim/replay.js";
 import { isKeychainReservedPath } from "../claim/keychain.js";
 import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
 import { isNetgetReservedPath } from "../claim/netget.js";
@@ -203,15 +203,25 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
   // ad hoc copy, or a request shaped to slip past the guard can still land
   // on the reserved location once the real writer resolves it independently.
   const candidatePath = extractLegacyWritePath(body);
+
+  // Checked on the RAW path, before canonicalization filters anything away
+  // -- see isMalformedWritePath's own doc comment for why the raw form
+  // matters here specifically (an empty segment canonicalizeWritePath would
+  // silently drop is not necessarily handled the same way by the actual
+  // kernel write path, which has no such filter).
+  if (isMalformedWritePath(candidatePath)) {
+    return res.status(400).json(createErrorEnvelope(target, { error: "MALFORMED_WRITE_PATH" }));
+  }
+
   // kernelWrite() (memoryStore.ts) turns a dotted path into a "/"-joined
   // me:// URI (kpath.split(".").join("/")) before it ever reaches the
   // kernel -- so "netget.delegates" and a literal "netget/delegates" from
   // the caller land on the EXACT same physical location, and a
   // startsWith("netget.")-style check that only recognizes the dotted form
-  // misses the slash form entirely. isGatewayRoutingRecordPath below
-  // already normalizes for exactly this reason; the other reserved-path
-  // checks need the same normalization, not their own separate logic.
-  const normalizedCandidatePath = candidatePath.replace(/\//g, ".").split(".").filter(Boolean).join(".");
+  // misses the slash form entirely. canonicalizeWritePath (replay.ts) is
+  // the one shared implementation of this normalization -- every guard
+  // below uses it, not its own copy.
+  const normalizedCandidatePath = canonicalizeWritePath(candidatePath);
 
   // The namespace this request resolved to (Host header) may itself
   // legitimately BE this monad's own root -- kernelPathFor never prefixes

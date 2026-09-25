@@ -200,6 +200,65 @@ export function extractLegacyWritePath(body: unknown): string {
   ).trim();
 }
 
+/**
+ * The single, shared slash/dot canonicalization every reserved-path guard
+ * must use before comparing a caller-supplied path -- kernelWrite()
+ * (memoryStore.ts) treats "." and "/" as equivalent separators
+ * (kpath.split(".").join("/") before the write ever reaches the kernel), so
+ * "netget.delegates" and a literal "netget/delegates" land on the identical
+ * physical location. A guard comparing the raw, un-normalized path misses
+ * the slash form entirely -- confirmed as a real bypass before this was
+ * applied consistently (netgetReservedPathAuthorization.test.ts). Every
+ * guard in commandHandler.ts and syncHandler.ts must call this on a path
+ * before checking it, not maintain its own copy of the same three-line
+ * transform -- that duplication is exactly how syncHandler.ts's per-event
+ * checks went unnormalized for a full review cycle after
+ * rootCommandHandler's own guards were already fixed.
+ */
+export function canonicalizeWritePath(pathInput: string): string {
+  return String(pathInput || "")
+    .trim()
+    .replace(/\//g, ".")
+    .split(".")
+    .filter(Boolean)
+    .join(".");
+}
+
+/**
+ * True when the RAW path (before canonicalizeWritePath's own
+ * split-then-filter-then-join) is shaped in a way no guard here should
+ * silently normalize away. Checked on the raw string deliberately, not the
+ * canonicalized one: canonicalizeWritePath's `.filter(Boolean)` drops empty
+ * segments (from "..", "//", a leading/trailing separator) before a guard
+ * ever sees them, but the actual write path -- memoryStore.ts's
+ * kernelWrite(), `kpath.split(".").join("/")` -- has no such filter, so
+ * whatever the underlying `.me` kernel's own me:// URI parsing does with a
+ * resulting empty segment (e.g. a literal "//" in the URI) is unverified
+ * here, not confirmed safe. Rejecting the shape outright, before either
+ * transform runs, closes that regardless of how it turns out to parse
+ * downstream. Also rejects a "scheme://" prefix (a caller-supplied "me://"
+ * URI has no business appearing as a bare path value) and a percent-encoded
+ * segment (this codebase's own paths are plain ASCII dotted segments; an
+ * encoded one is exactly the shape that reads one way to a guard's string
+ * comparison and could decode to another by the time something else parses
+ * it). Checked in addition to, not instead of, the specific reserved-path
+ * guards -- this is a blanket shape rejection, not a replacement for any of
+ * them.
+ */
+export function isMalformedWritePath(rawPath: string): boolean {
+  const p = String(rawPath || "");
+  if (!p.trim()) return false; // empty is a different, already-handled case
+  if (p.includes("://")) return true;
+  if (/%[0-9a-fA-F]{2}/.test(p)) return true;
+  // Any run of 2+ separator characters (mixed "." and "/") produces an
+  // empty segment once split -- ".." itself is exactly this shape (two
+  // separators with nothing between). Also rejects a leading or trailing
+  // separator for the same reason (an empty first/last segment).
+  if (/[./]{2,}/.test(p)) return true;
+  if (/^[./]|[./]$/.test(p.trim())) return true;
+  return false;
+}
+
 function normalizeLegacyReplayMemory(input: unknown): ReplayMemory | null {
   if (!isPlainObject(input)) return null;
 

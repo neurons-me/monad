@@ -259,15 +259,20 @@ describe("reserved-path guards resolve the same write target the real writer doe
     expect(write.json.error).toBe("NETGET_PATH_REQUIRES_CLAIM");
   });
 
-  it("a leading-dot path (.netget.delegates) is also caught -- empty leading segment is dropped by normalization", async () => {
+  it("a leading-dot path (.netget.delegates) is rejected as malformed -- caught even before the netget guard runs", async () => {
+    // Once caught by isNetgetReservedPath's own dot-startsWith check after
+    // canonicalization (empty leading segment dropped); now caught earlier
+    // still, by isMalformedWritePath's leading-separator check, which runs
+    // before any reserved-path guard -- a stricter, more specific rejection
+    // than falling through to the netget-specific one.
     const write = await postRoot(
       origin,
       { "x-forwarded-host": UNCLAIMED_SUB_NAMESPACE },
       { path: ".netget.delegates", value: { attacker: { publicKey: "attacker-key", scopes: ["serve"] } } },
     );
 
-    expect(write.status).toBe(403);
-    expect(write.json.error).toBe("NETGET_PATH_REQUIRES_CLAIM");
+    expect(write.status).toBe(400);
+    expect(write.json.error).toBe("MALFORMED_WRITE_PATH");
   });
 
   it("a body using `expression` instead of `path` is still resolved and caught", async () => {

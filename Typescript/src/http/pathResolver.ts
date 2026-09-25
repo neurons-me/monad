@@ -1,5 +1,6 @@
 import type express from "express";
 import { readSemanticBranchForNamespace, isPathNearSecretScope } from "../claim/memoryStore.js";
+import { isForeignUsersPrefixWrite } from "../kernel/manager.js";
 import { resolveNamespace } from "./namespace.js";
 import { normalizeHttpRequestToMeTarget } from "./meTarget.js";
 import { createEnvelope, createErrorEnvelope } from "./envelope.js";
@@ -37,6 +38,23 @@ export async function resolveNamespacePathValue(
   const dotPath = normalizeDotPath(dotPathInput);
 
   if (!dotPath) {
+    return { namespace, path: dotPath, found: false, _classification: "not_found" };
+  }
+
+  // Mirrors kernel/manager.ts's isForeignUsersPrefixWrite() (the write-side
+  // fix for the same shape) on the READ side. Verified live before adding
+  // this that today's actual read path (readSemanticBranchForNamespace ->
+  // buildSemanticBranchTreeForNamespace -> listSemanticMemoriesByNamespaceBranch)
+  // does NOT currently leak another namespace's users.<label>.* content when
+  // read through the root -- but only as a side effect of memoryToRow()
+  // rewriting a matched row's own `path` field to strip that namespace's
+  // prefix before the branch tree gets built from it, not because of any
+  // guard written for this purpose. That protection is real today and
+  // confirmed by a live test (rootWriteDirectionCheck.test.ts), but it is
+  // exactly the kind of accidental side effect a later, unrelated refactor
+  // of memoryToRow() could silently break. This guard makes the same
+  // outcome structural instead of incidental, matching the write side.
+  if (isForeignUsersPrefixWrite(namespace, dotPath)) {
     return { namespace, path: dotPath, found: false, _classification: "not_found" };
   }
 

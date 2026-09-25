@@ -7,7 +7,7 @@ import {
 import { checkGroupAuthorization } from "../claim/groupAuthorization.js";
 import { checkAppAuthorization } from "../claim/appAuthorization.js";
 import { getClaim } from "../claim/records.js";
-import { getNamespaceChainHead, isNamespaceWriteAuthorized } from "../claim/replay.js";
+import { canonicalizeWritePath, getNamespaceChainHead, isMalformedWritePath, isNamespaceWriteAuthorized } from "../claim/replay.js";
 import { isKeychainReservedPath } from "../claim/keychain.js";
 import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
 import { isNetgetReservedPath } from "../claim/netget.js";
@@ -83,17 +83,34 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
 
     if (!rawEvents.length) return res.status(400).json({ error: "No events provided" });
 
+    // Every per-event path guard below reads through this one function --
+    // raw path extracted once, checked for malformation on that raw form
+    // (isMalformedWritePath's own doc comment explains why the raw, not
+    // canonicalized, form matters), then canonicalized once via the same
+    // shared canonicalizeWritePath() rootCommandHandler (POST /) uses. No
+    // guard here keeps its own copy of this extraction, unlike the earlier
+    // version of this file -- that duplication is exactly how these
+    // per-event checks went unnormalized for a full review cycle after
+    // rootCommandHandler's were already fixed.
+    function eventPath(event: unknown): { raw: string; canonical: string; namespace: string } | null {
+      if (!event || typeof event !== "object") return null;
+      const record = event as Record<string, unknown>;
+      const raw = String(record.path || "");
+      return { raw, canonical: canonicalizeWritePath(raw), namespace: String(record.namespace || "").trim().toLowerCase() };
+    }
+
+    const malformedEvent = rawEvents.map(eventPath).find((e) => e && isMalformedWritePath(e.raw));
+    if (malformedEvent) {
+      return res.status(400).json({ error: "MALFORMED_WRITE_PATH" });
+    }
+
     // Same guard as rootCommandHandler (POST /): an event whose own
     // `namespace` resolves to this monad's root (kernelPathFor never
     // prefixes such a write) with a `path` reaching into users.<label>.*
     // lands in a DIFFERENT namespace's own storage, forgeable with only the
     // root claim's signature. Checked per-event, since each event carries
     // its own namespace -- distinct from callerNamespace below.
-    const forgedUsersEvent = rawEvents.find((event) => {
-      if (!event || typeof event !== "object") return false;
-      const record = event as Record<string, unknown>;
-      return isForeignUsersPrefixWrite(String(record.namespace || ""), String(record.path || ""));
-    });
+    const forgedUsersEvent = rawEvents.map(eventPath).find((e) => e && isForeignUsersPrefixWrite(e.namespace, e.canonical));
     if (forgedUsersEvent) {
       return res.status(403).json({ error: "CANNOT_WRITE_ANOTHER_NAMESPACES_STORAGE" });
     }
@@ -102,23 +119,17 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
     // is only ever mutated through claim/keychain.ts's own validated
     // functions, never through a generic commit, even by the target
     // namespace's own claim holder.
-    const reservedEvent = rawEvents.find(
-      (event) => event && typeof event === "object" && isKeychainReservedPath(String((event as Record<string, unknown>).path || "")),
-    );
+    const reservedEvent = rawEvents.map(eventPath).find((e) => e && isKeychainReservedPath(e.canonical));
     if (reservedEvent) {
       return res.status(403).json({ error: "KEYCHAIN_PATH_REQUIRES_KEYCHAIN_API" });
     }
     // Same reasoning, for the gateway-authority branch (claim/gatewayAuthority.ts).
-    const reservedGatewayEvent = rawEvents.find(
-      (event) => event && typeof event === "object" && isGatewayAuthorityReservedPath(String((event as Record<string, unknown>).path || "")),
-    );
+    const reservedGatewayEvent = rawEvents.map(eventPath).find((e) => e && isGatewayAuthorityReservedPath(e.canonical));
     if (reservedGatewayEvent) {
       return res.status(403).json({ error: "GATEWAY_PATH_REQUIRES_GATEWAY_API" });
     }
     // Same reasoning as rootCommandHandler for the gateway's routing records.
-    const routingEvent = rawEvents.find(
-      (event) => event && typeof event === "object" && isGatewayRoutingRecordPath(String((event as Record<string, unknown>).path || "")),
-    );
+    const routingEvent = rawEvents.map(eventPath).find((e) => e && isGatewayRoutingRecordPath(e.canonical));
     if (routingEvent && !isInternalRequest(req)) {
       return res.status(403).json({ error: "GATEWAY_ROUTING_RECORDS_REQUIRE_INTERNAL_CALLER" });
     }
@@ -128,9 +139,7 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
     // here would never move that excluded head, so it would stay valid to
     // replay forever. Reserved to internal callers for the same reason as
     // the gateway routing records above.
-    const surfaceEvent = rawEvents.find(
-      (event) => event && typeof event === "object" && isSurfaceTelemetryReservedPath(String((event as Record<string, unknown>).path || "")),
-    );
+    const surfaceEvent = rawEvents.map(eventPath).find((e) => e && isSurfaceTelemetryReservedPath(e.canonical));
     if (surfaceEvent && !isInternalRequest(req)) {
       return res.status(403).json({ error: "SURFACE_TELEMETRY_REQUIRES_INTERNAL_CALLER" });
     }
@@ -165,12 +174,7 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
     // caller's own (the shared-root group case this file's header comment
     // describes), so the netget guard has to follow the same per-event
     // namespace, not assume it matches callerNamespace below.
-    const unclaimedNetgetEvent = rawEvents.find((event) => {
-      if (!event || typeof event !== "object") return false;
-      const record = event as Record<string, unknown>;
-      if (!isNetgetReservedPath(String(record.path || ""))) return false;
-      return !getClaim(String(record.namespace || "").trim().toLowerCase());
-    });
+    const unclaimedNetgetEvent = rawEvents.map(eventPath).find((e) => e && isNetgetReservedPath(e.canonical) && !getClaim(e.namespace));
     if (unclaimedNetgetEvent) {
       return res.status(403).json({ error: "NETGET_PATH_REQUIRES_CLAIM" });
     }

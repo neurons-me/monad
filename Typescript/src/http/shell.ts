@@ -81,7 +81,7 @@ export function htmlShell(options: { providerBoot?: NamespaceProviderBoot | null
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <link rel="icon" type="image/png" href="/gui/favicon.png" />
     <link rel="stylesheet" href="/gui/styles.css" />
-    <link rel="stylesheet" href="https://unpkg.com/this.gui@2.4.0/dist/styles.css" />
+    <link rel="stylesheet" href="https://unpkg.com/this.gui@4.0.0/dist/styles.css" />
     <title>${namespaceTitle}</title>
   </head>
   <body>
@@ -154,7 +154,7 @@ export function htmlShell(options: { providerBoot?: NamespaceProviderBoot | null
       if (!ReactDOM) throw new Error('ReactDOM global is missing. Failed to load react-dom.production.min.js');
       await importFirst(
         '/gui/this.gui.umd.js',
-        'https://unpkg.com/this.gui@2.4.0/dist/this.gui.umd.js'
+        'https://unpkg.com/this.gui@4.0.0/dist/this.gui.umd.js'
       );
       const GUI = globalThis.ThisGUI || globalThis.thisGUI || globalThis.GUI || globalThis['this.gui'];
       const providerBoot = globalThis.__MONAD_NAMESPACE_PROVIDER_BOOT__ || null;

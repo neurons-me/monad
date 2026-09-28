@@ -16,7 +16,7 @@ Includes full NRP mesh stack:
 - Scope-chain routing: `monad[frank]` compound → rootspace → 404 fallback
 
 Start here for implementation details:
-- [Namespace Resolution Protocol v0.3.0](./NRP-v0.3.0.md)
+- [Namespace Resolution Protocol v0.3.0](https://neurons-me.github.io/NRP/v.0.3.0.html) — the spec lives on the NRP site; this is the reference implementation
 - [Mesh Implementation Status](./Mesh/status.md)
 - [Mesh Scoring Engine](./Mesh/scoring.md)
 - [Mesh Test Documentation](./Mesh/testing.md)

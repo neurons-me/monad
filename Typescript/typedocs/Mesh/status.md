@@ -10,8 +10,8 @@ The current NRP work is no longer only an HTTP resolver. It is a mesh-aware
 runtime path with optional Total Monad Synthesis (`MONAD_SYNTHESIS_ENABLED=1`):
 
 **Source-of-truth note:** this page is an implementation status report. The
-normative protocol contract is [NRP v0.3.0](../NRP-v0.3.0.md). The previous
-formal spec, [NRP v0.2.1](../NRP-v0.2.1.md), is archived and only covers the
+normative protocol contract is [NRP v0.3.0](https://neurons-me.github.io/NRP/v.0.3.0.html). The previous
+formal spec, [NRP v0.2.1](https://neurons-me.github.io/NRP/v.0.2.1.html), is archived and only covers the
 mesh draft through Phase 6.
 
 **Single-forward (default, Phase 1–9):**
@@ -91,7 +91,7 @@ separate registration. `nrp.open`/`resolved` (namespace resolution) shipped
 first; `read`/`subscribe`/`unsubscribe`/`data`/`stream` (one-shot reads and
 live value subscriptions, backed by a new in-process `pathNotify` registry
 triggered on every `POST /` write) landed 2026-08-18. Full message contract:
-[NRP v0.3.0 §11](../NRP-v0.3.0.md#11-websocket-binding-nrp). Reference
+[NRP v0.3.0](https://neurons-me.github.io/NRP/v.0.3.0.html) §11. Reference
 client: `this.gui/runtime`'s `createWsMeRuntime()`. Verified end-to-end
 (external write over HTTP → live push to two independent WebSocket clients,
 no polling) — see

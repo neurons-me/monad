@@ -1,7 +1,7 @@
 # The Knowledge Graph — Semantic Memory as a Queryable Ledger
 
 **neurons.me / suiGn**
-**Status:** Describes the current `monad.ai` implementation (semantic memory log, `appendSemanticMemory`, and the host-telemetry bridge). Not a wire protocol — see [NRP v0.3.0](./NRP-v0.3.0.md) for how a `me://` target actually gets resolved across the mesh.
+**Status:** Describes the current `monad.ai` implementation (semantic memory log, `appendSemanticMemory`, and the host-telemetry bridge). Not a wire protocol — see [NRP v0.3.0](https://neurons-me.github.io/NRP/v.0.3.0.html) for how a `me://` target actually gets resolved across the mesh.
 **License:** CC0 1.0 Universal — Public Domain
 
 ---
@@ -97,11 +97,11 @@ curl http://<gateway>/apps/<name>/surface/host/cpu
 ## 6. What this is not
 
 - Not a new database. There is exactly one storage mechanism: the kernel's own hash-chained memory log, the same one `users.*` and `daemon.claims.*` already live in.
-- Not a wire protocol change. Reading `surface.host.*` uses the same `me://` resolution and HTTP path-resolver every other semantic path already uses — see [NRP v0.3.0](./NRP-v0.3.0.md) for that layer.
+- Not a wire protocol change. Reading `surface.host.*` uses the same `me://` resolution and HTTP path-resolver every other semantic path already uses — see [NRP v0.3.0](https://neurons-me.github.io/NRP/v.0.3.0.html) for that layer.
 - Not verified or attested capacity. See §4.2 — this is self-report, not certification.
 
 ## See also
 
-- [NRP v0.3.0](./NRP-v0.3.0.md) — how a `me://` target is resolved across the mesh; this document only covers what happens once a value is already in one kernel's own memory log.
+- [NRP v0.3.0](https://neurons-me.github.io/NRP/v.0.3.0.html) — how a `me://` target is resolved across the mesh; this document only covers what happens once a value is already in one kernel's own memory log.
 - [Mesh/status.md](./Mesh/status.md) — implementation status of the broader mesh, separate from this bridge.
 - `resources/usageLedger.ts` — the signed, billing-facing sibling of this bridge.

@@ -7,7 +7,7 @@ import { ensureInternalToken } from "./http/internalToken.js";
 import { getKernel, getKernelStateDir } from "./kernel/manager.js";
 import { seedSelfMonadIndexEntry } from "./kernel/monadIndex.js";
 import { normalizeNamespaceIdentity, normalizeNamespaceRootName } from "./namespace/identity.js";
-import { assertDeclaredSpacesValid } from "./runtime/hostResolver.js";
+import { assertDeclaredSpacesValid, assertMeCapabilities } from "./runtime/hostResolver.js";
 import { loadSelfNodeConfig, type SelfNodeConfig } from "./http/selfMapping.js";
 import { defaultUsageLedger } from "./resources/usageLedger.js";
 import { defaultHostTelemetryLedger } from "./resources/hostTelemetryLedger.js";
@@ -146,6 +146,10 @@ export function resolveMonadRuntimeConfig(options: MonadOptions = {}): MonadRunt
   const port = options.port || sourceEnv.PORT || 8161;
   const nodeHostname = options.hostname || sourceEnv.MONAD_SELF_HOSTNAME || os.hostname();
   const fetchProxyTimeoutMs = Number(options.fetchProxyTimeoutMs || sourceEnv.MONAD_FETCH_TIMEOUT_MS || 15000);
+
+  // First, whether this.me can do what this monad calls at all (an install problem), then whether what is
+  // declared is valid (a configuration problem). Two different faults, two different errors.
+  assertMeCapabilities();
 
   // The spaces this monad resolves hosts against are checked BEFORE anything is written to the environment: a
   // rejected start leaves process.env as it found it, and a bad declaration stops here instead of surfacing

@@ -41,6 +41,41 @@ export type ResolveHostToMeUriResult =
     };
 
 /**
+ * What this monad needs from this.me, stated once. package.json carries the same floor as a range
+ * (`this.me: workspace:^4.2.0`), so an incompatible install is refused when dependencies are resolved; this
+ * is the check that still answers if one gets through, and it says what is missing instead of failing on an
+ * undefined function somewhere later.
+ */
+export const REQUIRED_ME = {
+  version: "4.2.0",
+  feature: "runtime-declared spaces",
+  capabilities: ["validateKnownSpaces", "parseMeSpaceUri", "tryParseMeSpaceUri"],
+} as const;
+
+/** The installed this.me cannot do what this monad needs. A different fault from a bad configuration. */
+export class IncompatibleMeError extends Error {
+  readonly missing: string[];
+  constructor(missing: string[]) {
+    super(
+      `Incompatible this.me: monad.ai needs this.me >= ${REQUIRED_ME.version} (${REQUIRED_ME.feature}); ` +
+        `the installed one does not provide: ${missing.join(", ")}. ` +
+        "Update this.me together with monad.ai (see the README, \"Requires this.me\").",
+    );
+    this.name = "IncompatibleMeError";
+    this.missing = missing;
+  }
+}
+
+/**
+ * Refuses an installed this.me that lacks what this monad calls. Runs on every start, whatever is declared:
+ * a monad that happens to declare nothing today is still running against the wrong kernel.
+ */
+export function assertMeCapabilities(me: Record<string, unknown> = ThisMe as unknown as Record<string, unknown>): void {
+  const missing = REQUIRED_ME.capabilities.filter((name) => typeof me[name] !== "function");
+  if (missing.length > 0) throw new IncompatibleMeError([...missing]);
+}
+
+/**
  * Where a runtime declares the spaces it serves. The host resolver and the startup check both read THIS list,
  * so what is validated at boot is exactly what requests are later resolved against.
  */
@@ -69,11 +104,6 @@ export function readDeclaredSpaces(env: Record<string, string | undefined> = pro
 export function assertDeclaredSpacesValid(env: Record<string, string | undefined> = process.env): string[] {
   const declared = readDeclaredSpaces(env);
   if (declared.length === 0) return [];
-  if (typeof ThisMe.validateKnownSpaces !== "function") {
-    throw new Error(
-      "this.me does not provide validateKnownSpaces: this monad needs a this.me that supports runtime-declared spaces. Update this.me.",
-    );
-  }
   for (const { source, value } of declared) {
     try {
       ThisMe.validateKnownSpaces([value]);
@@ -98,7 +128,6 @@ export function declaredSpaceReference(
 ): { space: string } | null {
   const declared = readDeclaredSpaces(env).map((entry) => entry.value);
   if (declared.length === 0) return null;
-  if (typeof ThisMe.tryParseMeSpaceUri !== "function") return null;
   const text = String(expression ?? "").trim();
   if (!text) return null;
   const asUri = text.toLowerCase().startsWith("me://") ? text : `me://${text}`;

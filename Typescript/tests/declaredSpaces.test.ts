@@ -6,8 +6,12 @@
  * request happened to be resolved against it. Startup now checks the same list with the same rules (this.me
  * decides what a valid space is), names the variable, and writes nothing to process.env when it refuses.
  */
+import fs from "node:fs";
 import {
+  REQUIRED_ME,
+  IncompatibleMeError,
   assertDeclaredSpacesValid,
+  assertMeCapabilities,
   readDeclaredSpaces,
   resolveHostToMeUri,
 } from "../src/runtime/hostResolver.js";
@@ -112,5 +116,45 @@ describe("the resolver and a single-label declared root", () => {
       ok: false,
       reason: "UNKNOWN_SPACE",
     });
+  });
+});
+
+describe("an incompatible this.me is its own failure, and is declared as a dependency", () => {
+  it("accepts the installed this.me", () => {
+    expect(() => assertMeCapabilities()).not.toThrow();
+  });
+
+  it("names the version and what is missing when a capability is absent", () => {
+    const old = { validateKnownSpaces: () => [], parseMeSpaceUri: () => null };
+    let caught: unknown;
+    try {
+      assertMeCapabilities(old);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(IncompatibleMeError);
+    const error = caught as IncompatibleMeError;
+    expect(error.missing).toEqual(["tryParseMeSpaceUri"]);
+    expect(error.message).toContain(`this.me >= ${REQUIRED_ME.version}`);
+    expect(error.message).toContain("tryParseMeSpaceUri");
+    expect(error.message).toMatch(/Update this\.me together with monad\.ai/);
+  });
+
+  it("is not mistaken for, and does not read like, an invalid configuration", () => {
+    expect(() => assertMeCapabilities({})).toThrow(IncompatibleMeError);
+    let config: unknown;
+    try {
+      assertDeclaredSpacesValid({ ME_NAMESPACE: "bad_space!" });
+    } catch (error) {
+      config = error;
+    }
+    expect(config).toBeInstanceOf(Error);
+    expect(config).not.toBeInstanceOf(IncompatibleMeError);
+    expect((config as Error).message).not.toMatch(/Incompatible this\.me/);
+  });
+
+  it("package.json declares the same floor the startup check states", () => {
+    const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    expect(pkg.dependencies["this.me"]).toBe(`workspace:^${REQUIRED_ME.version}`);
   });
 });

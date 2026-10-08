@@ -140,6 +140,24 @@ Returns all registered monads on this surface. Used by the `surface[]` mesh reso
 
 ---
 
+## Requires this.me
+
+monad.ai needs `this.me` **>= 4.2.0** (runtime-declared spaces). The floor is declared where dependencies are
+resolved (`"this.me": "workspace:^4.2.0"`) and checked again at every start, so an older `this.me` is refused
+instead of failing later on a missing function.
+
+The two faults are different and read differently:
+
+- `Incompatible this.me: monad.ai needs this.me >= 4.2.0 … does not provide: <names>`: the installed kernel is too old.
+  Update `this.me` together with monad.ai; they move as a pair.
+- `ME_NAMESPACE="…" is not a valid space: …` (also `MONAD_LOCAL_ALIAS_ROOT`, `MONAD_CANONICAL_SPACE`): the
+  configuration declares a space `this.me` refuses. Nothing has been written to the environment when it stops.
+
+What a monad declares as its own spaces, in these three variables, may have one label (`localhost`, `here`) or
+several (`local.cleaker`, `neurons.me`). Names inside a declared space (`jabellae.localhost`) and the space itself
+(`me://localhost`) resolve against that declaration, and nothing undeclared does. The machine's hostname is not
+a declared space.
+
 ## Environment variables
 
 | Variable | Default | Description |

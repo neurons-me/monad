@@ -8,6 +8,9 @@ import { execFile, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolveMeIdentityHash } from "../identity/meIdentity.js";
 import { normalizeNamespaceConstant } from "../namespace/identity.js";
+// A namespace import, not a named one: against a this.me that predates validateKnownSpaces a named import is a
+// link error at load, and here an older this.me simply keeps the previous behaviour (see declaredLoopbackRoot).
+import * as ThisMe from "this.me";
 import { readMonadEnv } from "./monadEnv.js";
 
 export type MonadRecordStatus = "starting" | "running" | "paused" | "stopped" | "dead";
@@ -194,13 +197,40 @@ async function terminateRecordProcess(input: {
   return waitForPidExit(input.record.pid, 2000);
 }
 
+/**
+ * The root a monad is started with or recorded under. `localhost` is a loopback ALIAS to every other part of
+ * the namespace layer (it is folded into this machine's own root), but when it is stated as the monad's
+ * namespace it is a declaration: the one-label root the local entry uses. Folding it here made a monad
+ * started with `--namespace localhost` quietly serve `<hostname>.local` instead, unless the invoking shell
+ * happened to export ME_NAMESPACE=localhost -- so what an operator or netget asked for was not what ran.
+ * Only a root that this.me accepts as a declared space is kept as written; anything else, and any this.me
+ * that cannot say, behaves exactly as before.
+ */
+export function declaredLoopbackRoot(input: unknown): string | null {
+  const raw = String(input ?? "").trim().toLowerCase().replace(/:\d+$/, "");
+  if (raw !== "localhost") return null;
+  const validate = (ThisMe as { validateKnownSpaces?: (spaces: string[]) => unknown }).validateKnownSpaces;
+  if (typeof validate !== "function") return null;
+  try {
+    validate([raw]);
+  } catch {
+    return null;
+  }
+  return raw;
+}
+
+/** The namespace root for a stated or recorded value: a declared loopback root as written, else normalized. */
+export function resolveStatedRoot(input: unknown): string {
+  return declaredLoopbackRoot(input) ?? normalizeNamespaceConstant(input);
+}
+
 function normalizeRecord(record: MonadRecord | null): MonadRecord | null {
   if (!record) return null;
   const legacyNameNamespace = normalizeNamespaceConstant(`${record.name}.local`);
   const recordedNamespace = normalizeNamespaceConstant(record.namespace || record.identity);
   const namespace = !record.namespace && recordedNamespace === legacyNameNamespace
     ? resolveDefaultRootspace()
-    : normalizeNamespaceConstant(record.namespace || record.identity || resolveDefaultRootspace());
+    : resolveStatedRoot(record.namespace || record.identity || resolveDefaultRootspace());
   return {
     ...record,
     namespace,
@@ -438,7 +468,7 @@ export async function startMonadProcess(options: StartMonadCliOptions = {}): Pro
 
   const runtimeDir = getMonadRuntimeDir(name);
   const port = await findFreePort(options.port ?? existing?.port);
-  const namespace = normalizeNamespaceConstant(options.namespace || existing?.namespace || resolveDefaultRootspace());
+  const namespace = resolveStatedRoot(options.namespace || existing?.namespace || resolveDefaultRootspace());
   const identity = namespace;
   const surface = name;
   const endpoint = `http://127.0.0.1:${port}`;

@@ -3,6 +3,9 @@ import {
   projectDnsHostToNamespace,
   type MeDnsProjectionFailureReason,
 } from "this.me";
+// A namespace import, not a named one: against a this.me that predates validateKnownSpaces a named import is
+// a link-time SyntaxError nobody can read. This way startup can say what is actually missing.
+import * as ThisMe from "this.me";
 
 export interface ResolveHostToMeUriOptions {
   knownSpaces?: readonly string[];
@@ -37,12 +40,55 @@ export type ResolveHostToMeUriResult =
       knownSpaces: string[];
     };
 
+/**
+ * Where a runtime declares the spaces it serves. The host resolver and the startup check both read THIS list,
+ * so what is validated at boot is exactly what requests are later resolved against.
+ */
+export const DECLARED_SPACE_ENV = ["ME_NAMESPACE", "MONAD_LOCAL_ALIAS_ROOT", "MONAD_CANONICAL_SPACE"] as const;
+
+export type DeclaredSpace = {
+  source: (typeof DECLARED_SPACE_ENV)[number];
+  value: string;
+};
+
+export function readDeclaredSpaces(env: Record<string, string | undefined> = process.env): DeclaredSpace[] {
+  const declared: DeclaredSpace[] = [];
+  for (const source of DECLARED_SPACE_ENV) {
+    const value = String(env[source] || "").trim();
+    if (value) declared.push({ source, value });
+  }
+  return declared;
+}
+
+/**
+ * Startup check: every declared space must be one the contract in this.me accepts (it decides what is valid,
+ * including folding case). Throws naming the variable, so a bad declaration stops the monad where it is
+ * configured instead of failing every request resolved against it. Pass the env that is ABOUT to be applied
+ * to validate it before anything is written.
+ */
+export function assertDeclaredSpacesValid(env: Record<string, string | undefined> = process.env): string[] {
+  const declared = readDeclaredSpaces(env);
+  if (declared.length === 0) return [];
+  if (typeof ThisMe.validateKnownSpaces !== "function") {
+    throw new Error(
+      "this.me does not provide validateKnownSpaces: this monad needs a this.me that supports runtime-declared spaces. Update this.me.",
+    );
+  }
+  for (const { source, value } of declared) {
+    try {
+      ThisMe.validateKnownSpaces([value]);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`${source}=${JSON.stringify(value)} is not a valid space: ${reason}`);
+    }
+  }
+  return declared.map((entry) => entry.value);
+}
+
 function collectKnownSpaces(options: ResolveHostToMeUriOptions): string[] {
   const rawValues = [
     ...(options.knownSpaces || []),
-    process.env.ME_NAMESPACE,
-    process.env.MONAD_LOCAL_ALIAS_ROOT,
-    process.env.MONAD_CANONICAL_SPACE,
+    ...readDeclaredSpaces().map((entry) => entry.value),
   ];
 
   const seen = new Set<string>();

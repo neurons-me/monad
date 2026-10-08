@@ -7,6 +7,7 @@ import { ensureInternalToken } from "./http/internalToken.js";
 import { getKernel, getKernelStateDir } from "./kernel/manager.js";
 import { seedSelfMonadIndexEntry } from "./kernel/monadIndex.js";
 import { normalizeNamespaceIdentity, normalizeNamespaceRootName } from "./namespace/identity.js";
+import { assertDeclaredSpacesValid } from "./runtime/hostResolver.js";
 import { loadSelfNodeConfig, type SelfNodeConfig } from "./http/selfMapping.js";
 import { defaultUsageLedger } from "./resources/usageLedger.js";
 import { defaultHostTelemetryLedger } from "./resources/hostTelemetryLedger.js";
@@ -145,6 +146,15 @@ export function resolveMonadRuntimeConfig(options: MonadOptions = {}): MonadRunt
   const port = options.port || sourceEnv.PORT || 8161;
   const nodeHostname = options.hostname || sourceEnv.MONAD_SELF_HOSTNAME || os.hostname();
   const fetchProxyTimeoutMs = Number(options.fetchProxyTimeoutMs || sourceEnv.MONAD_FETCH_TIMEOUT_MS || 15000);
+
+  // The spaces this monad resolves hosts against are checked BEFORE anything is written to the environment: a
+  // rejected start leaves process.env as it found it, and a bad declaration stops here instead of surfacing
+  // later on every request. Same list, same rules as the host resolver (see hostResolver.ts).
+  assertDeclaredSpacesValid({
+    ME_NAMESPACE: resolveEnvValue(options, sourceEnv, "namespace", "ME_NAMESPACE"),
+    MONAD_LOCAL_ALIAS_ROOT: env.MONAD_LOCAL_ALIAS_ROOT,
+    MONAD_CANONICAL_SPACE: env.MONAD_CANONICAL_SPACE,
+  });
 
   writeEnv(env, "PORT", port);
   writeEnv(env, "SEED", resolveEnvValue(options, sourceEnv, "seed", "SEED") || sourceEnv.ME_SEED);

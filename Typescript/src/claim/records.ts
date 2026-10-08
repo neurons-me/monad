@@ -2,7 +2,12 @@ import crypto from "crypto";
 import { normalizeProofMessage, verifyEd25519Signature } from "this.me";
 import { getKernel, getRootNamespace } from "../kernel/manager.js";
 import { saveSnapshot } from "../kernel/manager.js";
-import { buildPersistentClaimBundle, writePersistentClaimBundle } from "./manager.js";
+import {
+  buildPersistentClaimBundle,
+  listPersistentClaims,
+  verifyPersistentClaim,
+  writePersistentClaimBundle,
+} from "./manager.js";
 import { hasReservedHandleLabel, normalizeNamespaceIdentity, normalizeNamespaceRootName, parseNamespaceIdentityParts } from "../namespace/identity.js";
 import { appendSemanticMemory } from "./memoryStore.js";
 import type {
@@ -187,6 +192,95 @@ function materializeProjectedNamespaceClaim(namespace: string, _timestamp: numbe
     data: { __ptr: namespace },
     timestamp: _timestamp,
   });
+}
+
+export type ReRootClaimsResult = {
+  from: string;
+  to: string;
+  dryRun: boolean;
+  /** namespaces issued under the new root (or that would be, on a dry run) */
+  created: string[];
+  /** namespaces left alone, with the reason (already claimed under the new root, signature not valid, ...) */
+  skipped: Array<{ namespace: string; reason: string }>;
+};
+
+/**
+ * Re-issues every claim held under root `from` as the SAME claim under root `to`: same identityHash, same
+ * public key, same creation time, signed fresh by this monad for the new namespace.
+ *
+ * Why this exists: a handle's data lives under `users.<handle>` whatever the root, but the claim that
+ * authorizes writing it is per namespace. Change the root a monad serves and every existing handle is
+ * unclaimed under the new one while its data is still there, so the first caller to claim
+ * `<handle>.<newRoot>` with any key gets write access to it (and the real owner is told NAMESPACE_TAKEN).
+ * Running this first closes that, and needs no password: a claim is rebuilt from the public key it already
+ * holds, by the same builder claimNamespace uses.
+ *
+ * Non-destructive (old claims stay) and idempotent (a namespace already claimed under `to` is skipped).
+ * A claim whose own signature does not verify is NOT carried over. The monad must not be running on this state.
+ */
+export function reRootNamespaceClaims(input: {
+  from: string;
+  to: string;
+  /** limit to these handles; default is every claim under `from` */
+  handles?: string[];
+  dryRun?: boolean;
+}): ReRootClaimsResult {
+  const from = normalizeNamespaceRootName(input.from);
+  const to = normalizeNamespaceRootName(input.to);
+  if (!from || !to) throw new Error("REROOT_ROOTS_REQUIRED");
+  if (from === to) throw new Error("REROOT_ROOTS_EQUAL");
+  const only = input.handles?.length ? new Set(input.handles.map((handle) => handle.trim().toLowerCase())) : null;
+  const dryRun = input.dryRun === true;
+  const result: ReRootClaimsResult = { from, to, dryRun, created: [], skipped: [] };
+  const now = Date.now();
+
+  for (const { claim } of listPersistentClaims()) {
+    const identity = parseNamespaceIdentityParts(claim.namespace);
+    const handle = String(identity.username || "").trim().toLowerCase();
+    if (!handle || normalizeNamespaceRootName(identity.host) !== from) continue;
+    if (only && !only.has(handle)) continue;
+
+    const target = normalizeNamespace(`${handle}.${to}`);
+    if (!verifyPersistentClaim(claim.namespace)) {
+      result.skipped.push({ namespace: claim.namespace, reason: "SIGNATURE_NOT_VALID" });
+      continue;
+    }
+    if (getClaim(target) || listPersistentClaims().some((entry) => entry.claim.namespace === target)) {
+      result.skipped.push({ namespace: claim.namespace, reason: "ALREADY_CLAIMED_UNDER_NEW_ROOT" });
+      continue;
+    }
+    if (dryRun) {
+      result.created.push(target);
+      continue;
+    }
+
+    const bundle = buildPersistentClaimBundle({
+      namespace: target,
+      identityHash: claim.identityHash,
+      publicKey: claim.publicKey.key,
+      issuedAt: claim.issuedAt,
+    });
+    const record: ClaimRecord = {
+      namespace: target,
+      identityHash: claim.identityHash,
+      publicKey: bundle.summary.claim.publicKey.key,
+      createdAt: claim.issuedAt,
+      updatedAt: now,
+    };
+    try {
+      kernelSet(claimPath(target), record);
+      writePersistentClaimBundle(bundle);
+      materializeProjectedNamespaceClaim(target, now);
+    } catch (error) {
+      try { kernelSet(claimPath(target), undefined); } catch { /* nothing to undo */ }
+      result.skipped.push({ namespace: claim.namespace, reason: error instanceof Error ? error.message : String(error) });
+      continue;
+    }
+    result.created.push(target);
+  }
+
+  if (!dryRun && result.created.length > 0) saveSnapshot();
+  return result;
 }
 
 export function rebuildProjectedNamespaceClaims(): number {

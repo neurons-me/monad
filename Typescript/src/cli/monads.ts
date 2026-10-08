@@ -11,6 +11,7 @@ import {
   pauseMonadProcess,
   readLogTail,
   readMonadRecord,
+  resolveMonadSeed,
   restartMonadProcess,
   resumeMonadProcess,
   startMonadProcess,
@@ -43,6 +44,8 @@ Usage:
   monads env <name> K=V ...  Keep variables (SEED, MONAD_MODULES, ...) and use them on every start
   monads env <name> --unset K  Forget a variable
   monads env <name> --seed-from-stdin  Keep SEED, read from stdin (never echoed)
+  monads reroot-claims <name> --to <root> [--from <root>] [--handles a,b] [--dry-run] [--keep-seed]
+                             Re-issue a stopped Monad's claims under a new root (before changing its namespace)
   monads proxy               Start the .monad browser gateway (routes name.monad)
   monads proxy --port <port> Start the gateway on a custom port (default: 8160)
 
@@ -65,7 +68,7 @@ function parseNamespaceOption(args: string[]): string | undefined {
 }
 
 function parsePositionalName(args: string[]): string | undefined {
-  const valueOptions = new Set(["--port", "--namespace", "--rootspace"]);
+  const valueOptions = new Set(["--port", "--namespace", "--rootspace", "--to", "--from", "--handles"]);
   for (let index = 1; index < args.length; index += 1) {
     const arg = args[index]!;
     const previous = args[index - 1]!;
@@ -385,6 +388,55 @@ async function openPanel(): Promise<void> {
   }
 }
 
+async function commandRerootClaims(args: string[]): Promise<void> {
+  const name = normalizeMonadName(parsePositionalName(args));
+  const record = await readMonadRecord(name);
+  if (!record) throw new Error(`Monad "${name}" is not known.`);
+  const to = parseOptionValue(args, "--to");
+  if (!to) throw new Error("Usage: monads reroot-claims <name> --to <root> [--from <root>] [--handles a,b] [--dry-run] [--keep-seed]");
+  const from = parseOptionValue(args, "--from") || record.namespace;
+  const handles = (parseOptionValue(args, "--handles") || "").split(",").map((handle) => handle.trim()).filter(Boolean);
+  const dryRun = args.includes("--dry-run");
+
+  const status = await getMonadStatus(record);
+  if (status.status === "running" || status.status === "starting") {
+    throw new Error(`Monad "${name}" is ${status.status}. Stop it first: the claims are changed on its own state.`);
+  }
+
+  // The state is opened as the monad itself would open it: its own seed (the one it keeps, else the one its
+  // CURRENT namespace gives it -- changing the namespace later changes that default, see --keep-seed), the NEW
+  // root as its namespace, and its own state and claim directories.
+  const kept = readMonadEnv(name);
+  const seed = resolveMonadSeed({ stored: kept.SEED, shell: process.env.SEED || process.env.ME_SEED, namespace: record.namespace });
+  process.env.SEED = seed;
+  process.env.ME_NAMESPACE = to;
+  process.env.ME_STATE_DIR = record.stateDir;
+  process.env.MONAD_CLAIM_DIR = record.claimDir;
+
+  const { validateKnownSpaces } = await import("this.me");
+  validateKnownSpaces([from, to]);
+  const { reRootNamespaceClaims } = await import("../claim/records.js");
+  const result = reRootNamespaceClaims({ from, to, handles: handles.length ? handles : undefined, dryRun });
+
+  console.log(`${dryRun ? "Would re-issue" : "Re-issued"} ${result.created.length} claim(s) of "${name}" from ${result.from} to ${result.to}:`);
+  for (const namespace of result.created) console.log(`  + ${namespace}`);
+  for (const skipped of result.skipped) console.log(`  - ${skipped.namespace}  (${skipped.reason})`);
+  if (dryRun) return;
+
+  if (args.includes("--keep-seed")) {
+    if (kept.SEED) console.log("The monad already keeps its own SEED; nothing to pin.");
+    else {
+      writeMonadEnv(name, { SEED: seed });
+      console.log(`Kept the SEED the monad has been running with, so its identity survives the namespace change.`);
+    }
+  } else if (!kept.SEED) {
+    console.log(
+      `Note: "${name}" keeps no SEED of its own, so it derives one from its namespace. Starting it under "${to}" would derive a ` +
+        "different one, i.e. a different identity. Re-run with --keep-seed (or `monads env` it) before changing the namespace.",
+    );
+  }
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const command = args[0];
@@ -407,6 +459,7 @@ async function main(): Promise<void> {
   else if (command === "status") await commandStatus(args);
   else if (command === "logs") await commandLogs(args);
   else if (command === "env") await commandEnv(args);
+  else if (command === "reroot-claims") await commandRerootClaims(args);
   else if (command === "proxy") await commandProxy(args);
   else {
     printHelp();

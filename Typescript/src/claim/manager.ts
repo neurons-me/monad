@@ -375,6 +375,27 @@ export function loadPersistentClaim(namespace: string): PersistentClaimSummary |
   };
 }
 
+/**
+ * Every persistent claim in the claim store, as written. Files that are not a PersistentClaimV1 record, or
+ * cannot be read, are left out: this lists what is usable, it does not validate it (see verifyPersistentClaim).
+ */
+export function listPersistentClaims(): PersistentClaimSummary[] {
+  const { claimsDir } = getClaimStorePaths();
+  if (!fs.existsSync(claimsDir)) return [];
+  const claims: PersistentClaimSummary[] = [];
+  for (const entry of fs.readdirSync(claimsDir)) {
+    if (!entry.endsWith(".json")) continue;
+    const claimPath = path.join(claimsDir, entry);
+    try {
+      const claim = JSON.parse(fs.readFileSync(claimPath, "utf8")) as PersistentClaimRecord;
+      if (claim?.kind === "PersistentClaimV1" && typeof claim.namespace === "string") claims.push({ claimPath, claim });
+    } catch {
+      // unreadable or not a claim record
+    }
+  }
+  return claims.sort((left, right) => left.claim.namespace.localeCompare(right.claim.namespace));
+}
+
 export function verifyPersistentClaim(namespace: string) {
   try {
     const loaded = loadPersistentClaim(namespace);

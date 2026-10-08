@@ -27,6 +27,9 @@ function fakeBootstrap(overrides: Partial<MonadBootstrapResult["config"]> = {}):
       reactDomUmdDir: "/tmp/react-dom",
       routesPath: "/tmp/routes.js",
       indexPath: "/tmp/index.html",
+      frontendDir: null,
+      modules: [],
+      mainServerName: null,
       selfNodeConfig: {
         identity: "files.local",
         monadId: "monad:files",

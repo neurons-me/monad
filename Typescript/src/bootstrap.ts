@@ -4,6 +4,8 @@ import { existsSync } from "fs";
 import { rebuildProjectedNamespaceClaims } from "./claim/records.js";
 import { ensureRootSemanticBootstrap } from "./claim/semanticBootstrap.js";
 import { ensureInternalToken } from "./http/internalToken.js";
+import { MAIN_SERVER_NAME_PATH, normalizeMainServerName, seedMainServerName } from "./claim/mainServer.js";
+import { hasAnyGatewayOwner } from "./claim/gatewayAuthority.js";
 import { getKernel, getKernelStateDir } from "./kernel/manager.js";
 import { seedSelfMonadIndexEntry } from "./kernel/monadIndex.js";
 import { normalizeNamespaceIdentity, normalizeNamespaceRootName } from "./namespace/identity.js";
@@ -50,6 +52,11 @@ export interface MonadOptions {
    * or in MONAD_MODULES, by whoever starts it.
    */
   modules?: string | string[];
+  /**
+   * The domain that administers this gateway, declared in the namespace as
+   * netget.main.server.name (claim/mainServer.ts). MONAD_MAIN_SERVER_NAME.
+   */
+  mainServerName?: string;
   fetchProxyTimeoutMs?: number;
   logger?: MonadLogger | false;
 }
@@ -72,6 +79,8 @@ export interface MonadRuntimeConfig {
   frontendDir: string | null;
   /** Packages that mount routes into this monad. */
   modules: string[];
+  /** Main server domain to declare in the namespace on start, or null. */
+  mainServerName: string | null;
   selfNodeConfig: SelfNodeConfig | null;
   localNamespaceRoot: string;
 }
@@ -182,6 +191,7 @@ export function resolveMonadRuntimeConfig(options: MonadOptions = {}): MonadRunt
   writeEnv(env, "MONAD_INDEX_PATH", resolveEnvValue(options, sourceEnv, "indexPath", "MONAD_INDEX_PATH"));
   writeEnv(env, "MONAD_FRONTEND_DIR", resolveEnvValue(options, sourceEnv, "frontendDir", "MONAD_FRONTEND_DIR"));
   writeEnv(env, "MONAD_MODULES", resolveEnvValue(options, sourceEnv, "modules", "MONAD_MODULES"));
+  writeEnv(env, "MONAD_MAIN_SERVER_NAME", resolveEnvValue(options, sourceEnv, "mainServerName", "MONAD_MAIN_SERVER_NAME"));
   writeEnv(env, "MONAD_FETCH_TIMEOUT_MS", fetchProxyTimeoutMs);
 
   const selfNodeConfig = loadSelfNodeConfig({
@@ -226,6 +236,7 @@ export function resolveMonadRuntimeConfig(options: MonadOptions = {}): MonadRunt
     ),
     frontendDir: env.MONAD_FRONTEND_DIR ? resolvePath(cwd, env.MONAD_FRONTEND_DIR, ".") : null,
     modules: parseModuleList(env.MONAD_MODULES),
+    mainServerName: normalizeMainServerName(env.MONAD_MAIN_SERVER_NAME),
     selfNodeConfig,
     localNamespaceRoot,
   };
@@ -258,6 +269,15 @@ export async function bootstrapMonad(options: MonadOptions = {}): Promise<MonadB
     config.selfNodeConfig?.identity || config.localNamespaceRoot,
   );
   const seededSemanticBootstrap = ensureRootSemanticBootstrap(semanticBootstrapRoot);
+  // The gateway's main server, as a public path of the root namespace.
+  const mainServerSeed = seedMainServerName(semanticBootstrapRoot, config.mainServerName, {
+    gatewayClaimed: hasAnyGatewayOwner(),
+  });
+  if (mainServerSeed === "kept") {
+    console.warn(
+      `[monad] MONAD_MAIN_SERVER_NAME=${config.mainServerName} ignored: the gateway is claimed, so ${MAIN_SERVER_NAME_PATH} in the namespace is the authority (change it with the owner's signature).`,
+    );
+  }
 
   // Start the resource usage ledger bridge: from here onwards every surface
   // request produces a signed ledger entry at surface.usage.requests, and a

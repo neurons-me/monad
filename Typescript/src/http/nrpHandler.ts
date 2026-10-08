@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { getKernel } from "../kernel/manager.js";
 import { resolveNamespacePathValue, type ResolvedNamespacePath } from "./pathResolver.js";
 import { resolveServedNamespace } from "./requestedNamespace.js";
+import { declaredSpaceReference } from "../runtime/hostResolver.js";
 import { subscribe as subscribePathChange } from "../kernel/pathNotify.js";
 import type { DisclosureContent } from "./disclosure.js";
 import { isValidDomainShape } from "cleaker";
@@ -173,7 +174,12 @@ function handleNrpOpen(ws: WebSocket, req: IncomingMessage, msg: MsgNrpOpen): vo
   // still be a real claim/branch in `.me` without this passing (the kernel
   // has always treated namespace as an opaque string); it simply never
   // derives an NRP channel, so this rejects before doing any kernel lookup.
-  if (!isValidDomainShape(namespace)) {
+  //
+  // The shape rule is context-free, so it can never accept a space of a single label. A space this runtime
+  // declared for itself (`me://localhost`, `me://here`) is the root form of the same address and is let
+  // through on that context alone: the handle form (`me://jabellae.localhost`) already passed on its shape.
+  // Nothing undeclared gets through this way.
+  if (!isValidDomainShape(namespace) && !declaredSpaceReference(namespace)) {
     send(ws, {
       type: "error",
       channelId,

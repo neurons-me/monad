@@ -85,6 +85,27 @@ export function assertDeclaredSpacesValid(env: Record<string, string | undefined
   return declared.map((entry) => entry.value);
 }
 
+/**
+ * Reads an expression as a reference to a space this runtime DECLARED (`me://here`, or the bare `here`),
+ * using the same declared list the resolver and the startup check use. Returns null for anything else,
+ * including every runtime that declares nothing: without that context a bare name is never taken to be a
+ * space. This is how an entry point tells the root form (`me://<space>`) from the handle form
+ * (`me://<handle>.<space>`) without guessing.
+ */
+export function declaredSpaceReference(
+  expression: string,
+  env: Record<string, string | undefined> = process.env,
+): { space: string } | null {
+  const declared = readDeclaredSpaces(env).map((entry) => entry.value);
+  if (declared.length === 0) return null;
+  if (typeof ThisMe.tryParseMeSpaceUri !== "function") return null;
+  const text = String(expression ?? "").trim();
+  if (!text) return null;
+  const asUri = text.toLowerCase().startsWith("me://") ? text : `me://${text}`;
+  const parsed = ThisMe.tryParseMeSpaceUri(asUri, { knownSpaces: declared });
+  return parsed ? { space: parsed.space } : null;
+}
+
 function collectKnownSpaces(options: ResolveHostToMeUriOptions): string[] {
   const rawValues = [
     ...(options.knownSpaces || []),

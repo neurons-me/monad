@@ -37,7 +37,22 @@ function isLocalControlHost(value: string | undefined): boolean {
 
 function isAllowedOrigin(req: express.Request): boolean {
   const origin = req.get("origin");
-  if (!origin || origin === "null") return true;
+  // Absent entirely (no Origin header at all -- a non-browser caller, or a
+  // same-origin request, neither of which sends one) is the only case this
+  // treats as "nothing to check." The literal string "null" is a REAL,
+  // attacker-controlled Origin value, not an absence of one: a sandboxed
+  // iframe (<iframe sandbox src="data:text/html,...">) or a data:/file: page
+  // sends exactly `Origin: null` by spec, specifically because it has no
+  // origin of its own to disclose -- and used to pass this check for that
+  // reason, found live 2026-10-04 (same audit pass that closed the
+  // equivalent loopback-only/CORS-reflection gaps in netget): a page with no
+  // real origin to lose could embed a sandboxed iframe whose script reaches
+  // this control plane (start/stop/restart/delete named monad processes)
+  // with Origin: null and sailed through. There is no legitimate first-party
+  // caller that needs this exemption -- this monad's own UI is same-origin,
+  // which sends either no Origin header or the real matching one, never the
+  // literal string "null".
+  if (!origin) return true;
   return isLocalControlHost(origin);
 }
 

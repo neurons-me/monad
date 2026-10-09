@@ -60,12 +60,22 @@
  */
 
 import { parseNamespaceExpression } from "cleaker";
+import {
+  hasMainServerName,
+  isMainServerReservedPath,
+  normalizeMainServerName,
+  readMainServerGateway,
+  writeMainServerGateway,
+  writeMainServerName,
+} from "./mainServer.js";
 import { getClaim } from "./records.js";
+import { readSemanticBranchForNamespace } from "./memoryStore.js";
 import { isNamespaceWriteAuthorized } from "./replay.js";
 import { getKeychainKey } from "./keychain.js";
 import {
   getKernel,
   getKernelStateDir,
+  getRootNamespace,
   isRecognizedOwnRootConstant,
   readDurableSnapshotValue,
   saveSnapshot,
@@ -110,6 +120,8 @@ export type GatewayAuthorityError =
   | "TARGET_NOT_ADMIN"
   | "CANNOT_REVOKE_OWNER"
   | "NAMESPACE_NOT_LOCAL_TO_THIS_INSTALLATION"
+  | "MAIN_SERVER_NAME_INVALID"
+  | "MAIN_SERVER_OWNED_BY_ANOTHER_GATEWAY"
   | InstallationAuthorizationError
   | "INSTALLATION_AUTHORIZATION_PERSIST_FAILED";
 
@@ -203,6 +215,7 @@ function gatewayPath(gatewayId: string): string {
  *  isForeignNamespaceCollapsingToRoot() for why that case is real). */
 export function isGatewayAuthorityReservedPath(pathInput: string): boolean {
   const path = String(pathInput || "").trim();
+  if (isMainServerReservedPath(path)) return true; // netget.main.* -- see mainServer.ts
   return path === "daemon" || path === GATEWAY_ROOT || path.startsWith(`${GATEWAY_ROOT}.`);
 }
 
@@ -431,6 +444,7 @@ export function bootstrapGatewayAuthority(input: BootstrapGatewayAuthorityInput)
     // reported as a persist failure: the guarantee that actually matters
     // (the owner survives on disk) already holds.
     durablyPersisted = true;
+    bindSeededMainServerToGateway(gatewayId);
     finalizeInstallationAuthorization(stateDir, gatewayId, "consumed");
     return { ok: true, value: record };
   } catch {
@@ -630,6 +644,95 @@ export function revokeGatewayAdmin(input: RevokeGatewayAdminInput): GatewayAutho
 
   persist(record);
   return { ok: true, value: record };
+}
+
+// ─── main server name ───────────────────────────────────────────────────
+
+/**
+ * A main-server name the operator seeded has no gateway yet. The first gateway bootstrapped
+ * on this monad is the installation's own, so it takes the declaration: from then on only
+ * its owner may change it. Best effort -- a bootstrap must not fail over this.
+ */
+function bindSeededMainServerToGateway(gatewayId: string): void {
+  try {
+    const root = getRootNamespace();
+    if (hasMainServerName(root) && !readMainServerGateway(root)) {
+      writeMainServerGateway(root, gatewayId);
+      saveSnapshot();
+    }
+  } catch {
+    // left unbound: the first signed change binds it
+  }
+}
+
+/** True once any gateway on this monad has an owner. Reads the branch as the semantic tree
+ *  (each record is a value at its own path, so the parent has no value of its own). */
+export function hasAnyGatewayOwner(): boolean {
+  const branch = readSemanticBranchForNamespace(getRootNamespace(), GATEWAY_ROOT);
+  if (!branch || typeof branch !== "object") return false;
+  return Object.values(branch as Record<string, unknown>).some(
+    (record) => Boolean(record) && typeof record === "object" && Boolean((record as GatewayAuthorityRecord).owner),
+  );
+}
+
+export interface SetGatewayMainServerNameInput {
+  gatewayId: string;
+  namespace: string;
+  actingKeyId: string;
+  /** The domain to declare at netget.main.server.name. */
+  name: string;
+  nonce: string;
+  timestamp: number;
+  signature: string;
+  signedPayload?: string;
+}
+
+/**
+ * Changes netget.main.server.name. Owner only -- an admin can administer the
+ * gateway but does not get to move where the gateway is administered from. The
+ * same two checks as every mutation here, kept separate: the acting key is
+ * currently active (vigencia) and the identity behind it is this gateway's
+ * owner per the branch's own state (autorizacion).
+ */
+export function setGatewayMainServerName(input: SetGatewayMainServerNameInput): GatewayAuthorityResult<{ name: string }> {
+  const gatewayId = String(input.gatewayId || "").trim();
+  if (!gatewayId) return { ok: false, error: "GATEWAY_ID_REQUIRED" };
+  const namespace = normalizeNamespaceIdentity(input.namespace);
+  if (!namespace) return { ok: false, error: "NAMESPACE_REQUIRED" };
+  const actingKeyId = String(input.actingKeyId || "").trim();
+  if (!actingKeyId) return { ok: false, error: "IDENTITY_MISMATCH" };
+  if (!input.nonce || !input.signature) return { ok: false, error: "PROOF_REQUIRED" };
+  if (!isFreshTimestamp(input.timestamp)) return { ok: false, error: "PROOF_INVALID" };
+  const name = normalizeMainServerName(input.name);
+  if (!name) return { ok: false, error: "MAIN_SERVER_NAME_INVALID" };
+  if (!isNamespaceLocalToThisInstallation(namespace)) return { ok: false, error: "NAMESPACE_NOT_LOCAL_TO_THIS_INSTALLATION" };
+
+  const resolved = resolveActingIdentity(gatewayId, namespace, actingKeyId);
+  if (!resolved.ok) return resolved;
+  const { record, actingIdentity, actingKeyPublicKey } = resolved.value;
+  if (record.owner !== actingIdentity) return { ok: false, error: "OWNER_ONLY" };
+  // The name is global to the namespace: another gateway's owner does not get to change
+  // what this one's declaration says.
+  const holder = readMainServerGateway(getRootNamespace());
+  if (holder && holder !== gatewayId) return { ok: false, error: "MAIN_SERVER_OWNED_BY_ANOTHER_GATEWAY" };
+
+  if (isReplayed(`main-server:${gatewayId}`, actingKeyId, input.nonce)) return { ok: false, error: "REPLAY_REJECTED" };
+
+  const signedFields = { op: "gateway-set-main-server", gatewayId, namespace, name, nonce: input.nonce, timestamp: input.timestamp };
+  const authorized = isNamespaceWriteAuthorized({
+    claimIdentityHash: actingKeyId,
+    claimPublicKey: actingKeyPublicKey,
+    body: { ...signedFields, signature: input.signature, signedPayload: input.signedPayload },
+  });
+  if (!authorized) return { ok: false, error: "PROOF_INVALID" };
+
+  consumeNonce(`main-server:${gatewayId}`, actingKeyId, input.nonce);
+
+  const root = getRootNamespace();
+  writeMainServerName(root, name);
+  if (!holder) writeMainServerGateway(root, gatewayId);
+  saveSnapshot();
+  return { ok: true, value: { name } };
 }
 
 // ─── transfer ───────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@ import type { SelfSurfaceTrust, SelfSurfaceType } from "../http/selfMapping.js";
 import type { MonadRuntimeConfig } from "../bootstrap.js";
 import { listMonadRecords } from "../cli/runtime.js";
 import { normalizeMeIdentityHash, resolveMeIdentityHashFromEnv } from "../identity/meIdentity.js";
-import { getKernel, saveSnapshot } from "./manager.js";
+import { getKernel, getKernelMemoryLog, saveSnapshot } from "./manager.js";
 
 export interface MonadIndexEntry {
   monad_id: string;
@@ -80,7 +80,7 @@ export function readMonadIndexEntry(monadId: string): MonadIndexEntry | undefine
  */
 export function listMonadIndex(): MonadIndexEntry[] {
   const prefix = `${INDEX_ROOT}.`;
-  const mems = ((getKernel() as any).memories ?? []) as Memory[];
+  const mems = getKernelMemoryLog() as ReadonlyArray<Memory>;
   const latest = new Map<string, MonadIndexEntry | null>();
 
   for (const mem of mems) {

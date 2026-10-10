@@ -97,6 +97,27 @@ export function releaseStateDirLock(): void {
   unregisterStateDirLockCleanup();
 }
 
+/**
+ * Read-only view of the kernel's append-only memory log, WITHOUT the per-call
+ * copy that `kernel.memories` makes (`toPublicMemories` allocates one object
+ * per memory -- on a 500k-entry log that is ~0.8 s and heavy GC, paid on every
+ * HTTP request). Callers must treat the entries as immutable and must pick the
+ * fields they expose (path/operator/value/hash/prevHash/timestamp) instead of
+ * handing entries to the wire: unlike the public copy, these entries still
+ * carry the kernel's internal `effectiveSecret`.
+ *
+ * Falls back to the public getter if the kernel no longer keeps its log in a
+ * `_memories` array, so a kernel change degrades to slow, never to wrong.
+ */
+export function getKernelMemoryLog(): ReadonlyArray<{
+  path: string; operator: string | null; value: unknown; hash: string; prevHash?: string; timestamp: number;
+}> {
+  const kernel = getKernel() as unknown as { _memories?: unknown; memories?: unknown };
+  const raw = kernel._memories;
+  if (Array.isArray(raw)) return raw as never;
+  return (kernel.memories ?? []) as never;
+}
+
 export function getKernelStateDir(): string {
   const configured = String(process.env.ME_STATE_DIR || "").trim();
   return configured ? resolve(configured) : DEFAULT_ME_STATE_DIR;

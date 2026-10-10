@@ -6,6 +6,7 @@ import {
   namespaceToKernelPrefix,
   getRootNamespace,
   isForeignNamespaceCollapsingToRoot,
+  getKernelMemoryLog,
 } from "../kernel/manager.js";
 import type { Memory } from "this.me";
 
@@ -127,9 +128,9 @@ function kernelRead(namespace: string, path: string): unknown {
   return undefined;
 }
 
-function memoryToRow(mem: Memory, index: number): SemanticMemoryRow {
+function memoryToRow(mem: Memory, index: number, root: string = getRootNamespace()): SemanticMemoryRow {
   const kpath = mem.path;
-  let namespace = getRootNamespace();
+  let namespace = root;
   let path = kpath;
 
   if (kpath.startsWith("users.")) {
@@ -138,7 +139,7 @@ function memoryToRow(mem: Memory, index: number): SemanticMemoryRow {
     if (dot !== -1) {
       const username = rest.slice(0, dot);
       path = rest.slice(dot + 1);
-      namespace = `${username}.${getRootNamespace()}`;
+      namespace = `${username}.${root}`;
     }
   }
 
@@ -155,8 +156,8 @@ function memoryToRow(mem: Memory, index: number): SemanticMemoryRow {
   };
 }
 
-function allMemories(): Memory[] {
-  return getKernel().memories as Memory[];
+function allMemories(): ReadonlyArray<Memory> {
+  return getKernelMemoryLog() as ReadonlyArray<Memory>;
 }
 
 function memoriesForPrefix(prefix: string): Memory[] {
@@ -365,12 +366,24 @@ export function listSemanticMemoriesByRootNamespace(
 
   const limit = Math.max(1, Math.min(5_000, options.limit ?? 500));
   const mems = allMemories();
-
-  return mems
-    .map((m, i) => memoryToRow(m, i))
-    .filter((row) => normalizeNamespaceRootName(row.namespace) === rootNamespace)
-    .filter((row) => options.includeSystem || !isSystemSemanticPath(row.path))
-    .slice(0, limit);
+  const root = getRootNamespace();
+  // The log can hold hundreds of thousands of entries but only a handful of
+  // distinct namespaces: normalize each distinct namespace once, and stop at
+  // `limit` instead of building every row first and slicing afterwards.
+  const sameRoot = new Map<string, boolean>();
+  const out: SemanticMemoryRow[] = [];
+  for (let i = 0; i < mems.length && out.length < limit; i++) {
+    const row = memoryToRow(mems[i]!, i, root);
+    let match = sameRoot.get(row.namespace);
+    if (match === undefined) {
+      match = normalizeNamespaceRootName(row.namespace) === rootNamespace;
+      sameRoot.set(row.namespace, match);
+    }
+    if (!match) continue;
+    if (!options.includeSystem && isSystemSemanticPath(row.path)) continue;
+    out.push(row);
+  }
+  return out;
 }
 
 // ─── authorized hosts (kernel-backed projection) ─────────────────────────────

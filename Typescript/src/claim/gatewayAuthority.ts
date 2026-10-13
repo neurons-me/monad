@@ -81,7 +81,7 @@ import {
   saveSnapshot,
   saveSnapshotOrThrow,
 } from "../kernel/manager.js";
-import { normalizeNamespaceIdentity, normalizeNamespaceRootName } from "../namespace/identity.js";
+import { normalizeNamespaceIdentity, normalizeNamespaceRootName, signedNamespaceSpelling } from "../namespace/identity.js";
 import {
   beginInstallationAuthorizationConsumption,
   finalizeInstallationAuthorization,
@@ -361,7 +361,7 @@ export function bootstrapGatewayAuthority(input: BootstrapGatewayAuthorityInput)
   const signedFields = {
     op: "netget-claim-gateway",
     gatewayId,
-    namespace,
+    namespace: signedNamespaceSpelling(input.namespace, namespace),
     identityHash,
     keyId,
     challenge: input.challenge,
@@ -566,7 +566,7 @@ export function grantGatewayAdmin(input: GrantGatewayAdminInput): GatewayAuthori
   const signedFields = {
     op: "gateway-grant-admin",
     gatewayId,
-    namespace,
+    namespace: signedNamespaceSpelling(input.namespace, namespace),
     targetIdentityHash,
     targetNamespace,
     targetPublicKey: input.targetPublicKey ?? null,
@@ -626,7 +626,7 @@ export function revokeGatewayAdmin(input: RevokeGatewayAdminInput): GatewayAutho
 
   if (isReplayed(`revoke:${gatewayId}`, actingKeyId, input.nonce)) return { ok: false, error: "REPLAY_REJECTED" };
 
-  const signedFields = { op: "gateway-revoke-admin", gatewayId, namespace, targetIdentityHash, nonce: input.nonce, timestamp: input.timestamp };
+  const signedFields = { op: "gateway-revoke-admin", gatewayId, namespace: signedNamespaceSpelling(input.namespace, namespace), targetIdentityHash, nonce: input.nonce, timestamp: input.timestamp };
   const authorized = isNamespaceWriteAuthorized({
     claimIdentityHash: actingKeyId,
     claimPublicKey: actingKeyPublicKey,
@@ -718,7 +718,7 @@ export function setGatewayMainServerName(input: SetGatewayMainServerNameInput): 
 
   if (isReplayed(`main-server:${gatewayId}`, actingKeyId, input.nonce)) return { ok: false, error: "REPLAY_REJECTED" };
 
-  const signedFields = { op: "gateway-set-main-server", gatewayId, namespace, name, nonce: input.nonce, timestamp: input.timestamp };
+  const signedFields = { op: "gateway-set-main-server", gatewayId, namespace: signedNamespaceSpelling(input.namespace, namespace), name, nonce: input.nonce, timestamp: input.timestamp };
   const authorized = isNamespaceWriteAuthorized({
     claimIdentityHash: actingKeyId,
     claimPublicKey: actingKeyPublicKey,
@@ -773,7 +773,7 @@ export function transferGatewayOwner(input: TransferGatewayOwnerInput): GatewayA
 
   if (isReplayed(`transfer:${gatewayId}`, actingKeyId, input.nonce)) return { ok: false, error: "REPLAY_REJECTED" };
 
-  const signedFields = { op: "gateway-transfer-owner", gatewayId, namespace, targetIdentityHash, nonce: input.nonce, timestamp: input.timestamp };
+  const signedFields = { op: "gateway-transfer-owner", gatewayId, namespace: signedNamespaceSpelling(input.namespace, namespace), targetIdentityHash, nonce: input.nonce, timestamp: input.timestamp };
   const authorized = isNamespaceWriteAuthorized({
     claimIdentityHash: actingKeyId,
     claimPublicKey: actingKeyPublicKey,

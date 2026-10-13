@@ -141,6 +141,24 @@ export function normalizeNamespaceIdentity(input: unknown): string {
   return canonicalizeNamespaceConstant(raw);
 }
 
+/**
+ * The spelling of a namespace that a signer put into a payload it signed.
+ *
+ * A client signs the namespace it HOLDS and sends the same string in the request body ("alice.localhost"), while this
+ * server resolves identities by the canonical form ("alice.<this-machine-root>"): a loopback host constant is an alias
+ * for this machine's root (canonicalizeNamespaceConstant). Verifying the signature over the canonical form would
+ * verify bytes nobody signed, so every first keychain registration of an identity addressed through an alias answered
+ * PROOF_INVALID.
+ *
+ * `sent` is returned when it resolves to `canonical` (same identity, another spelling) and the canonical form
+ * otherwise. The proof stays bound to exactly one string: a signature made over one spelling does not verify for
+ * another, and a namespace that resolves elsewhere is never accepted in place of this one.
+ */
+export function signedNamespaceSpelling(sent: unknown, canonical: string): string {
+  if (typeof sent !== "string" || !sent) return canonical;
+  return normalizeNamespaceIdentity(sent) === canonical ? sent : canonical;
+}
+
 export function normalizeNamespaceConstant(input: unknown): string {
   const raw = normalizeRawNamespace(input);
   if (!raw) return "";

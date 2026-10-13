@@ -59,7 +59,7 @@ import {
   readSemanticBranchForNamespace,
   readSemanticValueForNamespace,
 } from "./memoryStore.js";
-import { normalizeNamespaceIdentity } from "../namespace/identity.js";
+import { normalizeNamespaceIdentity, signedNamespaceSpelling } from "../namespace/identity.js";
 import { saveSnapshot } from "../kernel/manager.js";
 
 export interface KeychainKeyRecord {
@@ -262,7 +262,7 @@ export function registerKeychainKey(input: RegisterKeychainKeyInput): KeychainRe
 
   const signedFieldsBase: Record<string, unknown> = {
     op: "keychain-register",
-    namespace,
+    namespace: signedNamespaceSpelling(input.namespace, namespace),
     newKey: input.newKey,
     nonce: input.nonce,
     timestamp: input.timestamp,
@@ -392,7 +392,7 @@ export function revokeKeychainKey(input: RevokeKeychainKeyInput): KeychainResult
 
   if (isNonceReplayed(namespace, actingKeyId, input.nonce)) return { ok: false, error: "REPLAY_REJECTED" };
 
-  const signedFields = { op: "keychain-revoke", namespace, actingKeyId, targetKeyId, nonce: input.nonce, timestamp: input.timestamp };
+  const signedFields = { op: "keychain-revoke", namespace: signedNamespaceSpelling(input.namespace, namespace), actingKeyId, targetKeyId, nonce: input.nonce, timestamp: input.timestamp };
   const authorized = isNamespaceWriteAuthorized({
     claimIdentityHash: actingKeyId,
     claimPublicKey: actingKey.publicKey,
@@ -449,7 +449,7 @@ export function signKeychainOperation(input: SignKeychainOperationInput): Keycha
 
   if (isNonceReplayed(namespace, keyId, input.nonce)) return { ok: false, error: "REPLAY_REJECTED" };
 
-  const signedFields = { op: "keychain-sign", namespace, keyId, payload: input.payload ?? null, nonce: input.nonce, timestamp: input.timestamp };
+  const signedFields = { op: "keychain-sign", namespace: signedNamespaceSpelling(input.namespace, namespace), keyId, payload: input.payload ?? null, nonce: input.nonce, timestamp: input.timestamp };
   const authorized = isNamespaceWriteAuthorized({
     claimIdentityHash: keyId,
     claimPublicKey: key.publicKey,
@@ -517,7 +517,7 @@ export function recoverKeychainWithRoot(input: RecoverKeychainInput): KeychainRe
 
   const signedFields = {
     op: "keychain-recovery",
-    namespace,
+    namespace: signedNamespaceSpelling(input.namespace, namespace),
     identityHash,
     newKey: input.newKey,
     nonce: input.nonce,

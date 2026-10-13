@@ -163,3 +163,31 @@ describe("a signed payload is verified over the namespace spelling that was sent
     expect(res.json.error).toBe("PROOF_INVALID");
   });
 });
+
+describe("an installation authorization compares namespaces resolved, not as typed", () => {
+  it("an authorization written for <handle>.localhost is consumed by the canonical namespace, and not by another identity", async () => {
+    const { issueInstallationAuthorization, beginInstallationAuthorizationConsumption } =
+      await import("../src/claim/installationAuthorization.js");
+    const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "monad-install-auth-"));
+    try {
+      const alias = `quinn.${ALIAS_ROOT}`;
+      const canonical = normalizeNamespaceIdentity(alias);
+      const issued = issueInstallationAuthorization({ stateDir, gatewayId: "spelling.gateway.local", namespace: alias, identityHash: "quinn", expiresAt: Date.now() + 60_000 });
+      expect(issued.ok).toBe(true);
+
+      // another identity under the same root is refused, before and after the spelling is resolved
+      const other = beginInstallationAuthorizationConsumption({
+        stateDir, gatewayId: "spelling.gateway.local", namespace: normalizeNamespaceIdentity(`rory.${ALIAS_ROOT}`), identityHash: "quinn", isDurablyBootstrapped: () => false,
+      });
+      expect(other.ok).toBe(false);
+      if (!other.ok) expect(other.error).toBe("INSTALLATION_AUTHORIZATION_MISMATCH");
+
+      const same = beginInstallationAuthorizationConsumption({
+        stateDir, gatewayId: "spelling.gateway.local", namespace: canonical, identityHash: "quinn", isDurablyBootstrapped: () => false,
+      });
+      expect(same.ok).toBe(true);
+    } finally {
+      fs.rmSync(stateDir, { recursive: true, force: true });
+    }
+  });
+});

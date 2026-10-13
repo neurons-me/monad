@@ -63,6 +63,7 @@
 
 import fs from "fs";
 import path from "path";
+import { normalizeNamespaceIdentity } from "../namespace/identity.js";
 
 export type InstallationAuthorizationStatus = "pending" | "in-flight" | "consumed";
 
@@ -219,7 +220,12 @@ export function beginInstallationAuthorizationConsumption(input: {
 
   if (record.status === "consumed") return { ok: false, error: "INSTALLATION_AUTHORIZATION_CONSUMED" };
   if (Date.now() > record.expiresAt) return { ok: false, error: "INSTALLATION_AUTHORIZATION_EXPIRED" };
-  if (record.namespace !== input.namespace || record.identityHash !== input.identityHash) {
+  // The authorization was written with the namespace as the operator typed it ("alice.localhost"); the caller asks with
+  // the canonical form. Two spellings of one identity are one identity: compare them resolved.
+  if (
+    normalizeNamespaceIdentity(record.namespace) !== normalizeNamespaceIdentity(input.namespace)
+    || record.identityHash !== input.identityHash
+  ) {
     return { ok: false, error: "INSTALLATION_AUTHORIZATION_MISMATCH" };
   }
 

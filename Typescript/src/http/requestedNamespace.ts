@@ -20,6 +20,7 @@
 import type express from "express";
 import { resolveHostToMeUri } from "../runtime/hostResolver.js";
 import { hasReservedHandleLabel } from "../namespace/identity.js";
+import { resolveTransportHost } from "./namespace.js";
 
 export type ServedNamespace =
   | { ok: true; namespace: string }
@@ -61,5 +62,35 @@ export function refuseUnservedRequestedNamespace(req: express.Request, res: expr
   const requested = readRequestedNamespace(req);
   if (!requested.present || requested.ok) return false;
   res.status(400).json(describe(requested.reason));
+  return true;
+}
+
+/**
+ * True when the request reached this monad by a network ADDRESS (an IP literal, with no forwarded name): the monad
+ * answering as itself, which is how the GUI's directory consumers and an operator's curl read it. It names no space.
+ * That is a PUBLIC view: it delivers what the root already publishes and grants no privilege -- not an exception to
+ * permissions (writes by address still pass the same signature and reserved-path guards, and a path's disclosure is
+ * decided per path as for any other read).
+ */
+export function isReadByNetworkAddress(req: express.Request): boolean {
+  const host = resolveTransportHost(req);
+  return /^(\d{1,3}(\.\d{1,3}){3}|\[?[0-9a-f:]+\]?)$/i.test(host) && !req.headers["x-forwarded-host"];
+}
+
+/**
+ * For a read that arrived under a NAME this monad does not resolve to a space it serves ("unknown"): refuses it (404)
+ * instead of letting the kernel map that namespace onto its own root's storage, which would answer a name nobody
+ * created with the root's data. Not applied to a read by network address (see isReadByNetworkAddress), which names no
+ * space and keeps the monad's own view. Answers `true` when it refused.
+ */
+export function refuseUnresolvedNameRead(
+  req: express.Request,
+  res: express.Response,
+  namespace: string,
+  describe: (error: string) => unknown,
+): boolean {
+  if (String(namespace || "").trim().toLowerCase() !== "unknown") return false;
+  if (isReadByNetworkAddress(req)) return false;
+  res.status(404).json(describe("PATH_NOT_FOUND"));
   return true;
 }

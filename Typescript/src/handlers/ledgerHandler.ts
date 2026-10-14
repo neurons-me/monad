@@ -11,8 +11,8 @@ import {
   formatObserverRelationLabel,
   resolveNamespace,
   resolveNamespaceProjectionRoot,
-  resolveTransportHost,
 } from "../http/namespace.js";
+import { isReadByNetworkAddress } from "../http/requestedNamespace.js";
 import { createPathResolverHandler } from "../http/pathResolver.js";
 import { htmlShell, wantsHtml } from "../http/shell.js";
 import type { NamespaceProviderBoot } from "../http/provider.js";
@@ -89,8 +89,7 @@ export function createLedgerHandlers(config: LedgerHandlerConfig): LedgerHandler
     const limit = Math.max(1, Math.min(5000, Number((req.query as any)?.limit ?? 5000)));
     const identityHash = String((req.query as any)?.identityHash || "").trim();
     const rootNamespace = resolveNamespaceProjectionRoot(chainNs) || chainNs;
-    const transportHost = resolveTransportHost(req);
-    const askedByAddress = /^(\d{1,3}(\.\d{1,3}){3}|\[?[0-9a-f:]+\]?)$/i.test(transportHost) && !req.headers["x-forwarded-host"];
+    const askedByAddress = isReadByNetworkAddress(req);
     const users = usersVisibleFrom(chainNs, rootNamespace, askedByAddress);
     const blocks = readBlocks(chainNs, identityHash, limit);
     return res.json(createEnvelope(target, { namespace: chainNs, rootNamespace, lens, users, blocks, count: blocks.length }));

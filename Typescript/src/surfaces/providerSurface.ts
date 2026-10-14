@@ -4,7 +4,7 @@ import { createEnvelope, createErrorEnvelope } from "../http/envelope.js";
 import { normalizeHttpRequestToMeTarget } from "../http/meTarget.js";
 import { resolveNamespace, resolveTransportHost } from "../http/namespace.js";
 import { resolveNamespacePathValue } from "../http/pathResolver.js";
-import { refuseUnservedRequestedNamespace } from "../http/requestedNamespace.js";
+import { refuseUnresolvedNameRead, refuseUnservedRequestedNamespace } from "../http/requestedNamespace.js";
 import {
   buildNamespaceProviderBoot,
   resolveNamespaceSurfaceSpec,
@@ -100,6 +100,11 @@ export function createProviderSurface(config: ProviderSurfaceConfig): ExpressRou
         detail: "NamespaceProvider.resolve requires ?path=",
       }));
     }
+
+    // A namespace taken from the HOST that this monad does not resolve is not the root's: it is not read from the
+    // root's storage. (An explicit ?namespace= is already validated by its own route.)
+    const explicit = String((req.query as any)?.namespace || "").trim();
+    if (!explicit && refuseUnresolvedNameRead(req, res, namespace, (error) => createErrorEnvelope(target, { namespace, path: rawPath, route, error }))) return;
 
     const resolved = await resolveNamespacePathValue(namespace, rawPath);
     if (!resolved.found) {

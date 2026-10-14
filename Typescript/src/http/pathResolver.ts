@@ -1,10 +1,10 @@
 import type express from "express";
 import { readSemanticBranchForNamespace, isPathNearSecretScope } from "../claim/memoryStore.js";
-import { isForeignUsersPrefixWrite } from "../kernel/manager.js";
+import { isForeignNamespaceReadCollapsingToRoot, isForeignUsersPrefixWrite } from "../kernel/manager.js";
 import { resolveNamespace } from "./namespace.js";
 import { normalizeHttpRequestToMeTarget } from "./meTarget.js";
 import { createEnvelope, createErrorEnvelope } from "./envelope.js";
-import { refuseUnservedRequestedNamespace } from "./requestedNamespace.js";
+import { refuseUnresolvedNameRead, refuseUnservedRequestedNamespace } from "./requestedNamespace.js";
 import { resolveLogsFromSource, shouldInterceptLogsPath } from "./logsSourceProxy.js";
 import { resolveOpenRestyStatusFromSource, shouldInterceptOpenRestyPath } from "./openRestyStatusProxy.js";
 import type { DisclosureContent } from "./disclosure.js";
@@ -58,6 +58,13 @@ export async function resolveNamespacePathValue(
     return { namespace, path: dotPath, found: false, _classification: "not_found" };
   }
 
+  // A namespace that is not this monad's root must not be answered from the root's storage (the kernel maps every
+  // foreign constant onto it). The one exception is "unknown": the monad's own view, reached by network address, which
+  // the HTTP handlers allow or refuse by how the request arrived (requestedNamespace.ts).
+  if (namespace.toLowerCase() !== "unknown" && isForeignNamespaceReadCollapsingToRoot(namespace)) {
+    return { namespace, path: dotPath, found: false, _classification: "not_found" };
+  }
+
   const semanticResolved = readSemanticBranchForNamespace(namespace, dotPath);
   if (typeof semanticResolved !== "undefined") {
     return { namespace, path: dotPath, value: semanticResolved, found: true, _classification: "public" };
@@ -92,6 +99,7 @@ export function createPathResolverHandler() {
 
     if (refuseUnservedRequestedNamespace(req, res, (error) => createErrorEnvelope(target, { error }))) return;
     const namespace = resolveNamespace(req);
+    if (refuseUnresolvedNameRead(req, res, namespace, (error) => createErrorEnvelope(target, { error }))) return;
     const segments0 = trimmed.split("/").filter(Boolean);
 
     let segments = segments0;

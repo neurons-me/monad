@@ -58,6 +58,15 @@ const readRoot = (origin: string, host: string) => new Promise<{ status: number;
   });
   req.on("error", reject); req.end();
 });
+const request = (origin: string, host: string, method: string, urlPath: string, body?: unknown) => new Promise<{ status: number; text: string; json: any }>((resolve, reject) => {
+  const u = new URL(origin);
+  const payload = body === undefined ? undefined : JSON.stringify(body);
+  const req = http.request({ host: u.hostname, port: u.port, path: urlPath, method, headers: { Host: host, Accept: "application/json", ...(payload ? { "content-type": "application/json", "content-length": Buffer.byteLength(payload) } : {}) } }, (res) => {
+    let text = ""; res.on("data", (c) => (text += c));
+    res.on("end", () => { let json: any = null; try { json = JSON.parse(text); } catch { /* not json */ } resolve({ status: res.statusCode ?? 0, text, json }); });
+  });
+  req.on("error", reject); if (payload) req.write(payload); req.end();
+});
 const names = (r: { json: any }) => (r.json?.users ?? []).map((u: any) => u.username).sort();
 
 describe("an address that is not the root does not receive the root's directory", () => {
@@ -105,7 +114,80 @@ describe("an address that is not the root does not receive the root's directory"
 
   it("a read by IP is the root's, as before (what the directory consumers use)", async () => {
     const r = await readRoot(origin, new URL(origin).host);
-    console.log("DEBUG-IP", JSON.stringify(r.json?.target?.namespace), r.json?.rootNamespace, names(r));
     expect(names(r)).toEqual(["alice", "bob"]);
+  });
+});
+
+describe("nothing of the root is delivered to a name that is not the root -- the WHOLE response, and a datum read by path", () => {
+  let server: Server; let origin: string; let runtimeRoot: string;
+  const MARKER = "root-only-datum-7f3a91c2";
+  beforeEach(async () => {
+    resetKernelStateForTests(); resetKeychainNonceCacheForTests();
+    runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "monad-root-isolation-"));
+    ({ server, origin } = await startServer(runtimeRoot));
+    await claim(origin, "alice");
+    await claim(origin, "bob");
+    // a datum that belongs to the root, written at the root's own address
+    const w = await request(origin, ROOT, "POST", "/", { path: "profile.motto", value: MARKER, operation: "write" });
+    if (w.status >= 300) throw new Error(`could not write the root datum: ${w.status} ${w.text}`);
+  });
+  afterEach(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    resetKernelStateForTests(); resetKeychainNonceCacheForTests();
+    fs.rmSync(runtimeRoot, { recursive: true, force: true });
+  });
+
+  const OTHERS = [`whatever.${ALIAS_ROOT}`, `whatever.${ROOT}`, `a.b.${ALIAS_ROOT}`, "not-a-known-space.example", `alice.${ALIAS_ROOT}`];
+
+  it("control: the datum is readable at the root's own address", async () => {
+    const r = await request(origin, ROOT, "GET", "/profile/motto");
+    expect(r.status).toBe(200);
+    expect(r.text).toContain(MARKER);
+  });
+
+  it("a read of that path from any other name never returns the datum, in any part of the response", async () => {
+    for (const host of OTHERS) {
+      for (const p of ["/profile/motto", "/profile.motto", "/@root/profile/motto"]) {
+        const r = await request(origin, host, "GET", p);
+        if (r.text.includes(MARKER)) console.log("LEAK", host, p, r.status, r.text.slice(0, 400));
+        expect({ host, p, leaked: r.text.includes(MARKER) }).toEqual({ host, p, leaked: false });
+      }
+    }
+  });
+
+  it("the whole of GET / for any other name carries none of the root's data (users, blocks, datum, other users)", async () => {
+    for (const host of OTHERS) {
+      const r = await request(origin, host, "GET", "/");
+      expect(r.status).toBe(200);
+      expect({ host, leaked: r.text.includes(MARKER) }).toEqual({ host, leaked: false });
+      expect({ host, bob: r.text.includes("bob") }).toEqual({ host, bob: false });
+      if (!host.startsWith("alice.")) expect({ host, alice: r.text.includes("alice") }).toEqual({ host, alice: false });
+      expect(r.json?.blocks ?? []).toEqual(expect.any(Array));
+      for (const b of r.json?.blocks ?? []) expect(JSON.stringify(b)).not.toMatch(/bob/);
+    }
+  });
+
+  it("an unsigned write that arrives under another name does not land in the root's data", async () => {
+    const INJECT = "injected-from-another-name-51d0";
+    for (const host of [`whatever.${ALIAS_ROOT}`, "not-a-known-space.example"]) {
+      await request(origin, host, "POST", "/", { path: "profile.motto", value: INJECT, operation: "write" });
+    }
+    const atRoot = await request(origin, ROOT, "GET", "/profile/motto");
+    expect(atRoot.text).toContain(MARKER);
+    expect(atRoot.text).not.toContain(INJECT);
+  });
+
+  it("a read by network address is the monad's own public view: it grants no write and no private path", async () => {
+    const ip = new URL(origin).host;
+    // it is the same information the root's own address already publishes, nothing more
+    const view = await request(origin, ip, "GET", "/");
+    expect(view.status).toBe(200);
+    expect(names(view)).toEqual(["alice", "bob"]);
+    // and a write made by address is not a privileged channel into someone's namespace
+    const forged = await request(origin, ip, "POST", "/", { path: "users.alice.profile.email", value: "forged@example.test", operation: "write" });
+    expect(forged.status).toBeGreaterThanOrEqual(400);
+    // an unclaimed-namespace write guard still applies to reserved branches
+    const reserved = await request(origin, ip, "POST", "/", { path: "daemon.gateways.x.owner", value: "me", operation: "write" });
+    expect(reserved.status).toBeGreaterThanOrEqual(400);
   });
 });

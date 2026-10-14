@@ -321,6 +321,27 @@ export function isForeignNamespaceCollapsingToRoot(namespace: string): boolean {
 }
 
 /**
+ * The READ-side counterpart of isForeignNamespaceCollapsingToRoot: true when reading `namespace` would be answered
+ * from the kernel ROOT's storage although the namespace is not this monad's own root.
+ *
+ * It follows namespaceToKernelPrefix literally: a namespace whose root constant is not this monad's maps to the empty
+ * prefix whether or not it carries a handle (`root.unknown`, `a.b.example`), so reading it returned the root's data under
+ * a name that is not the root's. isForeignNamespaceCollapsingToRoot answers false for a namespace with a handle (it is
+ * the write guard for a bare foreign string), which is why it is not reused here.
+ */
+export function isForeignNamespaceReadCollapsingToRoot(namespace: string): boolean {
+  const trimmed = String(namespace || "").trim();
+  if (!trimmed) return false;
+  if (namespaceToKernelPrefix(trimmed) !== "") return false;
+  try {
+    const parsed = parseNamespaceExpression(trimmed);
+    return !isRecognizedOwnRootConstant(normalizeNamespaceRootName(parsed.constant));
+  } catch {
+    return true;
+  }
+}
+
+/**
  * True when `canonicalPath` (already run through replay.ts's
  * canonicalizeWritePath -- callers must not pass a raw, un-normalized path;
  * see that function's own doc comment for why) would land under a

@@ -1,6 +1,8 @@
 import type express from "express";
 import { getAllBlocks } from "../Blockchain/blockchain.js";
 import { getUsersForRootNamespace } from "../Blockchain/users.js";
+import { isRecognizedOwnRootConstant } from "../kernel/manager.js";
+import { normalizeNamespaceIdentity, normalizeNamespaceRootName } from "../namespace/identity.js";
 import { isSystemSemanticPath, listSemanticMemoriesByRootNamespace } from "../claim/memoryStore.js";
 import { createEnvelope } from "../http/envelope.js";
 import { normalizeHttpRequestToMeTarget } from "../http/meTarget.js";
@@ -9,6 +11,7 @@ import {
   formatObserverRelationLabel,
   resolveNamespace,
   resolveNamespaceProjectionRoot,
+  resolveTransportHost,
 } from "../http/namespace.js";
 import { createPathResolverHandler } from "../http/pathResolver.js";
 import { htmlShell, wantsHtml } from "../http/shell.js";
@@ -35,6 +38,38 @@ function readBlocks(ns: string, identityHash: string, limit: number) {
   return blocks.slice().sort((a: any, b: any) => Number(b?.timestamp || 0) - Number(a?.timestamp || 0)).slice(0, limit);
 }
 
+/**
+ * The directory a read of `/` may show to the address that asked.
+ *
+ *   the root's own address      the directory of users under it (what that address IS);
+ *   an address that is one user the user's own row, and nothing else;
+ *   any other name              none.
+ *
+ * The directory belongs to the root's context. An address under the root is another context: it used to receive the
+ * root's whole directory (usernames and identity hashes), so a name nobody had created showed everyone under the root.
+ * `rootNamespace` stays in the answer: it says under which root the address sits, it is not data of the root.
+ * Spellings are compared resolved (`alice.localhost` and `alice.<this machine's root>` are one address).
+ * `askedByAddress`: the request reached the monad by an IP literal with no forwarded host (see below).
+ */
+function usersVisibleFrom(chainNs: string, rootNamespace: string, askedByAddress = false) {
+  const own = normalizeNamespaceIdentity(chainNs);
+  const root = normalizeNamespaceIdentity(rootNamespace);
+  // An address that names no namespace this monad serves resolves to "unknown", and the kernel maps every namespace it
+  // does not know onto its own root's storage: asking for the directory of "unknown" is asking for the root's. Only an
+  // address that IS this monad's own root may have it.
+  const isOwnRoot = (!own || own === root) && isRecognizedOwnRootConstant(normalizeNamespaceRootName(own || root));
+  // A read by network ADDRESS (an IP literal, no forwarded name) is the monad answering as itself: it is how the
+  // directory consumers (the GUI's users table and search) have always read it. It names no other context.
+  if (isOwnRoot || askedByAddress) return getUsersForRootNamespace(rootNamespace);
+  if (!own || own === root) return [];
+  const directory = getUsersForRootNamespace(rootNamespace);
+  const suffix = `.${root}`;
+  if (!root || !own.endsWith(suffix)) return [];
+  const handle = own.slice(0, -suffix.length);
+  if (!handle || handle.includes(".")) return [];
+  return directory.filter((u: any) => String(u?.username ?? "").toLowerCase() === handle);
+}
+
 export function createLedgerHandlers(config: LedgerHandlerConfig): LedgerHandlers {
   // GET / — HTML shell (with ?target bridge delegation) or ledger read
   const root: express.RequestHandler = (req, res, next) => {
@@ -54,7 +89,9 @@ export function createLedgerHandlers(config: LedgerHandlerConfig): LedgerHandler
     const limit = Math.max(1, Math.min(5000, Number((req.query as any)?.limit ?? 5000)));
     const identityHash = String((req.query as any)?.identityHash || "").trim();
     const rootNamespace = resolveNamespaceProjectionRoot(chainNs) || chainNs;
-    const users = getUsersForRootNamespace(rootNamespace);
+    const transportHost = resolveTransportHost(req);
+    const askedByAddress = /^(\d{1,3}(\.\d{1,3}){3}|\[?[0-9a-f:]+\]?)$/i.test(transportHost) && !req.headers["x-forwarded-host"];
+    const users = usersVisibleFrom(chainNs, rootNamespace, askedByAddress);
     const blocks = readBlocks(chainNs, identityHash, limit);
     return res.json(createEnvelope(target, { namespace: chainNs, rootNamespace, lens, users, blocks, count: blocks.length }));
   };

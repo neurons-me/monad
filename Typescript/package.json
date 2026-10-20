@@ -2,8 +2,28 @@
   "name": "monad.ai",
   "version": "3.0.0",
   "description": "Monad daemon for identity, ledger, and semantic runtime surfaces.",
+  "homepage": "https://neurons-me.github.io/monad/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neurons-me/monad.git"
+  },
+  "bugs": {
+    "url": "https://github.com/neurons-me/monad/issues"
+  },
+  "keywords": [
+    "monad",
+    "me://",
+    "nrp",
+    "namespace",
+    "identity",
+    "ledger",
+    "signed-claims",
+    "ed25519",
+    "runtime",
+    "local-first"
+  ],
   "author": "suiGn",
-  "license": "ISC",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",

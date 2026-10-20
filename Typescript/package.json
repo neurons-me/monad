@@ -1,7 +1,7 @@
 {
   "name": "monad.ai",
   "version": "3.0.0",
-  "description": "Monad daemon for identity, ledger, and semantic runtime surfaces.",
+  "description": "A simple substance whose internal states arise from its own nature. — The runtime that hosts a .me namespace: identity, signed claims, ledger and its HTTP surface.",
   "homepage": "https://neurons-me.github.io/monad/",
   "repository": {
     "type": "git",
@@ -18,11 +18,13 @@
     "identity",
     "ledger",
     "signed-claims",
-    "ed25519",
-    "runtime",
     "local-first"
   ],
-  "author": "suiGn",
+  "author": {
+    "name": "sui.gn",
+    "url": "https://neurons.me",
+    "email": "dev@neurons.me"
+  },
   "license": "MIT",
   "type": "module",
   "main": "./dist/src/index.js",

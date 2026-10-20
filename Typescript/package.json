@@ -1,6 +1,6 @@
 {
   "name": "monad.ai",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "A simple substance whose internal states arise from its own nature. — The runtime that hosts a .me namespace: identity, signed claims, ledger and its HTTP surface.",
   "homepage": "https://neurons-me.github.io/monad/",
   "repository": {

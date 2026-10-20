@@ -155,6 +155,6 @@ describe("an incompatible this.me is its own failure, and is declared as a depen
 
   it("package.json declares the same floor the startup check states", () => {
     const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-    expect(pkg.dependencies["this.me"]).toBe(`workspace:^${REQUIRED_ME.version}`);
+    expect(pkg.dependencies["this.me"]).toBe(`^${REQUIRED_ME.version}`);
   });
 });

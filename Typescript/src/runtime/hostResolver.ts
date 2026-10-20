@@ -42,7 +42,7 @@ export type ResolveHostToMeUriResult =
 
 /**
  * What this monad needs from this.me, stated once. package.json carries the same floor as a range
- * (`this.me: workspace:^4.2.0`), so an incompatible install is refused when dependencies are resolved; this
+ * (`this.me: ^4.2.0`), so an incompatible install is refused when dependencies are resolved; this
  * is the check that still answers if one gets through, and it says what is missing instead of failing on an
  * undefined function somewhere later.
  */

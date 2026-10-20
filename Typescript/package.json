@@ -63,13 +63,13 @@
   },
   "dependencies": {
     "@types/ws": "^8.18.1",
-    "cleaker": "workspace:*",
+    "cleaker": "^4.0.1",
     "cors": "^2.8.5",
     "express": "^4.22.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "this.gui": "^4.0.0",
-    "this.me": "workspace:^4.2.0",
+    "this.me": "^4.2.0",
     "ws": "^8.21.1"
   },
   "devDependencies": {

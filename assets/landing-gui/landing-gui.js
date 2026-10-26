@@ -1,6 +1,6 @@
 // monad copy of /.me/assets/landing-gui/landing-gui.js (same .GUI topbar: me:// path, search, Docs, GitHub icon,
-// theme picker, light/dark, gear), plus one layout: #static-landing[data-layout=monad] renders the monad card
-// (GUI.Monad orb on top, GUI.MonadMesh open below, every monad live) from the static .mesh list.
+// theme picker, light/dark, gear), plus one layout: #static-landing[data-layout=monad] renders the monad.ai orb
+// (GUI.Monad, healthy left unset: the default neutral state, no live/offline claim).
 // .GUI (this.gui@4.2.0) for hand-written .me landings. Copy of neurons-me.github.io docs/assets/landing-gui.js
 // (the /robots/ and /smart-cities/ landings), kept here so .me pages don't depend on the site repo's paths, plus
 // the /.me/Demos/ index layout (kicker, h1, one line, image-left demo cards) and the /.me/docs/ index layout
@@ -47,8 +47,7 @@
   const docsIndex = SRC.dataset.layout === "docs-index", docPage = SRC.dataset.layout === "doc";
   const demosIndex = !docsIndex && !docPage && !!SRC.querySelector(".page .grid .card");
   const header = SRC.querySelector("header");
-  const page = monadPage ? { path, docs: SRC.querySelector(".topnav a[data-topbar=docs]")?.getAttribute("href"), github: SRC.querySelector(".topnav a[href*='github.com']")?.getAttribute("href"),
-      apps: [...SRC.querySelectorAll(".mesh li")].map((li) => ({ name: txt(li.querySelector(".name")), port: Number(txt(li.querySelector(".port")).replace(/^:/, "")), healthy: true })) } : docPage ? { path, docs: SRC.querySelector(".topnav a[data-topbar=docs]")?.getAttribute("href"), github: SRC.querySelector(".topnav a[href*='github.com']")?.getAttribute("href"), body: SRC.querySelector("main.doc") } : docsIndex ? (() => {
+  const page = monadPage ? { path, docs: SRC.querySelector(".topnav a[data-topbar=docs]")?.getAttribute("href"), github: SRC.querySelector(".topnav a[href*='github.com']")?.getAttribute("href") } : docPage ? { path, docs: SRC.querySelector(".topnav a[data-topbar=docs]")?.getAttribute("href"), github: SRC.querySelector(".topnav a[href*='github.com']")?.getAttribute("href"), body: SRC.querySelector("main.doc") } : docsIndex ? (() => {
     const t = SRC.querySelector(".page-title"), mark = t.querySelector("img"), foot = SRC.querySelector("footer a");
     return {
       path, docs: null, github: SRC.querySelector(".topnav a[href*='github.com']")?.getAttribute("href"),
@@ -577,13 +576,10 @@
             "& > [data-doc-sidebar] > *": { position: "sticky", top: "60px", maxHeight: "calc(100vh - 72px)", overflowY: "auto", overscrollBehavior: "contain" } } } }, blocks(axiomBlocks(relatedCards(page.body))))
       : N("Box", { component: "main", sx: { width: "min(860px, calc(100% - 40px))", mx: "auto", pt: 5, pb: 10, "@media (max-width:480px)": { pt: 3.5, width: "calc(100% - 32px)" } } }, blocks(axiomBlocks(relatedCards(page.body)))),
   ]);
-  // monad root: the card as GUI.MonadNamespaceCard draws it in this.gui@4.2.0 (orb band, mesh under a divider), built
-  // from its two parts so the mesh can start open (4.2.0's card has no meshDefaultOpen yet)
+  // monad root: only the monad.ai orb, in its default state (healthy unset: no live/offline claim)
   function MonadCard(p) {
-    const cardSx = { position: "relative", width: "100%", borderRadius: 3, border: "1px solid", borderColor: "divider", bgcolor: "background.paper", overflow: "hidden" };
-    return h(Box, { "data-gui-node-id": p["data-gui-node-id"], sx: cardSx },
-      h(Box, { sx: { height: 160, display: "flex", alignItems: "center", justifyContent: "center" } }, h(G.Monad, { mode: "contained", kind: "monad", label: "monad.ai", healthy: true })),
-      h(Box, { sx: { borderTop: 1, borderColor: "divider", px: 2, py: 1.5 } }, h(G.MonadMesh, { apps: page.apps, sleepingEntries: [], defaultOpen: true })));
+    return h(Box, { "data-gui-node-id": p["data-gui-node-id"], sx: { height: 220, display: "flex", alignItems: "center", justifyContent: "center" } },
+      h(G.Monad, { mode: "contained", kind: "monad", label: "monad.ai" }));
   }
   const monadSpec = () => N("Box", { sx: { minHeight: "100vh", bgcolor: "background.default", color: "text.primary" } }, [
     N("LandingTopBar", {}),

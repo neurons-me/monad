@@ -33,7 +33,7 @@
     html:not(.gui-on) .mepath a { color:#4fb3bf; }
     html:not(.gui-on) .mepath .here { font-weight:600; }
     html:not(.gui-on) .spacer { flex:1; }
-    html:not(.gui-on) .page { max-width:560px; margin:48px auto; padding:0 16px; font-family: ui-monospace, monospace; }
+    html:not(.gui-on) .monad-cards a { display:block; margin:12px 0; padding:12px; border:1px solid rgba(232,237,237,0.15); border-radius:12px; color:inherit; text-decoration:none; } html:not(.gui-on) .monad-cards span { display:block; } html:not(.gui-on) .page { max-width:560px; margin:48px auto; padding:0 16px; font-family: ui-monospace, monospace; }
   </style>
 </head>
 <body>
@@ -47,9 +47,13 @@
   </nav>
   <main class="page">
     <h1>monad.ai</h1>
+    <div class="monad-cards">
+      <a class="card" href="/monad/docs/"><span class="card-emoji">📚</span><span class="card-title">Docs</span><span class="card-desc">How a monad runs, finds its peers and picks who answers.</span><span class="card-path">me://monad/docs</span></a>
+      <a class="card" href="/monad/tests/"><span class="card-emoji">✅</span><span class="card-title">Tests</span><span class="card-desc">What the test suite covers, how to run it, and the last result.</span><span class="card-path">me://monad/tests</span></a>
+    </div>
   </main>
 </div>
 <div id="root"></div>
-<script src="/monad/assets/landing-gui/landing-gui.js?v=3" onerror="document.documentElement.classList.remove('gui-boot')"></script>
+<script src="/monad/assets/landing-gui/landing-gui.js?v=4" onerror="document.documentElement.classList.remove('gui-boot')"></script>
 </body>
 </html>

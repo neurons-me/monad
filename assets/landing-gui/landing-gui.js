@@ -47,7 +47,9 @@
   const docsIndex = SRC.dataset.layout === "docs-index", docPage = SRC.dataset.layout === "doc";
   const demosIndex = !docsIndex && !docPage && !!SRC.querySelector(".page .grid .card");
   const header = SRC.querySelector("header");
-  const page = monadPage ? { path, docs: SRC.querySelector(".topnav a[data-topbar=docs]")?.getAttribute("href"), github: SRC.querySelector(".topnav a[href*='github.com']")?.getAttribute("href") } : docPage ? { path, docs: SRC.querySelector(".topnav a[data-topbar=docs]")?.getAttribute("href"), github: SRC.querySelector(".topnav a[href*='github.com']")?.getAttribute("href"), body: SRC.querySelector("main.doc") } : docsIndex ? (() => {
+  const page = monadPage ? { path, docs: SRC.querySelector(".topnav a[data-topbar=docs]")?.getAttribute("href"), github: SRC.querySelector(".topnav a[href*='github.com']")?.getAttribute("href"),
+    cards: [...SRC.querySelectorAll(".monad-cards > a.card")].map((a) => ({ href: a.getAttribute("href"), title: txt(a.querySelector(".card-title")), desc: txt(a.querySelector(".card-desc")),
+      path: txt(a.querySelector(".card-path")), emoji: txt(a.querySelector(".card-emoji")) })) } : docPage ? { path, docs: SRC.querySelector(".topnav a[data-topbar=docs]")?.getAttribute("href"), github: SRC.querySelector(".topnav a[href*='github.com']")?.getAttribute("href"), body: SRC.querySelector("main.doc") } : docsIndex ? (() => {
     const t = SRC.querySelector(".page-title"), mark = t.querySelector("img"), foot = SRC.querySelector("footer a");
     return {
       path, docs: null, github: SRC.querySelector(".topnav a[href*='github.com']")?.getAttribute("href"),
@@ -75,13 +77,17 @@
     }),
   } : {
     path, docs: SRC.querySelector(".topnav .act")?.getAttribute("href"), github: SRC.querySelector(".topnav .gh")?.getAttribute("href"),
-    h1: txt(header.querySelector("h1")),
+    h1: txt(header.querySelector("h1")), lede: header.querySelector(".lede") && inline(header.querySelector(".lede")),
     mls: [...header.querySelectorAll(".mls-card")].map((c) => {
       const t = c.querySelector(".mls-title");
       return { title: txt(t), href: t.getAttribute("href"), desc: txt(c.querySelector(".item-desc")), links: [...c.querySelectorAll(".mls-links a")].map((a) => ({ text: txt(a), href: a.getAttribute("href") })) };
     }),
     sections: [...SRC.querySelectorAll(".wrap > section")].map((s) => {
       const grid = s.querySelector(".links");
+      // a section of .mls-card blocks (title link, line, chip links) instead of an item grid
+      if (!grid) return { title: txt(s.querySelector(".section-title")), label: txt(s.querySelector(".section-label")), lede: s.querySelector(".section-lede") && inline(s.querySelector(".section-lede")),
+        mls: [...s.querySelectorAll(".mls-card")].map((c) => { const t = c.querySelector(".mls-title");
+          return { title: txt(t), href: t.getAttribute("href"), desc: txt(c.querySelector(".item-desc")), links: [...c.querySelectorAll(".mls-links a")].map((a) => ({ text: txt(a), href: a.getAttribute("href") })) }; }) };
       return {
         title: txt(s.querySelector(".section-title")), label: txt(s.querySelector(".section-label")),
         kind: grid.classList.contains("demo-grid") ? "demo" : grid.classList.contains("docs-grid") ? "docs" : "list",
@@ -301,8 +307,9 @@
   const section = (s) => N("Box", { component: "section", sx: { py: 4, borderTop: 1, borderColor: "divider" } }, [
     s.title ? T(s.title, { fontSize: "clamp(1.6rem, 4vw, 2.2rem)", lineHeight: 1.1, letterSpacing: "-.02em", fontWeight: 800, m: 0, mb: "18px" }, { component: "h2" })
       : T(s.label, { fontSize: ".78rem", textTransform: "uppercase", letterSpacing: ".08em", color: "text.secondary", m: 0, mb: "18px" }, { component: "p" }),
-    N("Box", { sx: gridSx(s.kind) }, s.items.map(s.kind === "demo" ? demoCard : docCard(s.kind))),
-  ]);
+    s.lede && T(s.lede, { color: "text.secondary", fontSize: ".95rem", lineHeight: 1.6, m: 0, mb: "6px" }, { component: "p" }),
+    s.mls ? N("Box", {}, s.mls.map(mlsCard)) : N("Box", { sx: gridSx(s.kind) }, s.items.map(s.kind === "demo" ? demoCard : docCard(s.kind))),
+  ].filter(Boolean));
   // /.me/Demos/ index: kicker, h1, one line, then image-left cards in 2 columns from 720px (as the static page)
   const indexCard = (c) => N("Card", { component: "a", href: c.href, variant: "outlined", sx: { ...cardSx, display: "flex", flexDirection: "row", alignItems: "stretch", minHeight: 140, overflow: "hidden", borderRadius: "12px",
       "&:hover": { borderColor: "primary.main", boxShadow: 3, transform: "translateY(-1px)", textDecoration: "none" } } }, [
@@ -587,15 +594,17 @@
   }
   const monadSpec = () => N("Box", { sx: { minHeight: "100vh", bgcolor: "background.default", color: "text.primary" } }, [
     N("LandingTopBar", {}),
-    N("Box", { component: "main", sx: { width: "min(560px, calc(100% - 32px))", mx: "auto", pt: { xs: 4, sm: 8 }, pb: 10 } }, [N("MonadCard", {})]),
+    N("Box", { component: "main", sx: { width: "min(760px, calc(100% - 32px))", mx: "auto", pt: { xs: 4, sm: 8 }, pb: 10 } }, [N("MonadCard", {}),
+      page.cards.length ? N("Box", { sx: { display: "grid", gridTemplateColumns: "1fr", gap: 2, mt: { xs: 3, sm: 5 }, "@media (min-width:720px)": { gridTemplateColumns: "1fr 1fr" } } }, page.cards.map(indexCard)) : null].filter(Boolean)),
   ]);
   const spec = monadPage ? monadSpec() : docPage ? docSpec() : docsIndex ? docsSpec() : demosIndex ? indexSpec() : N("Box", { sx: { minHeight: "100vh", bgcolor: "background.default", color: "text.primary", lineHeight: 1.6 } }, [
     N("LandingTopBar", {}),
     N("Box", { component: "main", sx: { width: "min(760px, calc(100% - 40px))", mx: "auto", pt: 1.5 } }, [
       N("Box", { component: "header", sx: { pt: 3.5, pb: 5 } }, [
         T(page.h1, { fontSize: "clamp(2.2rem, 6vw, 3.4rem)", lineHeight: 1.05, letterSpacing: "-.03em", fontWeight: 800, m: 0, mb: 1.75 }, { component: "h1" }),
+        page.lede && T(page.lede, { fontSize: "1.05rem", color: "text.secondary", lineHeight: 1.6, m: 0, mb: 1 }, { component: "p" }),
         ...page.mls.map(mlsCard),
-      ]),
+      ].filter(Boolean)),
       ...page.sections.map(section),
       page.footer && T(page.footer, { pt: 3.75, pb: 7.5, color: "text.secondary", fontSize: ".85rem", borderTop: 1, borderColor: "divider", mt: 2.5 }, { component: "footer" }),
     ].filter(Boolean)),

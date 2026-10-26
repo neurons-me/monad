@@ -576,10 +576,14 @@
             "& > [data-doc-sidebar] > *": { position: "sticky", top: "60px", maxHeight: "calc(100vh - 72px)", overflowY: "auto", overscrollBehavior: "contain" } } } }, blocks(axiomBlocks(relatedCards(page.body))))
       : N("Box", { component: "main", sx: { width: "min(860px, calc(100% - 40px))", mx: "auto", pt: 5, pb: 10, "@media (max-width:480px)": { pt: 3.5, width: "calc(100% - 32px)" } } }, blocks(axiomBlocks(relatedCards(page.body)))),
   ]);
-  // monad root: only the monad.ai orb, in its default state (healthy unset: no live/offline claim)
+  // monad root: only the monad.ai orb, in its default state (healthy unset: no live/offline claim), drawn as
+  // MonadNamespaceCard draws it with orbScale={2} in the GUI source: a 130*2px band, the orb in its 120x130 box under
+  // CSS scale(2) from the centre. (core="flat" / ring={1.25} from the source are not props of this.gui@4.2.0's Monad.)
   function MonadCard(p) {
-    return h(Box, { "data-gui-node-id": p["data-gui-node-id"], sx: { height: 220, display: "flex", alignItems: "center", justifyContent: "center" } },
-      h(G.Monad, { mode: "contained", kind: "monad", label: "monad.ai" }));
+    const S = 2;
+    return h(Box, { "data-gui-node-id": p["data-gui-node-id"], sx: { height: 130 * S, display: "flex", alignItems: "center", justifyContent: "center" } },
+      h(Box, { sx: { width: 120, height: 130, flexShrink: 0, transform: `scale(${S})`, transformOrigin: "center" } },
+        h(G.Monad, { mode: "contained", kind: "monad", label: "monad.ai" })));
   }
   const monadSpec = () => N("Box", { sx: { minHeight: "100vh", bgcolor: "background.default", color: "text.primary" } }, [
     N("LandingTopBar", {}),

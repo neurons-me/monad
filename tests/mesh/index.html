@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mesh and NRP · tests · monad</title>
+  <meta name="description" content="Picks which monad answers a namespace (fresh, not itself, best score), agrees one value across several, and learns its scoring weights from outcomes." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="monad" />
+  <meta property="og:description" content="Picks which monad answers a namespace (fresh, not itself, best score), agrees one value across several, and learns its scoring weights from outcomes." />
+  <link rel="icon" type="image/png" href="https://res.cloudinary.com/dkwnxf6gm/image/upload/v1778090977/monad.ai.profile-removebg-preview_np26yp.png" />
+  <!-- .GUI (this.gui@4.2.0) renders this page from the static markup below (assets/landing-gui/landing-gui.js, a copy of
+       /.me/assets/landing-gui/landing-gui.js); the static page stays as the no-JS / CDN-failure fallback.
+       Page-scoped theme keys, neurons.me, dark by default. -->
+  <script>
+    window.__thisGuiThemeScope = { scopeId: "monad", themeModeKey: "monad.themeMode", themeIdKey: "monad.themeId", defaultMode: "dark" };
+    try {
+      if (!localStorage.getItem("monad.themeMode")) localStorage.setItem("monad.themeMode", "dark");
+      if (!localStorage.getItem("monad.themeId")) localStorage.setItem("monad.themeId", "neurons.me");
+    } catch (e) {}
+    document.documentElement.classList.add("gui-boot");
+  </script>
+  <style>.material-symbols-rounded,.material-symbols-outlined,.material-icons{display:none!important} body{margin:0} .gui-boot #static-landing{display:none}</style>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/this.gui@4.2.0/dist/this.gui.umd.js" integrity="sha384-tAyskhiyJweQ9xXPVOSEJ0OQDE+lFsqRJvGRb8LVoqLbdNxYmJEhW21+fxcAYG0d" crossorigin="anonymous"></script>
+  <style>
+    html:not(.gui-on) body { font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif; background:#0b1114; color:#e8eded; }
+    html:not(.gui-on) .topnav { display:flex; align-items:center; gap:10px; padding:0 20px; min-height:48px; border-bottom:1px solid rgba(232,237,237,0.08); }
+    html:not(.gui-on) .topnav a { color:inherit; text-decoration:none; }
+    html:not(.gui-on) .topnav .logo img { width:28px; height:28px; display:block; }
+    html:not(.gui-on) .mepath { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:13px; }
+    html:not(.gui-on) .mepath a { color:#4fb3bf; }
+    html:not(.gui-on) .mepath .here { font-weight:600; }
+    html:not(.gui-on) .spacer { flex:1; }
+    html:not(.gui-on) .monad-cards a { display:block; margin:12px 0; padding:12px; border:1px solid rgba(232,237,237,0.15); border-radius:12px; color:inherit; text-decoration:none; } html:not(.gui-on) .monad-cards span { display:block; } html:not(.gui-on) .wrap { max-width:760px; margin:24px auto; padding:0 16px; } html:not(.gui-on) .wrap a { color:#4fb3bf; display:block; } html:not(.gui-on) .page { max-width:560px; margin:48px auto; padding:0 16px; font-family: ui-monospace, monospace; }
+  </style>
+</head>
+<body>
+<div id="static-landing">
+  <nav class="topnav" aria-label="me path">
+    <a class="logo" href="https://neurons-me.github.io/" title="neurons.me"><img src="https://res.cloudinary.com/dkwnxf6gm/image/upload/v1760629064/neurons.me_b50f6a.png" alt="neurons.me" width="28" height="28" /></a>
+    <div class="mepath"><a href="https://neurons-me.github.io/.me/" title=".me">me://</a><a href="/monad/" title="monad">monad</a><a href="/monad/tests/" title="tests">tests</a><span class="here" aria-current="page">mesh</span></div>
+    <span class="spacer"></span>
+    <a class="act" href="/monad/docs/">Docs</a>
+    <a class="gh" href="https://github.com/neurons-me/monad">GitHub</a>
+  </nav>
+  <div class="wrap">
+    <header>
+      <h1>Mesh and NRP</h1>
+      <p class="lede">Picks which monad answers a namespace (fresh, not itself, best score), agrees one value across several, and learns its scoring weights from outcomes.</p>
+      <p class="lede">360 tests in 17 files. Source: <a href="https://github.com/neurons-me/monad/tree/main/Typescript/tests/NRP/">Typescript/tests/NRP/</a></p>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/meshSelect.test.ts">meshSelect.test.ts</a><span class="mls-meta">40 tests</span><p class="item-desc">Picks one claimant for a namespace: skips itself, stale and pending entries, prefers the best score, honors name and tag selectors, can try a runner-up, and falls back to the root space.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/meshSelectMulti.test.ts">meshSelectMulti.test.ts</a><span class="mls-meta">15 tests</span><p class="item-desc">The same selection returning a ranked, capped list of candidates.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/meshResolveMulti.test.ts">meshResolveMulti.test.ts</a><span class="mls-meta">22 tests</span><p class="item-desc">/.mesh/resolve/multi returns scored candidates, sorted, with max, min_score and staleness limits, and leaves out itself.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/meshAnnounce.test.ts">meshAnnounce.test.ts</a><span class="mls-meta">21 tests</span><p class="item-desc">POST /.mesh/announce: validation, throttling, signed versus pending entries, namespace squatting, first-key-wins, and the trusted-key allowlist.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/monadIndex.test.ts">monadIndex.test.ts</a><span class="mls-meta">16 tests</span><p class="item-desc">The index of known monads: read and write, order by last seen, lookups by namespace or name, the root identity hash.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/scoring.test.ts">scoring.test.ts</a><span class="mls-meta">38 tests</span><p class="item-desc">A claimant&#x27;s score: fresher, more resonant and faster scores higher; always finite and in [0, 1]; deterministic; shifts with forward results.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/patchBay.test.ts">patchBay.test.ts</a><span class="mls-meta">25 tests</span><p class="item-desc">Custom scorers registered at runtime (patches): storage, operations, and their effect on scores.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/adaptiveWeights.test.ts">adaptiveWeights.test.ts</a><span class="mls-meta">20 tests</span><p class="item-desc">Scorer weights start at defaults, move with rewards, and never fall below a floor.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/learningLoop.test.ts">learningLoop.test.ts</a><span class="mls-meta">37 tests</span><p class="item-desc">The learning step end to end: exact weight update, weight floor, reward formula, convergence over many requests.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/weightHealth.test.ts">weightHealth.test.ts</a><span class="mls-meta">19 tests</span><p class="item-desc">Health signals on learned weights: stable, dominant scorer, dead scorer, oscillation, no learning.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/decisionLog.test.ts">decisionLog.test.ts</a><span class="mls-meta">16 tests</span><p class="item-desc">Each routing decision is recorded and its outcome becomes a reward (a fast success scores near 1), written as JSONL.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/decisionLogSynthesis.test.ts">decisionLogSynthesis.test.ts</a><span class="mls-meta">23 tests</span><p class="item-desc">The same decision log and reward for synthesis decisions, and how they feed weight updates.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/synthesis.test.ts">synthesis.test.ts</a><span class="mls-meta">31 tests</span><p class="item-desc">Combining answers from several sources: all agree, a minority winner, or contested; failures, divergence and disclosure.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/bridgeSynthesis.test.ts">bridgeSynthesis.test.ts</a><span class="mls-meta">9 tests</span><p class="item-desc">Asks several monads and returns one public value on quorum, or a contested null; never forwards to pending entries or the cloud metadata address.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/bridge.parse.test.ts">bridge.parse.test.ts</a><span class="mls-meta">16 tests</span><p class="item-desc">Parses a bridge target (namespace:op/path) and the monad[frank] path syntax.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/nrpHandler.test.ts">nrpHandler.test.ts</a><span class="mls-meta">5 tests</span><p class="item-desc">/nrp never sends &#x27;stealth&#x27; on the wire: a namespace the kernel does not confirm resolves to &#x27;closed&#x27;.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/NRP/nrpDeclaredRoot.test.ts">nrpDeclaredRoot.test.ts</a><span class="mls-meta">7 tests</span><p class="item-desc">/nrp serves reads under a declared root and refuses a single label nobody declared.</p><div class="mls-links"></div></div>
+    </header>
+    <footer>MIT · neurons.me</footer>
+  </div>
+</div>
+<div id="root"></div>
+<script src="/monad/assets/landing-gui/landing-gui.js?v=6" onerror="document.documentElement.classList.remove('gui-boot')"></script>
+</body>
+</html>

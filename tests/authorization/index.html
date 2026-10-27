@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Authorization and gateway · tests · monad</title>
+  <meta name="description" content="A write needs a real signature over the real body from the right key; replays, other namespaces and reserved paths are refused." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="monad" />
+  <meta property="og:description" content="A write needs a real signature over the real body from the right key; replays, other namespaces and reserved paths are refused." />
+  <link rel="icon" type="image/png" href="https://res.cloudinary.com/dkwnxf6gm/image/upload/v1778090977/monad.ai.profile-removebg-preview_np26yp.png" />
+  <!-- .GUI (this.gui@4.2.0) renders this page from the static markup below (assets/landing-gui/landing-gui.js, a copy of
+       /.me/assets/landing-gui/landing-gui.js); the static page stays as the no-JS / CDN-failure fallback.
+       Page-scoped theme keys, neurons.me, dark by default. -->
+  <script>
+    window.__thisGuiThemeScope = { scopeId: "monad", themeModeKey: "monad.themeMode", themeIdKey: "monad.themeId", defaultMode: "dark" };
+    try {
+      if (!localStorage.getItem("monad.themeMode")) localStorage.setItem("monad.themeMode", "dark");
+      if (!localStorage.getItem("monad.themeId")) localStorage.setItem("monad.themeId", "neurons.me");
+    } catch (e) {}
+    document.documentElement.classList.add("gui-boot");
+  </script>
+  <style>.material-symbols-rounded,.material-symbols-outlined,.material-icons{display:none!important} body{margin:0} .gui-boot #static-landing{display:none}</style>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/this.gui@4.2.0/dist/this.gui.umd.js" integrity="sha384-tAyskhiyJweQ9xXPVOSEJ0OQDE+lFsqRJvGRb8LVoqLbdNxYmJEhW21+fxcAYG0d" crossorigin="anonymous"></script>
+  <style>
+    html:not(.gui-on) body { font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif; background:#0b1114; color:#e8eded; }
+    html:not(.gui-on) .topnav { display:flex; align-items:center; gap:10px; padding:0 20px; min-height:48px; border-bottom:1px solid rgba(232,237,237,0.08); }
+    html:not(.gui-on) .topnav a { color:inherit; text-decoration:none; }
+    html:not(.gui-on) .topnav .logo img { width:28px; height:28px; display:block; }
+    html:not(.gui-on) .mepath { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:13px; }
+    html:not(.gui-on) .mepath a { color:#4fb3bf; }
+    html:not(.gui-on) .mepath .here { font-weight:600; }
+    html:not(.gui-on) .spacer { flex:1; }
+    html:not(.gui-on) .monad-cards a { display:block; margin:12px 0; padding:12px; border:1px solid rgba(232,237,237,0.15); border-radius:12px; color:inherit; text-decoration:none; } html:not(.gui-on) .monad-cards span { display:block; } html:not(.gui-on) .wrap { max-width:760px; margin:24px auto; padding:0 16px; } html:not(.gui-on) .wrap a { color:#4fb3bf; display:block; } html:not(.gui-on) .page { max-width:560px; margin:48px auto; padding:0 16px; font-family: ui-monospace, monospace; }
+  </style>
+</head>
+<body>
+<div id="static-landing">
+  <nav class="topnav" aria-label="me path">
+    <a class="logo" href="https://neurons-me.github.io/" title="neurons.me"><img src="https://res.cloudinary.com/dkwnxf6gm/image/upload/v1760629064/neurons.me_b50f6a.png" alt="neurons.me" width="28" height="28" /></a>
+    <div class="mepath"><a href="https://neurons-me.github.io/.me/" title=".me">me://</a><a href="/monad/" title="monad">monad</a><a href="/monad/tests/" title="tests">tests</a><span class="here" aria-current="page">authorization</span></div>
+    <span class="spacer"></span>
+    <a class="act" href="/monad/docs/">Docs</a>
+    <a class="gh" href="https://github.com/neurons-me/monad">GitHub</a>
+  </nav>
+  <div class="wrap">
+    <header>
+      <h1>Authorization and gateway</h1>
+      <p class="lede">A write needs a real signature over the real body from the right key; replays, other namespaces and reserved paths are refused.</p>
+      <p class="lede">93 tests in 15 files. Source: <a href="https://github.com/neurons-me/monad/tree/main/Typescript/tests/">Typescript/tests/</a></p>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/namespaceWriteAuthorization.test.ts">namespaceWriteAuthorization.test.ts</a><span class="mls-meta">4 tests</span><p class="item-desc">A write is authorized only by a real signature over the real body from the right key; an echoed identityHash or a signature over another body is refused.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/chainHeadWriteAuthorization.test.ts">chainHeadWriteAuthorization.test.ts</a><span class="mls-meta">4 tests</span><p class="item-desc">Signed writes are bound to the chain head: resending a body, an old grant or a write meant for another namespace fails.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/namespaceCollisionAuthorization.test.ts">namespaceCollisionAuthorization.test.ts</a><span class="mls-meta">3 tests</span><p class="item-desc">An identity claiming an unrelated namespace string cannot write into the real root&#x27;s apps.* or keychain storage.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/rootWriteDirectionCheck.test.ts">rootWriteDirectionCheck.test.ts</a><span class="mls-meta">11 tests</span><p class="item-desc">The root&#x27;s claim cannot write into or read users.&lt;other&gt;.* content; malformed paths get 400.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/appAuthorization.test.ts">appAuthorization.test.ts</a><span class="mls-meta">3 tests</span><p class="item-desc">apps.&lt;appId&gt;.* writes: ownership, scoped grants, isolation between apps, revocation, and no writes under a foreign root.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/keychainMinimalWalkthrough.test.ts">keychainMinimalWalkthrough.test.ts</a><span class="mls-meta">5 tests</span><p class="item-desc">Keychain: list, register, sign, revoke, reject; the last admin key cannot be revoked; control recovers from the identity alone.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/gatewayAuthority.test.ts">gatewayAuthority.test.ts</a><span class="mls-meta">10 tests</span><p class="item-desc">Signed gateway bootstrap, grant, revoke and transfer; a generic write cannot touch daemon.gateways.*.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/mainServerAuthority.test.ts">mainServerAuthority.test.ts</a><span class="mls-meta">7 tests</span><p class="item-desc">netget.main.server.name changes only by the owner&#x27;s signature; replays and altered bodies are refused.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/mainServerName.test.ts">mainServerName.test.ts</a><span class="mls-meta">8 tests</span><p class="item-desc">The main server name is a public path, declared only when asked, normalized, and never writable unsigned over HTTP.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/netgetReservedPathAuthorization.test.ts">netgetReservedPathAuthorization.test.ts</a><span class="mls-meta">12 tests</span><p class="item-desc">Unsigned writes to netget.* are refused for unclaimed namespaces; ordinary writes are not blocked.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/netgetRegistration.test.ts">netgetRegistration.test.ts</a><span class="mls-meta">4 tests</span><p class="item-desc">Builds the netget exposure and registration payload from bootstrap, including public host aliases.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/internalToken.test.ts">internalToken.test.ts</a><span class="mls-meta">7 tests</span><p class="item-desc">The gateway&#x27;s routing records need an internal caller; a wrong token is as good as none.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/sessionHostFlowDisabled.test.ts">sessionHostFlowDisabled.test.ts</a><span class="mls-meta">7 tests</span><p class="item-desc">The session and host token flow is disabled after the 2026-10-04 audit: no token or nonce for an arbitrary username.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/crossPackageSigning.test.ts">crossPackageSigning.test.ts</a><span class="mls-meta">2 tests</span><p class="item-desc">A payload signed by this.me verifies in monad, and a mismatched canonical message is rejected.</p><div class="mls-links"></div></div>
+      <div class="mls-card"><a class="mls-title" href="https://github.com/neurons-me/monad/blob/main/Typescript/tests/signedNamespaceSpelling.test.ts">signedNamespaceSpelling.test.ts</a><span class="mls-meta">6 tests</span><p class="item-desc">A proof is checked over the namespace spelling that was sent; an alias is the same identity, a proof for another namespace is refused.</p><div class="mls-links"></div></div>
+    </header>
+    <footer>MIT · neurons.me</footer>
+  </div>
+</div>
+<div id="root"></div>
+<script src="/monad/assets/landing-gui/landing-gui.js?v=6" onerror="document.documentElement.classList.remove('gui-boot')"></script>
+</body>
+</html>

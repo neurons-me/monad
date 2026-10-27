@@ -77,17 +77,17 @@
     }),
   } : {
     path, docs: SRC.querySelector(".topnav .act")?.getAttribute("href"), github: SRC.querySelector(".topnav .gh")?.getAttribute("href"),
-    h1: txt(header.querySelector("h1")), lede: header.querySelector(".lede") && inline(header.querySelector(".lede")),
+    h1: txt(header.querySelector("h1")), lede: header.querySelector(".lede") && inline(header.querySelector(".lede")), ledes2: [...header.querySelectorAll(".lede")].slice(1).map(inline),
     mls: [...header.querySelectorAll(".mls-card")].map((c) => {
       const t = c.querySelector(".mls-title");
-      return { title: txt(t), href: t.getAttribute("href"), desc: txt(c.querySelector(".item-desc")), links: [...c.querySelectorAll(".mls-links a")].map((a) => ({ text: txt(a), href: a.getAttribute("href") })) };
+      return { title: txt(t), href: t.getAttribute("href"), meta: txt(c.querySelector(".mls-meta")), desc: txt(c.querySelector(".item-desc")), links: [...c.querySelectorAll(".mls-links a")].map((a) => ({ text: txt(a), href: a.getAttribute("href") })) };
     }),
     sections: [...SRC.querySelectorAll(".wrap > section")].map((s) => {
       const grid = s.querySelector(".links");
       // a section of .mls-card blocks (title link, line, chip links) instead of an item grid
       if (!grid) return { title: txt(s.querySelector(".section-title")), label: txt(s.querySelector(".section-label")), lede: s.querySelector(".section-lede") && inline(s.querySelector(".section-lede")),
         mls: [...s.querySelectorAll(".mls-card")].map((c) => { const t = c.querySelector(".mls-title");
-          return { title: txt(t), href: t.getAttribute("href"), desc: txt(c.querySelector(".item-desc")), links: [...c.querySelectorAll(".mls-links a")].map((a) => ({ text: txt(a), href: a.getAttribute("href") })) }; }) };
+          return { title: txt(t), href: t.getAttribute("href"), meta: txt(c.querySelector(".mls-meta")), desc: txt(c.querySelector(".item-desc")), links: [...c.querySelectorAll(".mls-links a")].map((a) => ({ text: txt(a), href: a.getAttribute("href") })) }; }) };
       return {
         title: txt(s.querySelector(".section-title")), label: txt(s.querySelector(".section-label")),
         kind: grid.classList.contains("demo-grid") ? "demo" : grid.classList.contains("docs-grid") ? "docs" : "list",
@@ -297,10 +297,12 @@
   const docCard = (kind) => (it) => N("Card", { component: "a", href: it.href, variant: "outlined", sx: { ...cardSx, p: "16px 20px" } }, [
     it.img && (kind === "docs" ? media(it.img) : listMedia(it.img)), title(it.title), it.desc && desc(it.desc)].filter(Boolean));
   const mlsCard = (m) => N("Card", { variant: "outlined", sx: { borderRadius: "14px", bgcolor: "background.paper", p: "16px 20px", mt: "18px" } }, [
-    N("Link", { href: m.href, underline: "hover", sx: { fontWeight: 600, fontSize: "1.02rem", color: "text.primary" } }, [m.title]),
+    N("Box", { sx: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 2 } }, [
+      N("Link", { href: m.href, underline: "hover", sx: { fontWeight: 600, fontSize: "1.02rem", color: "text.primary" } }, [m.title]),
+      m.meta && T(m.meta, { color: "text.secondary", fontSize: ".82rem", whiteSpace: "nowrap" }, { component: "span" })].filter(Boolean)),
     m.desc && desc(m.desc),
-    N("Box", { sx: { display: "flex", flexWrap: "wrap", gap: 1, mt: 1.5 } }, m.links.map((l) => N("Chip", { label: l.text, component: "a", href: l.href, clickable: true, variant: "outlined", size: "small",
-      sx: { fontSize: ".82rem", color: "primary.main", borderColor: "divider", "&:hover": { borderColor: "primary.main" } } }))),
+    m.links.length ? N("Box", { sx: { display: "flex", flexWrap: "wrap", gap: 1, mt: 1.5 } }, m.links.map((l) => N("Chip", { label: l.text, component: "a", href: l.href, clickable: true, variant: "outlined", size: "small",
+      sx: { fontSize: ".82rem", color: "primary.main", borderColor: "divider", "&:hover": { borderColor: "primary.main" } } }))) : null,
   ].filter(Boolean));
   const gridSx = (kind) => kind === "list" ? { display: "flex", flexDirection: "column", gap: "10px" }
     : { display: "grid", gridTemplateColumns: "1fr", gap: kind === "demo" ? "14px" : "10px", [WIDE]: { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" } };
@@ -612,6 +614,7 @@
       N("Box", { component: "header", sx: { pt: 3.5, pb: 5 } }, [
         T(page.h1, { fontSize: "clamp(2.2rem, 6vw, 3.4rem)", lineHeight: 1.05, letterSpacing: "-.03em", fontWeight: 800, m: 0, mb: 1.75 }, { component: "h1" }),
         page.lede && T(page.lede, { fontSize: "1.05rem", color: "text.secondary", lineHeight: 1.6, m: 0, mb: 1 }, { component: "p" }),
+        ...(page.ledes2 || []).map((l) => T(l, { fontSize: ".9rem", color: "text.secondary", lineHeight: 1.6, m: 0, mb: 1 }, { component: "p" })),
         ...page.mls.map(mlsCard),
       ].filter(Boolean)),
       ...page.sections.map(section),

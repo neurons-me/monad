@@ -49,7 +49,7 @@
   const header = SRC.querySelector("header");
   const page = monadPage ? { path, docs: SRC.querySelector(".topnav a[data-topbar=docs]")?.getAttribute("href"), github: SRC.querySelector(".topnav a[href*='github.com']")?.getAttribute("href"),
     cards: [...SRC.querySelectorAll(".monad-cards > a.card")].map((a) => ({ href: a.getAttribute("href"), title: txt(a.querySelector(".card-title")), desc: txt(a.querySelector(".card-desc")),
-      path: txt(a.querySelector(".card-path")), emoji: txt(a.querySelector(".card-emoji")) })) } : docPage ? { path, docs: SRC.querySelector(".topnav a[data-topbar=docs]")?.getAttribute("href"), github: SRC.querySelector(".topnav a[href*='github.com']")?.getAttribute("href"), body: SRC.querySelector("main.doc") } : docsIndex ? (() => {
+      glyph: a.querySelector("svg.card-glyph")?.innerHTML || "" })) } : docPage ? { path, docs: SRC.querySelector(".topnav a[data-topbar=docs]")?.getAttribute("href"), github: SRC.querySelector(".topnav a[href*='github.com']")?.getAttribute("href"), body: SRC.querySelector("main.doc") } : docsIndex ? (() => {
     const t = SRC.querySelector(".page-title"), mark = t.querySelector("img"), foot = SRC.querySelector("footer a");
     return {
       path, docs: null, github: SRC.querySelector(".topnav a[href*='github.com']")?.getAttribute("href"),
@@ -586,6 +586,15 @@
   // monad root: only the monad.ai orb, in its default state (healthy unset: no live/offline claim), drawn as
   // MonadNamespaceCard draws it with orbScale={2} in the GUI source: a 130*2px band, the orb in its 120x130 box under
   // CSS scale(2) from the centre. (core="flat" / ring={1.25} from the source are not props of this.gui@4.2.0's Monad.)
+  // monad root cards: a monochrome line glyph (inline SVG, currentColor, so it follows the theme and never shows tofu) + title
+  function GlyphCard(p) {
+    return h(G.Atoms.Box, { "data-gui-node-id": p["data-gui-node-id"], component: "a", href: p.href, sx: { display: "flex", flexDirection: "column", alignItems: "center", gap: 1.25, py: 3, px: 2,
+        border: 1, borderColor: "divider", borderRadius: "12px", bgcolor: "background.paper", color: "text.primary", textDecoration: "none", transition: "border-color .14s, transform .14s",
+        "&:hover": { borderColor: "primary.main", transform: "translateY(-1px)", "& svg": { color: "primary.main" } } } },
+      h("svg", { viewBox: "0 0 24 24", width: 40, height: 40, "aria-hidden": "true", fill: "none", stroke: "currentColor", strokeWidth: 1.4, strokeLinecap: "round", strokeLinejoin: "round", style: { display: "block" },
+        dangerouslySetInnerHTML: { __html: p.glyph } }),
+      h("span", { style: { fontWeight: 700, fontSize: "1.05rem" } }, p.title));
+  }
   function MonadCard(p) {
     const S = 2;
     return h(Box, { "data-gui-node-id": p["data-gui-node-id"], sx: { height: 130 * S, display: "flex", alignItems: "center", justifyContent: "center" } },
@@ -595,7 +604,7 @@
   const monadSpec = () => N("Box", { sx: { minHeight: "100vh", bgcolor: "background.default", color: "text.primary" } }, [
     N("LandingTopBar", {}),
     N("Box", { component: "main", sx: { width: "min(760px, calc(100% - 32px))", mx: "auto", pt: { xs: 4, sm: 8 }, pb: 10 } }, [N("MonadCard", {}),
-      page.cards.length ? N("Box", { sx: { display: "grid", gridTemplateColumns: "1fr", gap: 2, mt: { xs: 3, sm: 5 }, "@media (min-width:720px)": { gridTemplateColumns: "1fr 1fr" } } }, page.cards.map(indexCard)) : null].filter(Boolean)),
+      page.cards.length ? N("Box", { sx: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, mt: { xs: 3, sm: 5 }, maxWidth: 480, mx: "auto" } }, page.cards.map((c) => N("GlyphCard", c))) : null].filter(Boolean)),
   ]);
   const spec = monadPage ? monadSpec() : docPage ? docSpec() : docsIndex ? docsSpec() : demosIndex ? indexSpec() : N("Box", { sx: { minHeight: "100vh", bgcolor: "background.default", color: "text.primary", lineHeight: 1.6 } }, [
     N("LandingTopBar", {}),
@@ -622,7 +631,7 @@
   const FK = docPage && window.FanoutKernel && document.querySelector(".fanout-viz") ? window.FanoutKernel : null;
   G.mount(spec, ROOT, {
     ...(FK ? { me: FK } : {}),
-    gui: { ...G, ...(FK ? { render: undefined, RunMe: undefined } : {}), Theme: PageTheme, registry: { ...(G.Registry || G.registry), LandingTopBar, MonadCard, DocsCover, MeOrbMark, MeLandingHero, MeCodeBlock, DocCardCover, ModeHtml, ...(window.KernelTimeline ? { KernelTimeline: window.KernelTimeline } : {}), KernelBadge, ...(window.MeRun ? { MeRunBlock: window.MeRun.MeRunBlock } : {}), ...(window.AxiomsLive ? { AxiomProof: window.AxiomsLive.AxiomProof, AxiomKernel: window.AxiomsLive.AxiomKernel } : {}), ...(window.FanoutViz ? { FanoutViz: window.FanoutViz } : {}), ...(window.AudienceVenn ? { AudienceVenn: window.AudienceVenn } : {}), ...(window.SocialGraphLive ? { SocialGraphLive: window.SocialGraphLive } : {}) } },
+    gui: { ...G, ...(FK ? { render: undefined, RunMe: undefined } : {}), Theme: PageTheme, registry: { ...(G.Registry || G.registry), LandingTopBar, MonadCard, GlyphCard, DocsCover, MeOrbMark, MeLandingHero, MeCodeBlock, DocCardCover, ModeHtml, ...(window.KernelTimeline ? { KernelTimeline: window.KernelTimeline } : {}), KernelBadge, ...(window.MeRun ? { MeRunBlock: window.MeRun.MeRunBlock } : {}), ...(window.AxiomsLive ? { AxiomProof: window.AxiomsLive.AxiomProof, AxiomKernel: window.AxiomsLive.AxiomKernel } : {}), ...(window.FanoutViz ? { FanoutViz: window.FanoutViz } : {}), ...(window.AudienceVenn ? { AudienceVenn: window.AudienceVenn } : {}), ...(window.SocialGraphLive ? { SocialGraphLive: window.SocialGraphLive } : {}) } },
     devtools: { enabled: true, inspector: INSPECTOR_ON, adminView: false, inspectorToggleVisible: false },
   });
   html.classList.add("gui-on");

@@ -142,10 +142,51 @@ describe("a monad that serves a built front end", () => {
     expect(res.headers.get("content-type")).toContain("application/json");
   });
 
-  it("without a front end it is what it was: the diagnostic shell", async () => {
+  it("without a front end it serves the one minimal page (cleaker.js), not an interface of its own", async () => {
     const { base } = await start();
     const res = await fetch(`${base}/`, { headers: { accept: "text/html" } });
-    expect(await res.text()).toContain("monad provider shell");
+    const html = await res.text();
+    expect(html).toContain('data-monad-state="no-interface"');
+    expect(html).toContain("this.gui@4.4.3/dist/cleaker.js");
+    expect(html).toContain('integrity="sha384-');
+    expect(html).not.toContain("unpkg.com/this.gui@4.0.0");
+  });
+
+  // 2026-11-08: the monad package's own ../index.html (the monad.ai docs site's page) was served as cleaker.me's interface
+  // because the process manager passed it as MONAD_INDEX_PATH. A page next to the monad is never its interface.
+  it("never serves the repo's ../index.html when it has a front end", async () => {
+    fs.writeFileSync(path.join(root, "index.html"), "<!doctype html><title>x</title>MONAD-REPO-PAGE");
+    const cwd = path.join(root, "Typescript");
+    fs.mkdirSync(cwd, { recursive: true });
+    const { base } = await start({ cwd, frontendDir: writeFrontend() });
+    const html = await (await fetch(`${base}/`, { headers: { accept: "text/html" } })).text();
+    expect(html).toContain("FRONTEND-MARKER");
+    expect(html).not.toContain("MONAD-REPO-PAGE");
+  });
+
+  it("never serves the repo's ../index.html without a front end either: the minimal page", async () => {
+    fs.writeFileSync(path.join(root, "index.html"), "<!doctype html><title>x</title>MONAD-REPO-PAGE");
+    const cwd = path.join(root, "Typescript");
+    fs.mkdirSync(cwd, { recursive: true });
+    const { base } = await start({ cwd });
+    const html = await (await fetch(`${base}/`, { headers: { accept: "text/html" } })).text();
+    expect(html).not.toContain("MONAD-REPO-PAGE");
+    expect(html).toContain('data-monad-state="no-interface"');
+  });
+});
+
+describe("a monad's claim store is private from its start", () => {
+  it("narrows claims/ and the hidden claims/.keys/ to 0700, and key files to 0600, left broad by an older release", async () => {
+    const claims = path.join(root, "claims"), keys = path.join(claims, ".keys");
+    fs.mkdirSync(keys, { recursive: true });
+    fs.writeFileSync(path.join(claims, "x.cleaker.me.json"), "{}"); fs.writeFileSync(path.join(keys, "x.cleaker.me.private.pem"), "k");
+    fs.chmodSync(claims, 0o755); fs.chmodSync(keys, 0o755); fs.chmodSync(path.join(keys, "x.cleaker.me.private.pem"), 0o644);
+    const prev = process.env.MONAD_CLAIM_DIR; process.env.MONAD_CLAIM_DIR = claims;
+    try { await start({ claimDir: claims }); } finally { if (prev === undefined) delete process.env.MONAD_CLAIM_DIR; else process.env.MONAD_CLAIM_DIR = prev; }
+    const mode = (p: string) => fs.statSync(p).mode & 0o777;
+    expect(mode(claims)).toBe(0o700);
+    expect(mode(keys)).toBe(0o700);
+    expect(mode(path.join(keys, "x.cleaker.me.private.pem"))).toBe(0o600);
   });
 });
 

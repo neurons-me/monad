@@ -10,6 +10,7 @@ import {
   renameSync,
 } from "fs";
 import { resolve, join } from "path";
+import { ensurePrivateDir, tightenPrivateFile, PRIVATE_FILE_MODE } from "./privateFs.js";
 import { acquireProcessLock } from "./stateDirLock.js";
 import { normalizeNamespaceRootName } from "../namespace/identity.js";
 
@@ -133,7 +134,8 @@ export function getKernel(): InstanceType<typeof ME> {
   const seed = process.env.SEED || process.env.ME_SEED;
   if (!seed) throw new Error("SEED is required — set it in your environment before starting monad.ai");
 
-  mkdirSync(getKernelStateDir(), { recursive: true });
+  ensurePrivateDir(getKernelStateDir());
+  tightenPrivateFile(getKernelStatePath("snapshot.json"));
   acquireStateDirLock(getKernelStateDir());
 
   _kernel = new ME(seed, {
@@ -193,7 +195,7 @@ export function getKernel(): InstanceType<typeof ME> {
 export function saveSnapshotOrThrow(): void {
   if (!_kernel) throw new Error("KERNEL_NOT_READY");
   const stateDir = getKernelStateDir();
-  mkdirSync(stateDir, { recursive: true });
+  ensurePrivateDir(stateDir);
   const snapshotPath = getKernelStatePath("snapshot.json");
   const snapshot = _kernel.exportSnapshot();
   const payload = JSON.stringify(snapshot);
@@ -206,7 +208,8 @@ export function saveSnapshotOrThrow(): void {
   // security battery's process-interruption tests verify this against a
   // real SIGKILL, not just reasoning about it).
   const tmpPath = getKernelStatePath(`.snapshot.json.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  writeFileSync(tmpPath, payload, "utf8");
+  // Created private (0600), not made private afterwards: the rename makes this file snapshot.json.
+  writeFileSync(tmpPath, payload, { encoding: "utf8", mode: PRIVATE_FILE_MODE });
   renameSync(tmpPath, snapshotPath);
   console.log("[kernel] snapshot saved to", snapshotPath);
 }

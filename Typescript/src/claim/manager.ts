@@ -2,6 +2,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { normalizeNamespaceIdentity } from "../namespace/identity.js";
+import { ensurePrivateDir, tightenPrivateFile } from "../kernel/privateFs.js";
 import type {
   PersistentClaimKeySource,
   PersistentClaimPublicKey,
@@ -46,7 +47,8 @@ function normalizeNamespace(raw: unknown) {
 }
 
 function ensureDirectory(dirPath: string) {
-  fs.mkdirSync(dirPath, { recursive: true });
+  // claims (and the keys written next to them) are the monad's own: 0700 even when the directory already existed
+  ensurePrivateDir(dirPath);
 }
 
 function sanitizeNamespaceFilename(namespace: string) {
@@ -149,6 +151,20 @@ function verifyPayloadSignature(claim: PersistentClaimRecord) {
   }
 
   return crypto.verify("sha256", data, proofKey, sig);
+}
+
+/**
+ * Narrows what already exists of the claim store at startup: claims/ and claims/.keys/ to 0700, every key file to 0600.
+ * (ensureDirectory only runs when a claim is written; a store left 0755 by an older release stays so until then.)
+ * Throws, like ensurePrivateDir, when it cannot: the monad does not start on a claim store others can list.
+ */
+export function hardenClaimStore(): void {
+  const { claimsDir, keysDir } = getClaimStorePaths();
+  if (fs.existsSync(claimsDir)) ensurePrivateDir(claimsDir);
+  if (fs.existsSync(keysDir)) {
+    ensurePrivateDir(keysDir);
+    for (const f of fs.readdirSync(keysDir)) tightenPrivateFile(path.join(keysDir, f));
+  }
 }
 
 function getClaimStorePaths(): ClaimStorePaths {

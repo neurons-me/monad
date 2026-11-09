@@ -25,11 +25,10 @@ export function getGuiPkgDistDir(): string {
   );
 }
 
+/** The interface this monad serves: its front end's index.html, or one named outright. "" = none configured. */
 export function getMonadIndexPath(): string {
-  return path.resolve(
-    shellConfig.cwd || process.cwd(),
-    shellConfig.indexPath || process.env.MONAD_INDEX_PATH || "../index.html",
-  );
+  const named = shellConfig.indexPath || process.env.MONAD_INDEX_PATH || "";
+  return named ? path.resolve(shellConfig.cwd || process.cwd(), named) : "";
 }
 
 export const GUI_PKG_DIST_DIR = getGuiPkgDistDir();
@@ -66,7 +65,7 @@ export function htmlShell(options: { providerBoot?: NamespaceProviderBoot | null
 
   const indexPath = getMonadIndexPath();
   try {
-    if (fs.existsSync(indexPath)) {
+    if (indexPath && fs.existsSync(indexPath)) {
       let html = fs.readFileSync(indexPath, "utf8");
       html = html.replace(/<title>[^<]*<\/title>/, `<title>${namespaceTitle}</title>`);
       return providerBoot ? injectNamespaceProviderShell(html, providerBoot) : html;
@@ -74,118 +73,31 @@ export function htmlShell(options: { providerBoot?: NamespaceProviderBoot | null
   } catch {
     // fall back to inline shell
   }
+  // No interface configured: the same minimal page every gateway screen is (one tree), with cleaker.js (this.gui's
+  // standalone QR corner) -- not a second interface of the monad's own.
   const fallbackHtml = `<!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <link rel="icon" type="image/png" href="/gui/favicon.png" />
-    <link rel="stylesheet" href="/gui/styles.css" />
-    <link rel="stylesheet" href="https://unpkg.com/this.gui@4.0.0/dist/styles.css" />
     <title>${namespaceTitle}</title>
+    <style>
+      :root { color-scheme: light dark; --bg: #f4f6f7; --fg: #0f1720; --muted: #5b6b78; }
+      @media (prefers-color-scheme: dark) { :root { --bg: #0d1214; --fg: #e8eded; --muted: #98a7b3; } }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--fg);
+        font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+      main { max-width: 34rem; padding: 2rem; }
+      h1 { font-size: 1.25rem; margin: 0 0 .5rem; }
+      p { margin: .25rem 0; color: var(--muted); }
+      code { font-family: ui-monospace, Menlo, monospace; color: var(--fg); }
+    </style>
   </head>
-  <body>
-    <div id="app"></div>
-    <script type="module">
-      const loadScript = async (src) => {
-        // HEAD-check local paths first so we don't append a 404 script tag
-        if (src.startsWith('/')) {
-          try {
-            const r = await fetch(src, { method: 'HEAD' });
-            if (!r.ok) throw new Error('HEAD ' + r.status);
-          } catch {
-            throw new Error('Not available: ' + src);
-          }
-        }
-        return new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = src;
-          script.async = false;
-          script.onload = resolve;
-          script.onerror = () => reject(new Error('Failed to load ' + src));
-          document.head.appendChild(script);
-        });
-      };
-
-      const loadFirst = async (...sources) => {
-        let lastError = null;
-        for (const src of sources) {
-          try {
-            await loadScript(src);
-            return src;
-          } catch (error) {
-            lastError = error;
-          }
-        }
-        throw lastError || new Error('No script sources provided');
-      };
-
-      const importFirst = async (...sources) => {
-        let lastError = null;
-        for (const src of sources) {
-          try {
-            await import(src);
-            return src;
-          } catch (error) {
-            lastError = error;
-          }
-        }
-        throw lastError || new Error('No module sources provided');
-      };
-
-      if (!globalThis.process) {
-        globalThis.process = { env: { NODE_ENV: 'production' } };
-      } else if (!globalThis.process.env) {
-        globalThis.process.env = { NODE_ENV: 'production' };
-      } else if (!('NODE_ENV' in globalThis.process.env)) {
-        globalThis.process.env.NODE_ENV = 'production';
-      }
-      await loadFirst(
-        '/vendor/react/react.production.min.js',
-        'https://unpkg.com/react@18.3.1/umd/react.production.min.js'
-      );
-      await loadFirst(
-        '/vendor/react-dom/react-dom.production.min.js',
-        'https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js'
-      );
-      const React = globalThis.React;
-      const ReactDOM = globalThis.ReactDOM;
-      if (!React) throw new Error('React global is missing. Failed to load react.production.min.js');
-      if (!ReactDOM) throw new Error('ReactDOM global is missing. Failed to load react-dom.production.min.js');
-      await importFirst(
-        '/gui/this.gui.umd.js',
-        'https://unpkg.com/this.gui@4.0.0/dist/this.gui.umd.js'
-      );
-      const GUI = globalThis.ThisGUI || globalThis.thisGUI || globalThis.GUI || globalThis['this.gui'];
-      const providerBoot = globalThis.__MONAD_NAMESPACE_PROVIDER_BOOT__ || null;
-      let provider = null;
-      if (providerBoot && typeof globalThis.__MONAD_CREATE_NAMESPACE_PROVIDER__ === 'function') {
-        provider = globalThis.__MONAD_CREATE_NAMESPACE_PROVIDER__(GUI);
-      }
-      let surface = null;
-      try {
-        if (provider) {
-          surface = await provider.getSurface(providerBoot.namespace, providerBoot.route);
-        }
-      } catch (e) {
-        surface = null;
-      }
-
-      const guiRuntime = (GUI && (GUI.default || GUI.GUI || GUI)) || {};
-      console.log("GUI provider boot", providerBoot);
-      console.log("GUI provider", provider);
-      console.log("GUI surface", surface);
-      console.log("GUI runtime", guiRuntime);
-      const el = document.querySelector('#app');
-      if (el) {
-        const pre = document.createElement('pre');
-        pre.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
-        pre.style.padding = '16px';
-        pre.textContent = \`monad provider shell loaded\\nnamespace: \${providerBoot ? providerBoot.namespace : '-'}\\nroute: \${providerBoot ? providerBoot.route : '-'}\\n(apiOrigin: \${providerBoot ? providerBoot.apiOrigin : '-'})\\nprovider: \${provider ? 'ready' : 'missing'}\\nGUI global: \${GUI ? 'present' : 'missing'}\`;
-        el.innerHTML = '';
-        el.appendChild(pre);
-      }
-    </script>
+  <body data-monad-state="no-interface">
+    <main>
+      <h1><code>${namespaceTitle}</code></h1>
+      <p>This monad answers, but no interface is configured for it (<code>MONAD_FRONTEND_DIR</code>).</p>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/this.gui@4.4.3/dist/cleaker.js" integrity="sha384-Um9li/v82/OE78Ni3DZ+gk9nkZCMW+tKndOE0BshBDa0rzCUAetKCxkE1dvEDhMz" crossorigin="anonymous" data-corner="top-right"></script>
   </body>
 </html>`;
   return providerBoot ? injectNamespaceProviderShell(fallbackHtml, providerBoot) : fallbackHtml;

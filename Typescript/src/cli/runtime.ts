@@ -512,7 +512,6 @@ export async function startMonadProcess(options: StartMonadCliOptions = {}): Pro
     MONAD_NAME: name,
     MONAD_SURFACE: surface,
     MONAD_ROOTSPACE: namespace,
-    MONAD_INDEX_PATH: existingPath(packageRoot, "../index.html"),
     MONAD_ROUTES_PATH: existingPath(packageRoot, "../routes.js"),
     GUI_PKG_DIST_DIR: existingPath(repoRoot, "packages/GUI/npm/dist"),
     ME_PKG_DIST_DIR: existingPath(repoRoot, "me/npm/dist"),

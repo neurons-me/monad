@@ -13,6 +13,7 @@ import { assertDeclaredSpacesValid, assertMeCapabilities } from "./runtime/hostR
 import { loadSelfNodeConfig, type SelfNodeConfig } from "./http/selfMapping.js";
 import { defaultUsageLedger } from "./resources/usageLedger.js";
 import { defaultHostTelemetryLedger } from "./resources/hostTelemetryLedger.js";
+import { hardenClaimStore } from "./claim/manager.js";
 
 export type MonadLogger = Pick<Console, "log" | "warn" | "error">;
 
@@ -227,13 +228,11 @@ export function resolveMonadRuntimeConfig(options: MonadOptions = {}): MonadRunt
     reactDomUmdDir: resolvePath(cwd, env.LOCAL_REACTDOM_UMD_DIR,
       resolveFirstExisting(cwd, "node_modules/react-dom/umd", "../../../packages/GUI/npm/node_modules/react-dom/umd")),
     routesPath: resolvePath(cwd, env.MONAD_ROUTES_PATH, "../routes.js"),
-    // An index.html named outright wins; otherwise the front end's own; otherwise
-    // the historical ../index.html.
-    indexPath: resolvePath(
-      cwd,
-      env.MONAD_INDEX_PATH,
-      env.MONAD_FRONTEND_DIR ? path.join(env.MONAD_FRONTEND_DIR, "index.html") : "../index.html",
-    ),
+    // An index.html named outright wins; otherwise the front end's own; otherwise NONE. The repo's ../index.html is the
+    // monad.ai docs site's page (GitHub Pages), never a monad's interface: serving it took over cleaker.me (2026-11-08).
+    indexPath: env.MONAD_INDEX_PATH
+      ? path.resolve(cwd, env.MONAD_INDEX_PATH)
+      : env.MONAD_FRONTEND_DIR ? path.resolve(cwd, env.MONAD_FRONTEND_DIR, "index.html") : "",
     frontendDir: env.MONAD_FRONTEND_DIR ? resolvePath(cwd, env.MONAD_FRONTEND_DIR, ".") : null,
     modules: parseModuleList(env.MONAD_MODULES),
     mainServerName: normalizeMainServerName(env.MONAD_MAIN_SERVER_NAME),
@@ -248,6 +247,8 @@ export async function bootstrapMonad(options: MonadOptions = {}): Promise<MonadB
   const kernel = getKernel();
   // The credential of this machine's own callers (see http/internalToken.ts).
   ensureInternalToken(getKernelStateDir());
+  // The claim store (claims and their private keys) is the monad's own: narrowed at every start, not only on the next claim.
+  hardenClaimStore();
 
   // Declare the monad's identity expression in its own .me kernel.
   // This aligns with the browser-entry boot pattern: seed is the cryptographic anchor,

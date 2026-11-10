@@ -106,12 +106,6 @@ function parseClaimProofPayload(proof: NamespaceClaimProof): ClaimProofPayload |
   };
 }
 
-function normalizeProofTimestamp(proof: NamespaceClaimProof, payload: ClaimProofPayload): number {
-  const direct = Number(proof.timestamp ?? 0);
-  if (Number.isFinite(direct) && direct > 0) return direct;
-  return payload.timestamp;
-}
-
 function enforceClaimProofWindow(timestamp: number): boolean {
   return Math.abs(Date.now() - timestamp) <= CLAIM_PROOF_MAX_AGE_MS;
 }
@@ -154,7 +148,9 @@ async function resolveClaimIdentity(input: NamespaceClaimInput): Promise<
     return { ok: false, error: "PROOF_NAMESPACE_MISMATCH" };
   }
 
-  const proofTimestamp = normalizeProofTimestamp(proof, payload);
+  // Freshness must come from the signed message. The outer proof.timestamp
+  // is untrusted transport metadata; refreshing it must not revive an old proof.
+  const proofTimestamp = payload.timestamp;
   if (!enforceClaimProofWindow(proofTimestamp)) {
     return { ok: false, error: "PROOF_TIMESTAMP_INVALID" };
   }
@@ -468,7 +464,9 @@ export async function openNamespace(input: NamespaceOpenInput): Promise<OpenName
     return { ok: false, error: "PROOF_NAMESPACE_MISMATCH" };
   }
 
-  const proofTimestamp = normalizeProofTimestamp(proof, payload);
+  // Freshness must come from the signed message. The outer proof.timestamp
+  // is untrusted transport metadata; refreshing it must not revive an old proof.
+  const proofTimestamp = payload.timestamp;
   if (!enforceOpenChallengeWindow(proofTimestamp)) return { ok: false, error: "PROOF_TIMESTAMP_INVALID" };
 
   // Domain-separated, not just "any non-null challenge" -- a claim proof's

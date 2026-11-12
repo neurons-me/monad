@@ -102,17 +102,11 @@ function kernelWrite(namespace: string, path: string, data: unknown, operator?: 
   // this fix (execute() previously had no parameter to carry operator at
   // all).
 
-  if (operator === "=" && typeof data !== "object") {
-    // preserve explicit = operator via proxy eval syntax (primitives only — arrays/objects corrupt via eval)
-    const parts = kpath.split(".");
-    const leafName = parts[parts.length - 1]!;
-    const scopeParts = parts.slice(0, -1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const scope = scopeParts.reduce((p: any, k: string) => p[k], kernel as any);
-    scope["="](leafName, data);
-    return;
-  }
-
+  // Operator "=" here means "set" (the monad's contract: claim seeds, root schema seeds, tests). It used to go
+  // through the proxy's eval syntax, `scope["="](leaf, data)`, which in .me is the FORMULA operator: a string is
+  // evaluated as an expression, so plain text was stored with expression and value undefined (text seeds lost, and
+  // the 158 root seeds re-inserted on every start). execute() keeps operator "=" and stores the literal value, for
+  // every type (tests/semanticSeedLiteral.test.ts).
   kernel.execute(`me://self:write/${kpath.split(".").join("/")}`, data, operator ?? null);
 }
 

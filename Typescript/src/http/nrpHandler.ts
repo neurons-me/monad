@@ -2,7 +2,7 @@ import type { IncomingMessage } from "node:http";
 import type { Server } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { randomUUID } from "node:crypto";
-import { getKernel } from "../kernel/manager.js";
+import { getKernel, isForeignNamespaceReadCollapsingToRoot, namespaceToKernelPrefix } from "../kernel/manager.js";
 import { resolveNamespacePathValue, type ResolvedNamespacePath } from "./pathResolver.js";
 import { resolveServedNamespace } from "./requestedNamespace.js";
 import { declaredSpaceReference } from "../runtime/hostResolver.js";
@@ -83,14 +83,25 @@ function toPathDisclosure(resolved: ResolvedNamespacePath): DisclosureContent | 
   return resolved._classification === "public" ? "public" : "closed";
 }
 
+// Public or private, decided at the namespace's root the same way the HTTP path resolver decides it for a path:
+//   - a namespace this monad does not serve (its root constant is not this monad's own) is not answered from here;
+//   - a served namespace whose kernel prefix, or an ancestor of it (the bare root included), is a declared secret
+//     scope is private;
+//   - otherwise it is public. What each path inside it discloses is classified when that path is read (sendPathData).
+// Read-only: it never calls the kernel proxy as a function. It used to call `(kernel as any).read?.(segments)`; the
+// kernel has no `read` method, so on its proxy that was a path builder that appended a memory at `read` on every open
+// and returned something truthy, which made every namespace "public" (tests/NRP/nrpReadNoWrite.test.ts).
 function classifyNamespace(namespace: string): InternalClassification {
   try {
-    const kernel = getKernel();
-    // Walk the namespace path and check disclosure using the kernel's
-    // secret-scope rules. Path format: "users.<handle>" for personal namespaces.
-    const segments = namespace.split(".").filter(Boolean);
-    const value = (kernel as any).read?.(segments) ?? (kernel as any).get?.(segments);
-    if (value === undefined) return "stealth";
+    const ns = String(namespace || "").trim();
+    if (!ns) return "stealth";
+    if (isForeignNamespaceReadCollapsingToRoot(ns)) return "stealth";
+    const prefix = namespaceToKernelPrefix(ns);
+    const localSecrets: Record<string, unknown> = (getKernel() as any).localSecrets ?? {};
+    const parts = prefix ? prefix.split(".") : [];
+    for (let i = 0; i <= parts.length; i += 1) {
+      if (localSecrets[parts.slice(0, i).join(".")] !== undefined) return "stealth";
+    }
     return "public";
   } catch {
     return "closed";

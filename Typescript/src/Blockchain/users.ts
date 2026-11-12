@@ -1,6 +1,6 @@
 import { getBlocksForIdentity } from "./blockchain.js";
 import { getClaim } from "../claim/records.js";
-import { appendSemanticMemory, readSemanticBranchForNamespace } from "../claim/memoryStore.js";
+import { readSemanticBranchForNamespace } from "../claim/memoryStore.js";
 import { getRootNamespace } from "../kernel/manager.js";
 import { composeProjectedNamespace, normalizeNamespaceRootName } from "../namespace/identity.js";
 
@@ -11,10 +11,6 @@ export type UserRow = {
   createdAt: number;
   updatedAt: number;
 };
-
-export type ClaimUserResult =
-  | { ok: true; user: UserRow }
-  | { ok: false; error: "USERNAME_TAKEN" | "USERNAME_REQUIRED" | "IDENTITY_HASH_REQUIRED" | "PUBLIC_KEY_REQUIRED" };
 
 function normalizeUsername(raw: string) {
   return String(raw || "").trim().toLowerCase();
@@ -105,69 +101,6 @@ export function getUser(username: string): UserRow | undefined {
   if (!normalized) return undefined;
 
   return getAllUsers().find((user) => user.username === normalized);
-}
-
-export function claimUser(
-  username: string,
-  identityHash: string,
-  publicKey: string,
-): ClaimUserResult {
-  const normalizedUsername = normalizeUsername(username);
-  const normalizedIdentityHash = String(identityHash || "").trim();
-  const normalizedPublicKey = String(publicKey || "").trim();
-
-  if (!normalizedUsername) return { ok: false, error: "USERNAME_REQUIRED" };
-  if (!normalizedIdentityHash) return { ok: false, error: "IDENTITY_HASH_REQUIRED" };
-  if (!normalizedPublicKey) return { ok: false, error: "PUBLIC_KEY_REQUIRED" };
-
-  if (getUser(normalizedUsername)) {
-    return { ok: false, error: "USERNAME_TAKEN" };
-  }
-
-  const now = Date.now();
-  const rootNamespace = getRootNamespace();
-  const projectedNamespace = composeProjectedNamespace(normalizedUsername, rootNamespace);
-  const nextUser: UserRow = {
-    username: normalizedUsername,
-    identityHash: normalizedIdentityHash,
-    publicKey: normalizedPublicKey,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  appendSemanticMemory({
-    namespace: rootNamespace,
-    path: `users.${normalizedUsername}`,
-    operator: "__",
-    data: { __ptr: projectedNamespace },
-    timestamp: now,
-  });
-  appendSemanticMemory({
-    namespace: rootNamespace,
-    path: `users.${normalizedUsername}.identityHash`,
-    data: normalizedIdentityHash,
-    timestamp: now,
-  });
-  appendSemanticMemory({
-    namespace: rootNamespace,
-    path: `users.${normalizedUsername}.publicKey`,
-    data: normalizedPublicKey,
-    timestamp: now,
-  });
-  appendSemanticMemory({
-    namespace: rootNamespace,
-    path: `users.${normalizedUsername}.createdAt`,
-    data: now,
-    timestamp: now,
-  });
-  appendSemanticMemory({
-    namespace: rootNamespace,
-    path: `users.${normalizedUsername}.updatedAt`,
-    data: now,
-    timestamp: now,
-  });
-
-  return { ok: true, user: nextUser };
 }
 
 export function countBlocksForUser(identityHash: string) {

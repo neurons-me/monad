@@ -8,6 +8,7 @@ import { refuseUnresolvedNameRead, refuseUnservedRequestedNamespace } from "./re
 import { resolveLogsFromSource, shouldInterceptLogsPath } from "./logsSourceProxy.js";
 import { resolveOpenRestyStatusFromSource, shouldInterceptOpenRestyPath } from "./openRestyStatusProxy.js";
 import type { DisclosureContent } from "./disclosure.js";
+import { isGatewayRecordPath, mayReadGatewayRecords, pruneGatewayRecords } from "./gatewayRecordDisclosure.js";
 
 export type ResolvedNamespacePath = {
   namespace: string;
@@ -33,6 +34,7 @@ function normalizeDotPath(input: string): string {
 export async function resolveNamespacePathValue(
   namespaceInput: string,
   dotPathInput: string,
+  options: { gatewayRecords?: boolean } = {},
 ): Promise<ResolvedNamespacePath> {
   const namespace = String(namespaceInput || "").trim();
   const dotPath = normalizeDotPath(dotPathInput);
@@ -65,7 +67,14 @@ export async function resolveNamespacePathValue(
     return { namespace, path: dotPath, found: false, _classification: "not_found" };
   }
 
-  const semanticResolved = readSemanticBranchForNamespace(namespace, dotPath);
+  // The gateway's domain records are answered closed to every caller but the internal one, whether or not one exists
+  // at that path (no existence oracle); a parent's tree is answered without them (gatewayRecordDisclosure.ts).
+  if (!options.gatewayRecords && isGatewayRecordPath(dotPath)) {
+    return { namespace, path: dotPath, found: false, _classification: "closed" };
+  }
+
+  const read = readSemanticBranchForNamespace(namespace, dotPath);
+  const semanticResolved = options.gatewayRecords ? read : pruneGatewayRecords(dotPath, read);
   if (typeof semanticResolved !== "undefined") {
     return { namespace, path: dotPath, value: semanticResolved, found: true, _classification: "public" };
   }
@@ -170,7 +179,7 @@ export function createPathResolverHandler() {
       }));
     }
 
-    const resolved = await resolveNamespacePathValue(namespace, dotPath);
+    const resolved = await resolveNamespacePathValue(namespace, dotPath, { gatewayRecords: mayReadGatewayRecords(req) });
 
     // NRP Section 6: genuine absence (not near any secret scope) → 404
     if (resolved._classification === "not_found") {

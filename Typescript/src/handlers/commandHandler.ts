@@ -6,6 +6,7 @@ import { isKeychainReservedPath } from "../claim/keychain.js";
 import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
 import { isNetgetReservedPath } from "../claim/netget.js";
 import { isGatewayRoutingRecordPath, isInternalRequest, isSurfaceTelemetryReservedPath } from "../http/internalToken.js";
+import { mayReadGatewayRecords, withoutGatewayRecordRows } from "../http/gatewayRecordDisclosure.js";
 import { isForeignUsersPrefixWrite, saveSnapshot } from "../kernel/manager.js";
 import { notify as notifyPathChanged } from "../kernel/pathNotify.js";
 import { createEnvelope, createErrorEnvelope } from "../http/envelope.js";
@@ -116,7 +117,7 @@ export const meCommandHandler: express.RequestHandler = async (req, res) => {
 
   if (!out.ok) return res.status(openStatusCode(out.error)).json(createErrorEnvelope(target, { error: out.error }));
 
-  const memories = getMemoriesForNamespace(out.record.namespace);
+  const memories = mayReadGatewayRecords(req) ? getMemoriesForNamespace(out.record.namespace) : withoutGatewayRecordRows(getMemoriesForNamespace(out.record.namespace));
   const openedAt = Date.now();
   const audit = {
     proofId: computeProofId({

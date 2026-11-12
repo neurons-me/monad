@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { claimNamespace, openNamespace } from "../claim/records.js";
 import { getMemoriesForNamespace } from "../claim/replay.js";
 import { appendSemanticMemory, readSemanticValueForNamespace } from "../claim/memoryStore.js";
+import { mayReadGatewayRecords, withoutGatewayRecordRows } from "./gatewayRecordDisclosure.js";
 import { seedClaimNamespaceSemantics } from "../claim/claimSemantics.js";
 import { normalizeHttpRequestToMeTarget } from "./meTarget.js";
 import { createEnvelope, createErrorEnvelope } from "./envelope.js";
@@ -209,7 +210,8 @@ export const openRequestHandler: express.RequestHandler = async (req, res) => {
     return res.status(status).json(createErrorEnvelope(target, { error: out.error }));
   }
 
-  const memories = getMemoriesForNamespace(out.record.namespace);
+  // The gateway's domain records are not handed out here either (gatewayRecordDisclosure.ts): netget decides who reads them.
+  const memories = mayReadGatewayRecords(req) ? getMemoriesForNamespace(out.record.namespace) : withoutGatewayRecordRows(getMemoriesForNamespace(out.record.namespace));
   const openedAt = Date.now();
   appendSemanticMemory({
     namespace: out.record.namespace,

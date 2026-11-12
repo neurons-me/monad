@@ -59,6 +59,7 @@
  * part this audit found exploitable.
  */
 import express from "express";
+import { mayReadGatewayRecords, withoutGatewayRecordRows } from "./gatewayRecordDisclosure.js";
 import {
   listHostMemoryHistory,
   listHostsByNamespace,
@@ -159,7 +160,8 @@ export function createSessionRouter(): express.Router {
     }
 
     const namespace = resolveUserNamespace(req, username);
-    const memories = listHostMemoryHistory(namespace, username, fingerprint, limit).map((m: any) => ({
+    const history = listHostMemoryHistory(namespace, username, fingerprint, limit);
+    const memories = (mayReadGatewayRecords(req) ? history : withoutGatewayRecordRows(history)).map((m: any) => ({
       id: m.id,
       namespace: m.namespace,
       host_key: m.host_key,

@@ -14,6 +14,7 @@ import {
 } from "../http/namespace.js";
 import { isReadByNetworkAddress } from "../http/requestedNamespace.js";
 import { createPathResolverHandler } from "../http/pathResolver.js";
+import { mayReadGatewayRecords, withoutGatewayRecordRows } from "../http/gatewayRecordDisclosure.js";
 import { htmlShell, wantsHtml } from "../http/shell.js";
 import type { NamespaceProviderBoot } from "../http/provider.js";
 
@@ -31,9 +32,11 @@ export type LedgerHandlers = {
   catchAll: express.RequestHandler;
 };
 
-function readBlocks(ns: string, identityHash: string, limit: number) {
+function readBlocks(ns: string, identityHash: string, limit: number, req: express.Request) {
   const all = getAllBlocks();
   let blocks = filterBlocksByNamespace(all, ns);
+  // The gateway's domain records are not published here (gatewayRecordDisclosure.ts); filtered before the limit.
+  if (!mayReadGatewayRecords(req)) blocks = withoutGatewayRecordRows(blocks);
   if (identityHash) blocks = blocks.filter((b: any) => String(b?.authorIdentityHash || "") === identityHash);
   return blocks.slice().sort((a: any, b: any) => Number(b?.timestamp || 0) - Number(a?.timestamp || 0)).slice(0, limit);
 }
@@ -91,7 +94,7 @@ export function createLedgerHandlers(config: LedgerHandlerConfig): LedgerHandler
     const rootNamespace = resolveNamespaceProjectionRoot(chainNs) || chainNs;
     const askedByAddress = isReadByNetworkAddress(req);
     const users = usersVisibleFrom(chainNs, rootNamespace, askedByAddress);
-    const blocks = readBlocks(chainNs, identityHash, limit);
+    const blocks = readBlocks(chainNs, identityHash, limit, req);
     return res.json(createEnvelope(target, { namespace: chainNs, rootNamespace, lens, users, blocks, count: blocks.length }));
   };
 
@@ -105,7 +108,7 @@ export function createLedgerHandlers(config: LedgerHandlerConfig): LedgerHandler
     const lens = formatObserverRelationLabel(target.relation);
     const limit = Math.max(1, Math.min(5000, Number((req.query as any)?.limit ?? 5000)));
     const identityHash = String((req.query as any)?.identityHash || "").trim();
-    const result = readBlocks(ns, identityHash, limit);
+    const result = readBlocks(ns, identityHash, limit, req);
     return res.json(createEnvelope(target, { namespace: ns, lens, blocks: result, count: result.length }));
   };
 
@@ -117,7 +120,10 @@ export function createLedgerHandlers(config: LedgerHandlerConfig): LedgerHandler
     const lens = formatObserverRelationLabel(target.relation);
     const limit = Math.max(1, Math.min(5000, Number((req.query as any)?.limit ?? 500)));
     const includeSystem = String((req.query as any)?.includeSystem || "").trim() === "1";
-    const memories = listSemanticMemoriesByRootNamespace(rootNamespace, { limit, includeSystem });
+    const internal = mayReadGatewayRecords(req);
+    const memories = internal
+      ? listSemanticMemoriesByRootNamespace(rootNamespace, { limit, includeSystem })
+      : withoutGatewayRecordRows(listSemanticMemoriesByRootNamespace(rootNamespace, { limit: 5000, includeSystem })).slice(0, limit);
     const systemHidden = includeSystem
       ? 0
       : listSemanticMemoriesByRootNamespace(rootNamespace, { limit: 5000, includeSystem: true })
@@ -138,7 +144,7 @@ export function createLedgerHandlers(config: LedgerHandlerConfig): LedgerHandler
     const lens = formatObserverRelationLabel(target.relation);
     const limit = Math.max(1, Math.min(5000, Number((req.query as any)?.limit ?? 5000)));
     const identityHash = String((req.query as any)?.identityHash || "").trim();
-    const result = readBlocks(chainNs, identityHash, limit);
+    const result = readBlocks(chainNs, identityHash, limit, req);
 
     // When the path has a sub-path after @user (e.g. /@jabellae/name), fall through
     // to the semantic path resolver. Blockchain blocks live at /@user only.

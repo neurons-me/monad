@@ -12,6 +12,7 @@ import { isKeychainReservedPath } from "../claim/keychain.js";
 import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
 import { isNetgetReservedPath } from "../claim/netget.js";
 import { isGatewayRoutingRecordPath, isInternalRequest, isSurfaceTelemetryReservedPath } from "../http/internalToken.js";
+import { mayReadGatewayRecords, withoutGatewayRecordRows } from "../http/gatewayRecordDisclosure.js";
 import { isForeignNamespaceCollapsingToRoot, isForeignUsersPrefixWrite } from "../kernel/manager.js";
 
 // This used to be a fully open write: any POST here landed in
@@ -304,7 +305,8 @@ export const syncEventsHandler: express.RequestHandler = async (req, res) => {
       ? listHostMemoryHistory(namespace, username, fingerprint, limit)
       : listSemanticMemoriesByNamespace(namespace, { limit })
     ).filter((e: { timestamp?: number }) => Number(e?.timestamp ?? 0) > since);
-    return res.json({ events, memories: events });
+    const visible = mayReadGatewayRecords(req) ? events : withoutGatewayRecordRows(events);
+    return res.json({ events: visible, memories: visible });
   } catch (err) {
     return res.status(500).json({ error: String(err) });
   }

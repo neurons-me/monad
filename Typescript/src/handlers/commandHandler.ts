@@ -1,7 +1,7 @@
 import type express from "express";
 import { claimRequestHandler, openRequestHandler } from "../http/claims.js";
 import { claimNamespace, getClaim, openNamespace } from "../claim/records.js";
-import { canonicalizeWritePath, extractLegacyWritePath, getMemoriesForNamespace, getNamespaceChainHead, isMalformedWritePath, isNamespaceWriteAuthorized, recordMemory } from "../claim/replay.js";
+import { canonicalizeWritePath, extractLegacyWritePath, isDaemonReservedPath, getMemoriesForNamespace, getNamespaceChainHead, isMalformedWritePath, isNamespaceWriteAuthorized, recordMemory } from "../claim/replay.js";
 import { isKeychainReservedPath } from "../claim/keychain.js";
 import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
 import { isNetgetReservedPath } from "../claim/netget.js";
@@ -254,6 +254,10 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
   if (isGatewayAuthorityReservedPath(normalizedCandidatePath)) {
     return res.status(403).json(createErrorEnvelope(target, { error: "GATEWAY_PATH_REQUIRES_GATEWAY_API" }));
   }
+  // The rest of daemon.* (claim records, handle directory): see isDaemonReservedPath. Unconditional.
+  if (isDaemonReservedPath(normalizedCandidatePath)) {
+    return res.status(403).json(createErrorEnvelope(target, { error: "DAEMON_PATH_RESERVED" }));
+  }
 
   // The gateway's routing records decide where a hostname's traffic goes. An
   // unclaimed namespace takes an unsigned write, so without this anyone reaching
@@ -262,7 +266,7 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
   // path via extractLegacyWritePath()'s already-resolved candidatePath, not
   // its own re-derivation, for the same reason the other guards do now --
   // this function does its own slash/dot normalization internally already.
-  if (isGatewayRoutingRecordPath(candidatePath) && !isInternalRequest(req)) {
+  if (isGatewayRoutingRecordPath(normalizedCandidatePath) && !isInternalRequest(req)) {
     return res.status(403).json(createErrorEnvelope(target, { error: "GATEWAY_ROUTING_RECORDS_REQUIRE_INTERNAL_CALLER" }));
   }
 
@@ -273,7 +277,7 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
   // signed body would stay valid to replay forever; reserving the path to
   // internal callers closes that by refusing the write in the first place,
   // not just by excluding it from the head.
-  if (isSurfaceTelemetryReservedPath(candidatePath) && !isInternalRequest(req)) {
+  if (isSurfaceTelemetryReservedPath(normalizedCandidatePath) && !isInternalRequest(req)) {
     return res.status(403).json(createErrorEnvelope(target, { error: "SURFACE_TELEMETRY_REQUIRES_INTERNAL_CALLER" }));
   }
 

@@ -216,12 +216,30 @@ export function extractLegacyWritePath(body: unknown): string {
  * rootCommandHandler's own guards were already fixed.
  */
 export function canonicalizeWritePath(pathInput: string): string {
+  // The kernel also reads bracket segments (`a["b"]`, `a['b']`, `a[b]`) and trims each segment, so `daemon["claims"]`,
+  // `daemon[claims]` and `daemon .claims` land exactly where `daemon.claims` does. Every guard compares this form;
+  // before 2026-11-13 it only folded "/", and bracket spellings walked past every reserved-path guard (including the
+  // one that keeps a root write out of another namespace's users.<label> storage).
   return String(pathInput || "")
     .trim()
+    .replace(/\[\s*["']?([^\]"']*)["']?\s*\]/g, ".$1")
     .replace(/\//g, ".")
     .split(".")
+    .map((segment) => segment.trim())
     .filter(Boolean)
     .join(".");
+}
+
+/**
+ * daemon.* is this monad's own registry -- claim records (daemon.claims), the handle directory (daemon.users), gateway
+ * authority (daemon.gateways). Only the dedicated, verified functions write it (claimNamespace, gatewayAuthority.ts).
+ * A generic write surface must refuse it outright, whoever asks: a namespace resolving to this monad's own root writes
+ * UNPREFIXED at kernel root, and an unclaimed root takes unsigned writes, so without this anyone could create or
+ * replace any namespace's claim record (its key) -- confirmed on a disposable monad 2026-11-13.
+ */
+export function isDaemonReservedPath(canonicalPath: string): boolean {
+  const path = String(canonicalPath || "");
+  return path === "daemon" || path.startsWith("daemon.");
 }
 
 /**

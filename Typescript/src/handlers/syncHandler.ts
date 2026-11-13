@@ -7,7 +7,7 @@ import {
 import { checkGroupAuthorization } from "../claim/groupAuthorization.js";
 import { checkAppAuthorization } from "../claim/appAuthorization.js";
 import { getClaim } from "../claim/records.js";
-import { canonicalizeWritePath, getNamespaceChainHead, isMalformedWritePath, isNamespaceWriteAuthorized } from "../claim/replay.js";
+import { canonicalizeWritePath, getNamespaceChainHead, isDaemonReservedPath, isMalformedWritePath, isNamespaceWriteAuthorized } from "../claim/replay.js";
 import { isKeychainReservedPath } from "../claim/keychain.js";
 import { isGatewayAuthorityReservedPath } from "../claim/gatewayAuthority.js";
 import { isNetgetReservedPath } from "../claim/netget.js";
@@ -128,6 +128,11 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
     const reservedGatewayEvent = rawEvents.map(eventPath).find((e) => e && isGatewayAuthorityReservedPath(e.canonical));
     if (reservedGatewayEvent) {
       return res.status(403).json({ error: "GATEWAY_PATH_REQUIRES_GATEWAY_API" });
+    }
+    // And the rest of daemon.* (claim records, handle directory): replay.ts isDaemonReservedPath.
+    const daemonEvent = rawEvents.map(eventPath).find((e) => e && isDaemonReservedPath(e.canonical));
+    if (daemonEvent) {
+      return res.status(403).json({ error: "DAEMON_PATH_RESERVED" });
     }
     // Same reasoning as rootCommandHandler for the gateway's routing records.
     const routingEvent = rawEvents.map(eventPath).find((e) => e && isGatewayRoutingRecordPath(e.canonical));

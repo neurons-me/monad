@@ -5,6 +5,7 @@ import { normalizeMeIdentityHash } from "../identity/meIdentity.js";
 import { getClaim } from "../claim/records.js";
 import { decodeSignature, toStableJson, verifySignature } from "../claim/replay.js";
 import { readMonadIndexEntry, writeMonadIndexEntry, type MonadIndexEntry } from "../kernel/monadIndex.js";
+import { checkMeshEndpointSyntax } from "./meshForwardPolicy.js";
 
 // Minimum ms between accepts from the same monad_id — prevents index flooding.
 const MIN_ANNOUNCE_INTERVAL_MS = 10_000;
@@ -27,9 +28,11 @@ export function resetAnnounceThrottleForTests(): void {
  * Mac↔VM link, an operator can point `MONAD_TRUSTED_ANNOUNCE_KEYS_FILE` at a
  * JSON file (`{"keys": ["-----BEGIN PUBLIC KEY-----...", ...]}`) listing the
  * exact public keys of the nodes they actually control. Unset (the default),
- * any announce whose signature verifies is trusted, same as before this
- * pinning existed — this only ever narrows an already-verified announce
- * further, never widens who counts as verified.
+ * NO announce is accepted (2026-11-13): "any key whose signature verifies"
+ * trusted anyone who could generate a key, and an accepted endpoint is a
+ * place the bridge will fetch on a caller's behalf (see meshForwardPolicy.ts
+ * for what that allowed). An announce is stored only when it is signed, fresh
+ * and from a listed key; anything else is refused and nothing is written.
  *
  * Distinguishes "not configured" from "configured but unreadable/invalid":
  * a set env var pointing at a missing file or garbage JSON is an operator
@@ -224,6 +227,24 @@ export function createMeshAnnounceRouter(): express.Router {
         error: "ANNOUNCE_INVALID",
         hint: "monad_id, namespace, and endpoint are required.",
       });
+    }
+
+    // Fail closed (2026-11-13): no operator allowlist -> this monad accepts no announces at all; with one, only a
+    // signed, fresh announce from a listed key. Refusals write nothing (an unrouted `pending` entry was only ever
+    // chain growth for whoever sent it).
+    if (!loadTrustedAnnounceKeys().configured) {
+      return res.status(403).json({
+        ok: false,
+        error: "MESH_ANNOUNCE_DISABLED",
+        hint: "This monad accepts announces only from keys listed in MONAD_TRUSTED_ANNOUNCE_KEYS_FILE.",
+      });
+    }
+    if (!(verifyAnnounceSignature(parsed, now) && isAllowedAnnouncerKey(parsed.public_key || ""))) {
+      return res.status(403).json({ ok: false, error: "ANNOUNCE_NOT_TRUSTED", monad_id: parsed.monad_id });
+    }
+    const endpointRefusal = checkMeshEndpointSyntax(parsed.endpoint);
+    if (endpointRefusal) {
+      return res.status(400).json({ ok: false, error: "ENDPOINT_NOT_ALLOWED", reason: endpointRefusal });
     }
 
     const prev = lastAccepted.get(parsed.monad_id);

@@ -1,3 +1,4 @@
+import { checkMeshDestination } from "../http/meshForwardPolicy.js";
 import type express from "express";
 import { createEnvelope, createErrorEnvelope } from "../http/envelope.js";
 import type { DisclosureContent } from "../http/disclosure.js";
@@ -75,6 +76,21 @@ function assertSafeForwardUrl(url: URL): void {
     throw new Error(`BLOCKED_FORWARD_DESTINATION: ${url.hostname}`);
   }
 }
+
+/**
+ * The full check for a destination that came from OUTSIDE this monad -- an announced index entry (it carries a
+ * `status`) or a selector's web URL: no loopback, link-local, metadata or (unless the operator allows it) private
+ * addresses, after resolving the name (http/meshForwardPolicy.ts). Entries this monad wrote itself (self/CLI, no
+ * `status`) keep only the metadata floor above: sibling monads on this machine are loopback by design.
+ */
+async function assertForwardAllowed(url: URL, externallySourced: boolean): Promise<void> {
+  assertSafeForwardUrl(url);
+  if (!externallySourced) return;
+  const refusal = await checkMeshDestination(url);
+  if (refusal) throw new Error(`BLOCKED_FORWARD_DESTINATION: ${refusal}`);
+}
+
+const isAnnounced = (entry: { status?: unknown } | null | undefined) => Boolean(entry && entry.status !== undefined);
 
 function buildForwardInit(
   req: express.Request,
@@ -161,7 +177,7 @@ async function forwardCandidate(
   const startedAt = Date.now();
 
   try {
-    assertSafeForwardUrl(url);
+    await assertForwardAllowed(url, isAnnounced(candidate.entry));
     const response = await fetch(url, buildForwardInit(req, namespace, controller.signal));
     const latencyMs = Date.now() - startedAt;
     const contentType = String(response.headers.get("content-type") || "");
@@ -316,6 +332,9 @@ export function createBridgeHandler(config: BridgeHandlerConfig): express.Reques
           relation,
         };
         try {
+          // Not reachable through parseBridgeTarget today (it strips the selector brackets), but it fetches a URL
+          // the caller wrote: it gets the same destination check as an announced endpoint.
+          await assertForwardAllowed(new URL(selectorInfo.webTarget), true);
           const response = await fetch(selectorInfo.webTarget, { method: "GET" });
           const contentType = String(response.headers.get("content-type") || "text/html; charset=utf-8");
           const wantsJson = String(req.headers.accept || "").includes("application/json");
@@ -589,7 +608,7 @@ export function createBridgeHandler(config: BridgeHandlerConfig): express.Reques
       }
 
       const url = buildForwardUrl(origin, forwardPath, req.query);
-      assertSafeForwardUrl(url);
+      await assertForwardAllowed(url, isAnnounced(selection?.entry));
 
       const response = await fetch(url, buildForwardInit(req, parsed.namespace));
 

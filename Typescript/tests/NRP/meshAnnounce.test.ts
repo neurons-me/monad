@@ -2,23 +2,24 @@
  * meshAnnounce.test.ts — Remote Surface Registration
  *
  * WHAT IS MESH ANNOUNCE?
- * Any monad can POST to another surface's /.mesh/announce to register itself
- * in that surface's mesh index. This is how a Raspberry Pi monad becomes
- * visible in `cleaker.me`'s directory, even though it runs on a private device.
+ * A monad can POST to another surface's /.mesh/announce to register itself in that surface's mesh index, so that
+ * surface's bridge can route reads for its namespaces to it.
  *
- * The announce endpoint:
- *   - Validates required fields (monad_id, namespace, endpoint)
- *   - Writes the entry to the local kernel mesh index
- *   - Throttles repeated announces from the same monad (min 10s between accepts)
- *   - Returns { ok, registered, namespace, monad_id }
+ * Since 2026-11-13 it fails closed (see meshAnnounce.ts / meshForwardPolicy.ts): with no operator allowlist
+ * (MONAD_TRUSTED_ANNOUNCE_KEYS_FILE) NO announce is accepted; with one, only a signed, fresh announce from a listed
+ * key, whose endpoint is not loopback/link-local. Every refusal writes nothing. Before, any freshly generated key
+ * counted as `verified`, and an accepted endpoint is somewhere the bridge fetches on a caller's behalf.
  *
  * WHAT WE TEST:
- *   1. Valid announce is written to index and 200 returned
- *   2. Missing required fields → 400
- *   3. Second announce within throttle window → throttled (not re-written)
- *   4. After throttle window expires → accepted again
- *   5. claimed_namespaces defaults to [namespace] when absent
- *   6. scope_path is stored when provided
+ *   1. No allowlist -> 403 MESH_ANNOUNCE_DISABLED, nothing stored
+ *   2. A listed key's signed announce is written to the index and 200 returned
+ *   3. Missing required fields -> 400
+ *   4. Second announce within throttle window -> throttled (not re-written)
+ *   5. claimed_namespaces defaults to [namespace]; scope_path is stored
+ *   6. Unsigned, garbage-signed, stale or unlisted -> 403 ANNOUNCE_NOT_TRUSTED, nothing stored
+ *   7. Squatting / primary-namespace conflict / first-key-wins, as before
+ *   8. A broken allowlist file trusts nothing
+ *   9. A loopback endpoint is refused even from a listed key
  */
 
 import crypto from "crypto";
@@ -42,31 +43,14 @@ const savedClaimDir = process.env.MONAD_CLAIM_DIR;
 const savedTrustedKeysFile = process.env.MONAD_TRUSTED_ANNOUNCE_KEYS_FILE;
 
 let claimDir = "";
-
-beforeEach(() => {
-  process.env.ME_STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "monad-announce-"));
-  process.env.SEED = "announce-test-seed";
-  claimDir = fs.mkdtempSync(path.join(os.tmpdir(), "monad-announce-claims-"));
-  process.env.MONAD_CLAIM_DIR = claimDir;
-  delete process.env.MONAD_TRUSTED_ANNOUNCE_KEYS_FILE;
-  resetKernelStateForTests();
-});
-
-afterEach(() => {
-  process.env.SEED = savedSeed;
-  process.env.ME_STATE_DIR = savedStateDir;
-  if (savedClaimDir === undefined) delete process.env.MONAD_CLAIM_DIR;
-  else process.env.MONAD_CLAIM_DIR = savedClaimDir;
-  if (savedTrustedKeysFile === undefined) delete process.env.MONAD_TRUSTED_ANNOUNCE_KEYS_FILE;
-  else process.env.MONAD_TRUSTED_ANNOUNCE_KEYS_FILE = savedTrustedKeysFile;
-  fs.rmSync(claimDir, { recursive: true, force: true });
-  resetKernelStateForTests();
-  resetAnnounceThrottleForTests();
-});
+let trustedDir = "";
+let trustedFile = "";
 
 // ── Signature helpers ────────────────────────────────────────────────────────
 
-function generateSurfaceKeypair(): { publicKey: string; privateKey: string } {
+type Keypair = { publicKey: string; privateKey: string };
+
+function generateSurfaceKeypair(): Keypair {
   const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519", {
     publicKeyEncoding: { type: "spki", format: "pem" },
     privateKeyEncoding: { type: "pkcs8", format: "pem" },
@@ -87,6 +71,53 @@ function signAnnounceFields(privateKeyPem: string, fields: AnnounceFields): stri
   const message = toStableJson(fields);
   return crypto.sign(null, Buffer.from(message), privateKeyPem).toString("base64");
 }
+
+/** The operator's own node key: listed in the allowlist by default. */
+let OPERATOR: Keypair;
+
+/** Lists exactly these keys as trusted announcers. */
+function trust(...keys: Keypair[]) {
+  fs.writeFileSync(trustedFile, JSON.stringify({ keys: keys.map((k) => k.publicKey) }));
+  process.env.MONAD_TRUSTED_ANNOUNCE_KEYS_FILE = trustedFile;
+}
+
+/** A body signed by `key` over exactly the fields the server verifies (extra fields ride along unsigned). */
+function signed(body: Record<string, any>, key: Keypair = OPERATOR, timestamp = Date.now()) {
+  const fields: AnnounceFields = {
+    monad_id: body.monad_id,
+    namespace: body.namespace,
+    endpoint: body.endpoint,
+    claimed_namespaces: body.claimed_namespaces ?? [body.namespace],
+    identity_hash: body.identity_hash ?? "",
+    timestamp,
+  };
+  return { ...body, ...fields, public_key: key.publicKey, signature: signAnnounceFields(key.privateKey, fields) };
+}
+
+beforeEach(() => {
+  process.env.ME_STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "monad-announce-"));
+  process.env.SEED = "announce-test-seed";
+  claimDir = fs.mkdtempSync(path.join(os.tmpdir(), "monad-announce-claims-"));
+  process.env.MONAD_CLAIM_DIR = claimDir;
+  trustedDir = fs.mkdtempSync(path.join(os.tmpdir(), "monad-trusted-keys-"));
+  trustedFile = path.join(trustedDir, "keys.json");
+  OPERATOR = generateSurfaceKeypair();
+  trust(OPERATOR);
+  resetKernelStateForTests();
+});
+
+afterEach(() => {
+  process.env.SEED = savedSeed;
+  process.env.ME_STATE_DIR = savedStateDir;
+  if (savedClaimDir === undefined) delete process.env.MONAD_CLAIM_DIR;
+  else process.env.MONAD_CLAIM_DIR = savedClaimDir;
+  if (savedTrustedKeysFile === undefined) delete process.env.MONAD_TRUSTED_ANNOUNCE_KEYS_FILE;
+  else process.env.MONAD_TRUSTED_ANNOUNCE_KEYS_FILE = savedTrustedKeysFile;
+  fs.rmSync(claimDir, { recursive: true, force: true });
+  fs.rmSync(trustedDir, { recursive: true, force: true });
+  resetKernelStateForTests();
+  resetAnnounceThrottleForTests();
+});
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -111,12 +142,27 @@ const VALID_BODY = {
   trust: "trusted-peer",
 };
 
+// ── 0. Fail closed without an allowlist ───────────────────────────────────────
+
+describe("POST /.mesh/announce — no operator allowlist", () => {
+  it("refuses every announce (signed or not) with 403 MESH_ANNOUNCE_DISABLED and stores nothing", async () => {
+    delete process.env.MONAD_TRUSTED_ANNOUNCE_KEYS_FILE;
+    const app = makeApp();
+    for (const body of [signed(VALID_BODY, generateSurfaceKeypair()), VALID_BODY]) {
+      const res = await request(app).post("/.mesh/announce").send(body);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("MESH_ANNOUNCE_DISABLED");
+    }
+    expect(readMonadIndexEntry("monad:abc123")).toBeUndefined();
+  });
+});
+
 // ── 1. Valid announce ──────────────────────────────────────────────────────────
 
 describe("POST /.mesh/announce — valid registration", () => {
   it("returns 200 with registered=true and writes entry to index", async () => {
     const app = makeApp();
-    const res = await request(app).post("/.mesh/announce").send(VALID_BODY);
+    const res = await request(app).post("/.mesh/announce").send(signed(VALID_BODY));
 
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
@@ -133,7 +179,7 @@ describe("POST /.mesh/announce — valid registration", () => {
   });
 
   it("stores tags and claimed_namespaces correctly", async () => {
-    await request(makeApp()).post("/.mesh/announce").send(VALID_BODY);
+    await request(makeApp()).post("/.mesh/announce").send(signed(VALID_BODY));
     const entry = readMonadIndexEntry("monad:abc123");
     expect(entry!.tags).toEqual(["raspberry", "sensor"]);
     expect(entry!.claimed_namespaces).toContain("suign.cleaker.me");
@@ -169,8 +215,8 @@ describe("POST /.mesh/announce — validation", () => {
 describe("POST /.mesh/announce — throttling", () => {
   it("second immediate announce returns registered=false with reason throttled", async () => {
     const app = makeApp();
-    await request(app).post("/.mesh/announce").send(VALID_BODY);
-    const res2 = await request(app).post("/.mesh/announce").send(VALID_BODY);
+    await request(app).post("/.mesh/announce").send(signed(VALID_BODY));
+    const res2 = await request(app).post("/.mesh/announce").send(signed(VALID_BODY));
 
     expect(res2.body.registered).toBe(false);
     expect(res2.body.reason).toBe("throttled");
@@ -178,10 +224,10 @@ describe("POST /.mesh/announce — throttling", () => {
 
   it("different monad_id is never throttled by another monad's window", async () => {
     const app = makeApp();
-    await request(app).post("/.mesh/announce").send(VALID_BODY);
+    await request(app).post("/.mesh/announce").send(signed(VALID_BODY));
 
     const other = { ...VALID_BODY, monad_id: "monad:xyz999", name: "ana" };
-    const res = await request(app).post("/.mesh/announce").send(other);
+    const res = await request(app).post("/.mesh/announce").send(signed(other));
 
     expect(res.body.registered).toBe(true);
   });
@@ -192,14 +238,16 @@ describe("POST /.mesh/announce — throttling", () => {
 describe("POST /.mesh/announce — defaults", () => {
   it("claimed_namespaces defaults to [namespace] when absent", async () => {
     const body = { monad_id: "monad:def456", namespace: "frank.local", endpoint: "http://frank.local:8161" };
-    await request(makeApp()).post("/.mesh/announce").send(body);
+    // Signed over the default the server applies ([namespace]); the body itself carries no claimed_namespaces.
+    const { claimed_namespaces: _omitted, ...sent } = signed(body);
+    await request(makeApp()).post("/.mesh/announce").send(sent);
     const entry = readMonadIndexEntry("monad:def456");
     expect(entry!.claimed_namespaces).toEqual(["frank.local"]);
   });
 
   it("stores scope_path when provided", async () => {
     const body = { ...VALID_BODY, monad_id: "monad:scoped", scope_path: "/projects/music" };
-    await request(makeApp()).post("/.mesh/announce").send(body);
+    await request(makeApp()).post("/.mesh/announce").send(signed(body));
     const entry = readMonadIndexEntry("monad:scoped");
     expect(entry!.scope_path).toBe("/projects/music");
   });
@@ -208,68 +256,49 @@ describe("POST /.mesh/announce — defaults", () => {
 // ── 5. Verified vs. pending (signature verification) ──────────────────────────
 
 describe("POST /.mesh/announce — signature verification", () => {
-  it("an unsigned announce (the only kind the pre-hardening suite above sends) is stored as pending, never verified", async () => {
-    await request(makeApp()).post("/.mesh/announce").send(VALID_BODY);
-    const entry = readMonadIndexEntry("monad:abc123");
-    expect(entry!.status).toBe("pending");
+  it("an unsigned announce is refused (403 ANNOUNCE_NOT_TRUSTED) and nothing is stored", async () => {
+    const res = await request(makeApp()).post("/.mesh/announce").send(VALID_BODY);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("ANNOUNCE_NOT_TRUSTED");
+    expect(readMonadIndexEntry("monad:abc123")).toBeUndefined();
   });
 
-  it("a validly-signed announce is marked verified", async () => {
-    const { publicKey, privateKey } = generateSurfaceKeypair();
-    const fields: AnnounceFields = {
-      monad_id: "monad:signed1",
-      namespace: "signed.cleaker.me",
-      endpoint: "http://signed.local:8161",
-      claimed_namespaces: [],
-      identity_hash: "",
-      timestamp: Date.now(),
-    };
-    const signature = signAnnounceFields(privateKey, fields);
-
+  it("a validly-signed announce from a listed key is marked verified", async () => {
     const res = await request(makeApp())
       .post("/.mesh/announce")
-      .send({ ...fields, public_key: publicKey, signature });
+      .send(signed({ monad_id: "monad:signed1", namespace: "signed.cleaker.me", endpoint: "http://signed.local:8161", claimed_namespaces: [] }));
 
     expect(res.body.status).toBe("verified");
     expect(readMonadIndexEntry("monad:signed1")!.status).toBe("verified");
   });
 
-  it("an announce with a garbage signature is stored as pending, not verified", async () => {
-    const { publicKey } = generateSurfaceKeypair();
-    const fields: AnnounceFields = {
-      monad_id: "monad:badsig1",
-      namespace: "badsig.cleaker.me",
-      endpoint: "http://badsig.local:8161",
-      claimed_namespaces: [],
-      identity_hash: "",
-      timestamp: Date.now(),
-    };
-
+  it("an announce with a garbage signature is refused and nothing is stored", async () => {
     const res = await request(makeApp())
       .post("/.mesh/announce")
-      .send({ ...fields, public_key: publicKey, signature: "not-a-real-signature" });
+      .send({ ...signed({ monad_id: "monad:badsig1", namespace: "badsig.cleaker.me", endpoint: "http://badsig.local:8161", claimed_namespaces: [] }), signature: "not-a-real-signature" });
 
-    expect(res.body.status).toBe("pending");
-    expect(readMonadIndexEntry("monad:badsig1")!.status).toBe("pending");
+    expect(res.status).toBe(403);
+    expect(readMonadIndexEntry("monad:badsig1")).toBeUndefined();
   });
 
-  it("a signature whose timestamp falls outside the anti-replay window is rejected (stays pending)", async () => {
-    const { publicKey, privateKey } = generateSurfaceKeypair();
-    const fields: AnnounceFields = {
-      monad_id: "monad:stale1",
-      namespace: "stale.cleaker.me",
-      endpoint: "http://stale.local:8161",
-      claimed_namespaces: [],
-      identity_hash: "",
-      timestamp: Date.now() - 3 * 60 * 1000, // window is 2 minutes
-    };
-    const signature = signAnnounceFields(privateKey, fields);
-
+  it("a signature whose timestamp falls outside the anti-replay window is refused", async () => {
     const res = await request(makeApp())
       .post("/.mesh/announce")
-      .send({ ...fields, public_key: publicKey, signature });
+      .send(signed({ monad_id: "monad:stale1", namespace: "stale.cleaker.me", endpoint: "http://stale.local:8161", claimed_namespaces: [] }, OPERATOR, Date.now() - 3 * 60 * 1000)); // window is 2 minutes
 
-    expect(res.body.status).toBe("pending");
+    expect(res.status).toBe(403);
+    expect(readMonadIndexEntry("monad:stale1")).toBeUndefined();
+  });
+
+  it("a loopback or link-local endpoint is refused even from a listed key (400 ENDPOINT_NOT_ALLOWED)", async () => {
+    for (const [i, endpoint] of ["http://127.0.0.1:3000", "http://localhost:8161", "http://169.254.169.254"].entries()) {
+      const res = await request(makeApp())
+        .post("/.mesh/announce")
+        .send(signed({ monad_id: `monad:loop${i}`, namespace: "loop.cleaker.me", endpoint, claimed_namespaces: [] }));
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("ENDPOINT_NOT_ALLOWED");
+      expect(readMonadIndexEntry(`monad:loop${i}`)).toBeUndefined();
+    }
   });
 
   it("drops a claimed_namespace that a DIFFERENT identity genuinely holds a real claim for (squatting)", async () => {
@@ -293,7 +322,7 @@ describe("POST /.mesh/announce — signature verification", () => {
     });
     expect(victimClaim.ok).toBe(true);
 
-    const { publicKey, privateKey } = generateSurfaceKeypair();
+    const { publicKey, privateKey } = OPERATOR;
     const fields: AnnounceFields = {
       monad_id: "monad:narrow1",
       namespace: "narrow.cleaker.me",
@@ -319,7 +348,7 @@ describe("POST /.mesh/announce — signature verification", () => {
     // suspicious (the common case for a bare self-announced hostname) —
     // only a claim genuinely held by someone ELSE should be dropped.
     const identityHash = crypto.randomBytes(32).toString("hex");
-    const { publicKey, privateKey } = generateSurfaceKeypair();
+    const { publicKey, privateKey } = OPERATOR;
     const fields: AnnounceFields = {
       monad_id: "monad:unclaimed1",
       namespace: "unclaimed-host.local",
@@ -357,7 +386,8 @@ describe("POST /.mesh/announce — signature verification", () => {
     expect(victimClaim.ok).toBe(true);
 
     const attackerIdentityHash = crypto.randomBytes(32).toString("hex");
-    const { publicKey, privateKey } = generateSurfaceKeypair();
+    // Even a LISTED key may not take a namespace someone else holds.
+    const { publicKey, privateKey } = OPERATOR;
     const fields: AnnounceFields = {
       monad_id: "monad:impersonator1",
       namespace: victimNamespace, // attacker's PRIMARY namespace, not just claimed_namespaces
@@ -381,6 +411,9 @@ describe("POST /.mesh/announce — signature verification", () => {
   it("rejects re-announcing an already-verified monad_id under a different key (first-key-wins)", async () => {
     const app = makeApp();
     const original = generateSurfaceKeypair();
+    // Both keys are listed: the guarantee under test is first-key-wins between trusted nodes.
+    const impostor = generateSurfaceKeypair();
+    trust(original, impostor);
     const monad_id = "monad:pinned1";
     const fields1: AnnounceFields = {
       monad_id,
@@ -400,7 +433,6 @@ describe("POST /.mesh/announce — signature verification", () => {
     // under test) so the second POST is actually evaluated.
     resetAnnounceThrottleForTests();
 
-    const impostor = generateSurfaceKeypair();
     const fields2: AnnounceFields = { ...fields1, timestamp: Date.now() };
     const sig2 = signAnnounceFields(impostor.privateKey, fields2);
     const res2 = await request(app)
@@ -430,6 +462,8 @@ describe("POST /.mesh/announce — signature verification", () => {
     // point — a two-step bypass of the announced guarantee.
     const app = makeApp();
     const original = generateSurfaceKeypair();
+    const impostor = generateSurfaceKeypair();
+    trust(original, impostor);
     const monad_id = "monad:downgrade-attempt";
     const fields1: AnnounceFields = {
       monad_id,
@@ -454,9 +488,10 @@ describe("POST /.mesh/announce — signature verification", () => {
       namespace: "downgrade.cleaker.me",
       endpoint: "http://attacker-controlled.example:9999",
     });
-    // Must be rejected outright, not silently accepted as "pending".
-    expect(unsignedAttempt.status).toBe(409);
-    expect(unsignedAttempt.body.error).toBe("MONAD_ID_KEY_MISMATCH");
+    // Must be rejected outright, not silently accepted as "pending" (since 2026-11-13 it is refused before the
+    // key comparison: an unsigned announce is never trusted).
+    expect(unsignedAttempt.status).toBe(403);
+    expect(unsignedAttempt.body.error).toBe("ANNOUNCE_NOT_TRUSTED");
 
     // The original verified binding must be completely untouched.
     const afterUnsigned = readMonadIndexEntry(monad_id);
@@ -468,7 +503,6 @@ describe("POST /.mesh/announce — signature verification", () => {
 
     // Step 2: with the entry never downgraded, a genuinely different key
     // still cannot take over the monad_id either (the original guarantee).
-    const impostor = generateSurfaceKeypair();
     const fields2: AnnounceFields = { ...fields1, timestamp: Date.now() };
     const sig2 = signAnnounceFields(impostor.privateKey, fields2);
     const impostorAttempt = await request(app)
@@ -486,14 +520,11 @@ describe("POST /.mesh/announce — signature verification", () => {
 // ── 6. Operator-configured trusted-key allowlist (opt-in pinning) ─────────────
 
 describe("POST /.mesh/announce — MONAD_TRUSTED_ANNOUNCE_KEYS_FILE pinning", () => {
-  it("a validly-signed announce from a key outside the configured allowlist stays pending", async () => {
-    const trustedDir = fs.mkdtempSync(path.join(os.tmpdir(), "monad-trusted-keys-"));
-    const trustedFile = path.join(trustedDir, "keys.json");
+  it("a validly-signed announce from a key outside the configured allowlist is refused", async () => {
     const trusted = generateSurfaceKeypair();
-    fs.writeFileSync(trustedFile, JSON.stringify({ keys: [trusted.publicKey] }));
-    process.env.MONAD_TRUSTED_ANNOUNCE_KEYS_FILE = trustedFile;
+    trust(trusted);
 
-    try {
+    {
       const untrusted = generateSurfaceKeypair();
       const untrustedFields: AnnounceFields = {
         monad_id: "monad:untrusted1",
@@ -507,7 +538,9 @@ describe("POST /.mesh/announce — MONAD_TRUSTED_ANNOUNCE_KEYS_FILE pinning", ()
       const untrustedRes = await request(makeApp())
         .post("/.mesh/announce")
         .send({ ...untrustedFields, public_key: untrusted.publicKey, signature: untrustedSig });
-      expect(untrustedRes.body.status).toBe("pending");
+      expect(untrustedRes.status).toBe(403);
+      expect(untrustedRes.body.error).toBe("ANNOUNCE_NOT_TRUSTED");
+      expect(readMonadIndexEntry("monad:untrusted1")).toBeUndefined();
 
       const trustedFields: AnnounceFields = {
         monad_id: "monad:trusted1",
@@ -522,9 +555,6 @@ describe("POST /.mesh/announce — MONAD_TRUSTED_ANNOUNCE_KEYS_FILE pinning", ()
         .post("/.mesh/announce")
         .send({ ...trustedFields, public_key: trusted.publicKey, signature: trustedSig });
       expect(trustedRes.body.status).toBe("verified");
-    } finally {
-      delete process.env.MONAD_TRUSTED_ANNOUNCE_KEYS_FILE;
-      fs.rmSync(trustedDir, { recursive: true, force: true });
     }
   });
 
@@ -556,15 +586,14 @@ describe("POST /.mesh/announce — MONAD_TRUSTED_ANNOUNCE_KEYS_FILE pinning", ()
 
       // Signature is genuinely valid, but the (broken) allowlist must still
       // refuse it — never silently treated as "no allowlist configured".
-      expect(res.body.status).toBe("pending");
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("ANNOUNCE_NOT_TRUSTED");
     } finally {
       delete process.env.MONAD_TRUSTED_ANNOUNCE_KEYS_FILE;
     }
   });
 
   it("fails CLOSED when the allowlist file exists but contains invalid JSON", async () => {
-    const trustedDir = fs.mkdtempSync(path.join(os.tmpdir(), "monad-trusted-keys-invalid-"));
-    const trustedFile = path.join(trustedDir, "keys.json");
     fs.writeFileSync(trustedFile, "{ this is not valid json");
     process.env.MONAD_TRUSTED_ANNOUNCE_KEYS_FILE = trustedFile;
 
@@ -583,10 +612,10 @@ describe("POST /.mesh/announce — MONAD_TRUSTED_ANNOUNCE_KEYS_FILE pinning", ()
         .post("/.mesh/announce")
         .send({ ...fields, public_key: publicKey, signature });
 
-      expect(res.body.status).toBe("pending");
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("ANNOUNCE_NOT_TRUSTED");
     } finally {
       delete process.env.MONAD_TRUSTED_ANNOUNCE_KEYS_FILE;
-      fs.rmSync(trustedDir, { recursive: true, force: true });
     }
   });
 });

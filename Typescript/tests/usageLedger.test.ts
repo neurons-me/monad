@@ -5,9 +5,9 @@
  *   - signing key: SEED-derived vs ephemeral
  *   - start / stop lifecycle (isRunning, idempotent start)
  *   - publicKeyHex is a valid importable Ed25519 SPKI key
- *   - Level 1: surface request → entry at surface.usage.requests (after tick)
- *   - Level 1: signature round-trip verification using embedded pubKey
- *   - Level 1: identityHash forwarded when present
+ *   - requests are counted, never written one by one (no surface.usage.requests entries)
+ *   - one window entry carries the window's counts; signature covers them; keys capped
+ *   - interval policy (default 10 min, minimum 1 min) applied by start()
  *   - Level 2: flushWindowSnapshot() → entry at surface.usage.window
  *   - Level 2: window timing (endedAt > startedAt, start resets)
  *   - stop() prevents further events from being recorded
@@ -21,11 +21,19 @@ import path   from "path";
 import {
     ResourceUsageLedger,
     stableJson,
-    type RequestLedgerEntry,
     type WindowLedgerEntry,
     type GatewayUsageSnapshot,
 } from "../src/resources/usageLedger.js";
 import { recordSurfaceRequest } from "../src/http/surfaceTelemetry.js";
+import { HostTelemetryLedger } from "../src/resources/hostTelemetryLedger.js";
+import {
+    TELEMETRY_DEFAULT_INTERVAL_MS,
+    TELEMETRY_MAX_KEYS,
+    TELEMETRY_MIN_INTERVAL_MS,
+    TELEMETRY_OVERFLOW_KEY,
+    resolveTelemetryIntervalMs,
+} from "../src/resources/telemetryPolicy.js";
+import { vi } from "vitest";
 import { listSemanticMemoriesByNamespace } from "../src/claim/memoryStore.js";
 
 // The test setup (tests/setup.ts) sets process.env.ME_NAMESPACE = "cleaker.me"
@@ -55,14 +63,6 @@ function countWindowEntries(): number {
         prefix: "surface.usage.window",
         limit: 5_000,
     }).length;
-}
-
-function lastRequestEntry(): RequestLedgerEntry | undefined {
-    const rows = listSemanticMemoriesByNamespace(NS, {
-        prefix: "surface.usage.requests",
-        limit: 5_000,
-    });
-    return rows.length ? (rows[rows.length - 1]!.data as RequestLedgerEntry) : undefined;
 }
 
 function lastWindowEntry(): WindowLedgerEntry | undefined {
@@ -154,181 +154,143 @@ test("SEED-derived key is deterministic across instances", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Level 1 — per-request entries
+// Requests are counted, never written one by one (telemetryPolicy.ts)
 // ---------------------------------------------------------------------------
 
-test("Level 1: request event written to surface.usage.requests after tick", async () => {
+function req(over: Partial<Parameters<typeof recordSurfaceRequest>[0]> = {}) {
+    recordSurfaceRequest({
+        method: "GET", url: "/__surface", status: 200, durationMs: 4,
+        host: "127.0.0.1", namespace: NS, operation: "read",
+        nrp: "", lens: "", forwardedHost: null,
+        ...over,
+    } as Parameters<typeof recordSurfaceRequest>[0]);
+}
+
+test("requests write no memory of their own: 300 probes add 0 entries at surface.usage.requests", async () => {
     const ledger = new ResourceUsageLedger();
     ledger.start(60_000);
-
     const before = countRequestEntries();
+    const windowsBefore = countWindowEntries();
 
-    recordSurfaceRequest({
-        method:       "GET",
-        url:          "/test/usage-ledger-l1",
-        status:       200,
-        durationMs:   55,
-        host:         "local.netget",
-        namespace:    NS,
-        operation:    "read",
-        nrp:          "",
-        lens:         "",
-        forwardedHost: null,
-    });
-
+    for (let i = 0; i < 300; i++) req();
     await tick();
 
-    const after = countRequestEntries();
-    assert.ok(after > before, "entry count increased after request event");
-
-    const entry = lastRequestEntry()!;
-    assert.equal(entry.method,    "GET");
-    assert.equal(entry.url,       "/test/usage-ledger-l1");
-    assert.equal(entry.status,    200);
-    assert.equal(entry.durationMs, 55);
-    assert.equal(entry.host,      "local.netget");
-    assert.equal(entry.operation, "read");
-    assert.ok(typeof entry.cpuRatio    === "number", "cpuRatio is a number");
-    assert.ok(typeof entry.memoryRatio === "number", "memoryRatio is a number");
-    assert.ok(entry.cpuRatio    >= 0 && entry.cpuRatio    <= 1, "cpuRatio in [0,1]");
-    assert.ok(entry.memoryRatio >= 0 && entry.memoryRatio <= 1, "memoryRatio in [0,1]");
-    assert.ok(entry.requestedAt > 0, "requestedAt is a positive timestamp");
-
+    assert.equal(countRequestEntries(), before, "no per-request entries");
+    assert.equal(countWindowEntries(), windowsBefore, "nothing written until the window closes");
     ledger.stop();
 });
 
-test("Level 1: identityHash forwarded when present", async () => {
+test("the window writes ONE entry carrying every request of the window, counted", async () => {
     const ledger = new ResourceUsageLedger();
     ledger.start(60_000);
-
+    const before = countWindowEntries();
     const HASH = "aabbcc001122deadbeef000000000000000000000000000000000000000000ff01";
 
-    recordSurfaceRequest({
-        method:       "POST",
-        url:          "/claims/action",
-        status:       201,
-        durationMs:   12,
-        host:         "local.netget",
-        namespace:    NS,
-        operation:    "write",
-        nrp:          "",
-        lens:         "",
-        forwardedHost: null,
-        identityHash: HASH,
-    });
+    for (let i = 0; i < 120; i++) req();                                   // a probe
+    for (let i = 0; i < 30; i++) req({ host: "cleaker.me", url: "/gateway-identity" }); // a poller
+    req({ method: "POST", url: "/claims/action", status: 201, durationMs: 12, host: "cleaker.me", operation: "write", identityHash: HASH });
+    // Still queued for the next tick when the window closes: counted in this window, not lost.
+    ledger.flushWindowSnapshot();
 
-    await tick();
+    assert.equal(countWindowEntries(), before + 1, "exactly one window entry");
+    const entry = lastWindowEntry()!;
+    const counts = entry.requests!;
+    assert.equal(counts.total, 151);
+    assert.equal(counts.byHost["127.0.0.1"], 120);
+    assert.equal(counts.byHost["cleaker.me"], 31);
+    assert.equal(counts.byOperation.read, 150);
+    assert.equal(counts.byOperation.write, 1);
+    assert.equal(counts.anonymous.requests, 150);
+    assert.equal(counts.identities[HASH]!.requests, 1, "identityHash kept in its own bucket");
+    assert.equal(counts.identities[HASH]!.statusCodes["201"], 1);
 
-    const entry = lastRequestEntry()!;
-    assert.equal(entry.identityHash, HASH, "identityHash preserved in ledger entry");
-
+    // The next window starts from zero.
+    req();
+    ledger.flushWindowSnapshot();
+    assert.equal(lastWindowEntry()!.requests!.total, 1);
     ledger.stop();
 });
 
-test("Level 1: null identityHash when not provided", async () => {
+test("window signature covers the counts: altering requests.total invalidates it", async () => {
     const ledger = new ResourceUsageLedger();
     ledger.start(60_000);
-
-    recordSurfaceRequest({
-        method:       "GET",
-        url:          "/public/route",
-        status:       200,
-        durationMs:   5,
-        host:         "local.netget",
-        namespace:    NS,
-        operation:    "read",
-        nrp:          "",
-        lens:         "",
-        forwardedHost: null,
-    });
-
-    await tick();
-
-    const entry = lastRequestEntry()!;
-    assert.equal(entry.identityHash, null, "identityHash is null when not provided");
-
+    for (let i = 0; i < 5; i++) req();
+    ledger.flushWindowSnapshot();
+    const { sig, ...payload } = lastWindowEntry()!;
+    const pubKey = crypto.createPublicKey({ key: Buffer.from(sig.pubKey, "hex"), format: "der", type: "spki" });
+    const verify = (p: unknown) =>
+        crypto.verify(null, Buffer.from(stableJson(p as Record<string, unknown>), "utf8"), pubKey, Buffer.from(sig.value, "base64"));
+    assert.ok(verify(payload), "signature verifies");
+    assert.equal(verify({ ...payload, requests: { ...payload.requests!, total: payload.requests!.total + 1 } }), false);
     ledger.stop();
 });
 
-// ---------------------------------------------------------------------------
-// Level 1 — signature verification
-// ---------------------------------------------------------------------------
-
-test("Level 1: signature verifies against embedded pubKey", async () => {
+test("client-chosen keys are capped: 80 distinct Host headers and 50 identities keep the entry bounded, totals exact", async () => {
     const ledger = new ResourceUsageLedger();
     ledger.start(60_000);
-
-    recordSurfaceRequest({
-        method:       "PUT",
-        url:          "/chain/signed-entry",
-        status:       200,
-        durationMs:   7,
-        host:         "local.netget",
-        namespace:    NS,
-        operation:    "write",
-        nrp:          "",
-        lens:         "",
-        forwardedHost: null,
-    });
-
-    await tick();
-
-    const entry = lastRequestEntry()!;
-    const { sig, ...payload } = entry;
-
-    // Import the public key from the entry itself.
-    const pubKey = crypto.createPublicKey({
-        key:    Buffer.from(sig.pubKey, "hex"),
-        format: "der",
-        type:   "spki",
-    });
-
-    // Reconstruct the canonical signing input: stableJson of the payload.
-    const canonical = Buffer.from(stableJson(payload as unknown as Record<string, unknown>), "utf8");
-    const valid = crypto.verify(null, canonical, pubKey, Buffer.from(sig.value, "base64"));
-
-    assert.ok(valid, "signature in entry verifies against embedded public key");
-
+    for (let i = 0; i < 80; i++) req({ host: `random-${i}.example` });
+    for (let i = 0; i < 50; i++) req({ host: `h${i}`, identityHash: `id-${i}` });
+    ledger.flushWindowSnapshot();
+    const counts = lastWindowEntry()!.requests!;
+    assert.equal(counts.total, 130);
+    assert.ok(Object.keys(counts.byHost).length <= TELEMETRY_MAX_KEYS + 1, "byHost capped");
+    assert.equal(Object.values(counts.byHost).reduce((a, b) => a + b, 0), 130, "no request lost to the cap");
+    assert.ok(counts.byHost[TELEMETRY_OVERFLOW_KEY]! > 0);
+    assert.ok(Object.keys(counts.identities).length <= TELEMETRY_MAX_KEYS + 1, "identities capped");
+    const idTotal = Object.values(counts.identities).reduce((a, b) => a + b.requests, 0);
+    assert.equal(idTotal + counts.anonymous.requests, 130, "identity buckets + anonymous = total");
+    assert.ok(counts.identities[TELEMETRY_OVERFLOW_KEY]!.requests > 0, "identities past the cap share the overflow bucket");
+    for (const b of [counts.anonymous, ...Object.values(counts.identities)]) {
+        assert.ok(Object.keys(b.hosts).length <= TELEMETRY_MAX_KEYS + 1, "per-bucket hosts capped");
+    }
     ledger.stop();
 });
 
-test("Level 1: tampering payload invalidates signature", async () => {
+test("closeWindowIfActive(): an idle window writes nothing; an active one writes its counts once", async () => {
     const ledger = new ResourceUsageLedger();
     ledger.start(60_000);
-
-    recordSurfaceRequest({
-        method:       "DELETE",
-        url:          "/tamper-test",
-        status:       204,
-        durationMs:   3,
-        host:         "local.netget",
-        namespace:    NS,
-        operation:    "delete",
-        nrp:          "",
-        lens:         "",
-        forwardedHost: null,
-    });
-
-    await tick();
-
-    const entry = lastRequestEntry()!;
-    const { sig, ...payload } = entry;
-
-    // Tamper: change the status code
-    const tampered = { ...payload, status: 500 };
-
-    const pubKey = crypto.createPublicKey({
-        key:    Buffer.from(sig.pubKey, "hex"),
-        format: "der",
-        type:   "spki",
-    });
-
-    const canonical = Buffer.from(stableJson(tampered as unknown as Record<string, unknown>), "utf8");
-    const valid = crypto.verify(null, canonical, pubKey, Buffer.from(sig.value, "base64"));
-
-    assert.equal(valid, false, "tampered payload fails signature verification");
-
+    const before = countWindowEntries();
+    ledger.closeWindowIfActive();
+    assert.equal(countWindowEntries(), before, "idle window: no entry");
+    for (let i = 0; i < 7; i++) req();      // still queued (no tick): must be counted, not lost
+    ledger.closeWindowIfActive();
+    assert.equal(countWindowEntries(), before + 1);
+    assert.equal(lastWindowEntry()!.requests!.total, 7);
+    ledger.closeWindowIfActive();
+    assert.equal(countWindowEntries(), before + 1, "nothing left to write");
     ledger.stop();
+});
+
+test("interval policy: default 10 min, never below 1 min, whatever is configured", () => {
+    assert.equal(resolveTelemetryIntervalMs(undefined), TELEMETRY_DEFAULT_INTERVAL_MS);
+    assert.equal(resolveTelemetryIntervalMs(""), TELEMETRY_DEFAULT_INTERVAL_MS);
+    assert.equal(resolveTelemetryIntervalMs("not-a-number"), TELEMETRY_DEFAULT_INTERVAL_MS);
+    assert.equal(resolveTelemetryIntervalMs("10000"), TELEMETRY_MIN_INTERVAL_MS, "the old 10 s default is clamped");
+    assert.equal(resolveTelemetryIntervalMs(0), TELEMETRY_MIN_INTERVAL_MS);
+    assert.equal(resolveTelemetryIntervalMs(-5), TELEMETRY_MIN_INTERVAL_MS);
+    assert.equal(resolveTelemetryIntervalMs("600000"), 600_000);
+    assert.equal(resolveTelemetryIntervalMs(3_600_000), 3_600_000);
+});
+
+test("start() applies the policy to the timer it arms (usage and host ledgers)", () => {
+    const spy = vi.spyOn(globalThis, "setInterval");
+    try {
+        const usage = new ResourceUsageLedger();
+        usage.start(1_000);
+        usage.stop();
+        const host = new HostTelemetryLedger();
+        const sample = vi.spyOn(host, "sampleNow").mockImplementation(() => {});
+        host.start(5_000);
+        host.stop();
+        sample.mockRestore();
+        const fresh = new ResourceUsageLedger();
+        fresh.start();
+        fresh.stop();
+        const delays = spy.mock.calls.map((c) => c[1]);
+        assert.deepEqual(delays.slice(-3), [TELEMETRY_MIN_INTERVAL_MS, TELEMETRY_MIN_INTERVAL_MS, TELEMETRY_DEFAULT_INTERVAL_MS]);
+    } finally {
+        spy.mockRestore();
+    }
 });
 
 // ---------------------------------------------------------------------------

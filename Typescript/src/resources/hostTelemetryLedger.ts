@@ -38,6 +38,7 @@
 
 import { appendSemanticMemory } from '../claim/memoryStore.js';
 import { getRootNamespace } from '../kernel/manager.js';
+import { TELEMETRY_DEFAULT_INTERVAL_MS, resolveTelemetryIntervalMs } from './telemetryPolicy.js';
 import { getSurfaceTelemetrySnapshot } from '../http/surfaceTelemetry.js';
 import { measureLiveCpuCores, measureLiveRamGb, measureLiveStorageGb } from '../http/selfMapping.js';
 
@@ -60,14 +61,13 @@ export class HostTelemetryLedger {
    * Starts sampling and writing host telemetry.
    * Subsequent calls while already running are silently ignored.
    *
-   * @param intervalMs - Sample interval in milliseconds. Default: 30 000.
-   *   Values below 5 000 are clamped to 5 000 — each sample shells out to
-   *   `vm_stat` on macOS, not free enough to run on a sub-5s cadence.
+   * @param intervalMs - Sample interval in milliseconds. Default: 10 minutes; never below 1 minute
+   *   (telemetryPolicy.ts): every sample appends three memories to the chain.
    */
-  start(intervalMs = 30_000): this {
+  start(intervalMs: number = TELEMETRY_DEFAULT_INTERVAL_MS): this {
     if (this._timer) return this;
 
-    const interval = Math.max(5_000, intervalMs);
+    const interval = resolveTelemetryIntervalMs(intervalMs);
     this.sampleNow();
     this._timer = setInterval(() => this.sampleNow(), interval);
     this._timer.unref?.();

@@ -13,6 +13,10 @@ import { assertDeclaredSpacesValid, assertMeCapabilities } from "./runtime/hostR
 import { loadSelfNodeConfig, type SelfNodeConfig } from "./http/selfMapping.js";
 import { defaultUsageLedger } from "./resources/usageLedger.js";
 import { defaultHostTelemetryLedger } from "./resources/hostTelemetryLedger.js";
+import { resolveTelemetryIntervalMs } from "./resources/telemetryPolicy.js";
+import { addBeforeShutdownSave } from "./kernel/persist.js";
+
+const closeUsageWindowOnShutdown = () => defaultUsageLedger.closeWindowIfActive();
 import { hardenClaimStore } from "./claim/manager.js";
 
 export type MonadLogger = Pick<Console, "log" | "warn" | "error">;
@@ -280,18 +284,23 @@ export async function bootstrapMonad(options: MonadOptions = {}): Promise<MonadB
     );
   }
 
-  // Start the resource usage ledger bridge: from here onwards every surface
-  // request produces a signed ledger entry at surface.usage.requests, and a
-  // window snapshot is flushed to surface.usage.window every 10 s.
+  // Start the resource usage ledger bridge: surface requests are counted in
+  // memory and ONE signed aggregate per window goes to surface.usage.window
+  // (no memory per request). Window: MONAD_USAGE_WINDOW_MS, default 10 min,
+  // never below 1 min -- the policy lives in code (telemetryPolicy.ts), so it
+  // holds on every restart whatever env.json says.
   // The interval is unref'd so it never prevents graceful process exit.
-  const windowMs = Number(process.env.MONAD_USAGE_WINDOW_MS || 10_000);
+  const windowMs = resolveTelemetryIntervalMs(process.env.MONAD_USAGE_WINDOW_MS);
   defaultUsageLedger.start(windowMs);
+  // On shutdown the open window's counts are written before the snapshot save.
+  addBeforeShutdownSave(closeUsageWindowOnShutdown);
 
   // Start the host telemetry bridge: this host's own CPU/RAM/storage
   // (same numbers HostSurface shows) get written to surface.host.cpu/
   // memory/storage on a timer, so they're part of the queryable .me
   // knowledge graph, not just an ephemeral HTTP response.
-  const hostTelemetryMs = Number(process.env.MONAD_HOST_TELEMETRY_INTERVAL_MS || 30_000);
+  // Same policy: default 10 min, never below 1 min.
+  const hostTelemetryMs = resolveTelemetryIntervalMs(process.env.MONAD_HOST_TELEMETRY_INTERVAL_MS);
   defaultHostTelemetryLedger.start(hostTelemetryMs);
 
   return {

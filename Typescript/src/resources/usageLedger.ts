@@ -13,18 +13,24 @@
  * and downstream accounting consumers (the "resource crypto") can then read
  * signed, time-ordered entries without touching monad's HTTP layer.
  *
- * ## Two recording levels
+ * ## Recording levels (see telemetryPolicy.ts for why)
  *
- *   **Level 1 — per-request** (`surface.usage.requests`)
- *   Subscribed via `addSurfaceRequestListener`; drained asynchronously on the
- *   next `setImmediate` tick so the request response is never delayed.
- *   Payload: identityHash, namespace, method, url, status, durationMs, host,
- *   operation, requestedAt, cpuRatio, memoryRatio.
+ *   **Requests are counted, not written one by one.**  Subscribed via
+ *   `addSurfaceRequestListener`; each request only updates an in-memory
+ *   aggregate (by identity, host, operation, status).  No request appends a
+ *   memory of its own -- automatic probes and pollers used to be most of the
+ *   chain.  Older chains may still hold per-request entries at
+ *   `surface.usage.requests` ({@link RequestLedgerEntry}); nothing new is
+ *   written there.
  *
- *   **Level 2 — window snapshots** (`surface.usage.window`)
- *   Written on a configurable interval (default 10 s).
- *   Payload: windowStartedAt, windowEndedAt, requestRate, cpuRatio,
- *   memoryRatio, pressureCpu.
+ *   **Window aggregate** (`surface.usage.window`) -- ONE signed memory per
+ *   window (default 10 min, never under 1 min).  Payload: windowStartedAt,
+ *   windowEndedAt, requestRate, cpuRatio, memoryRatio, pressureCpu, and
+ *   `requests` -- the window's counts (total, anonymous, per identity, by
+ *   host, by operation), each map capped at TELEMETRY_MAX_KEYS keys.
+ *
+ *   **File export** (`$NETGET_DATA_DIR/runtime/gateway-usage.json`) -- the
+ *   same aggregate, for netget's GatewayUsageAggregator and Lua.
  *
  * ## Entry signatures
  *
@@ -58,6 +64,12 @@ import os     from 'os';
 import path   from 'path';
 
 import { appendSemanticMemory }          from '../claim/memoryStore.js';
+import {
+    TELEMETRY_DEFAULT_INTERVAL_MS,
+    TELEMETRY_MAX_KEYS,
+    TELEMETRY_OVERFLOW_KEY,
+    resolveTelemetryIntervalMs,
+} from './telemetryPolicy.js';
 import { getRootNamespace }              from '../kernel/manager.js';
 import {
     addSurfaceRequestListener,
@@ -110,14 +122,6 @@ function resolveSigningKey(): crypto.KeyObject {
 // ---------------------------------------------------------------------------
 // Local measurement helpers
 // ---------------------------------------------------------------------------
-
-/** CPU load ratio (0–1) based on the 1-minute load average across all cores. */
-function computeCpuRatio(): number {
-    const cores = Math.max(1, os.cpus()?.length ?? 1);
-    const load  = Number(os.loadavg?.()[0] ?? 0);
-    const ratio = load / cores;
-    return Number.isFinite(ratio) ? Math.max(0, Math.min(1, ratio)) : 0;
-}
 
 /** Resident set size divided by total physical memory (0–1). */
 function computeMemoryRatio(): number {
@@ -229,6 +233,17 @@ function freshAggregate(): RollingAggregate {
     return { byIdentity: new Map(), byHost: new Map(), byOperation: new Map(), total: 0 };
 }
 
+/** `map[key] += 1`, but a map that already holds TELEMETRY_MAX_KEYS keys counts new keys under the overflow key. */
+function countCapped(map: Record<string, number>, key: string): void {
+    const k = key in map || Object.keys(map).length < TELEMETRY_MAX_KEYS ? key : TELEMETRY_OVERFLOW_KEY;
+    map[k] = (map[k] ?? 0) + 1;
+}
+
+function countCappedMap(map: Map<string, number>, key: string): void {
+    const k = map.has(key) || map.size < TELEMETRY_MAX_KEYS ? key : TELEMETRY_OVERFLOW_KEY;
+    map.set(k, (map.get(k) ?? 0) + 1);
+}
+
 function bucketToPublic(b: RollingBucket): IdentityUsageBucket {
     return {
         requests:        b.requests,
@@ -274,7 +289,10 @@ export interface LedgerEntrySig {
     pubKey: string;
 }
 
-/** Level 1: one entry per surface request (`surface.usage.requests`). */
+/**
+ * Shape of the per-request entries older monads wrote at `surface.usage.requests`.  Nothing writes it any more
+ * (telemetryPolicy.ts); kept to read existing chains.
+ */
 export interface RequestLedgerEntry {
     /** Identity hash of the authenticated caller, or `null` when unauthenticated. */
     identityHash: string | null;
@@ -294,15 +312,26 @@ export interface RequestLedgerEntry {
     sig: LedgerEntrySig;
 }
 
-/** Level 2: one aggregate entry per window (`surface.usage.window`). */
+/** The requests of one window, counted (`WindowLedgerEntry.requests`). Maps are capped at TELEMETRY_MAX_KEYS keys. */
+export interface WindowRequestCounts {
+    total:       number;
+    anonymous:   IdentityUsageBucket;
+    identities:  Record<string, IdentityUsageBucket>;
+    byHost:      Record<string, number>;
+    byOperation: Record<string, number>;
+}
+
+/** One signed aggregate entry per window (`surface.usage.window`). */
 export interface WindowLedgerEntry {
     windowStartedAt: number;
     windowEndedAt:   number;
-    /** Number of requests received in the last 10 s window reported by surfaceTelemetry. */
+    /** Number of requests received in the last 10 s reported by surfaceTelemetry (instantaneous rate). */
     requestRate:     number;
     cpuRatio:        number;
     memoryRatio:     number;
     pressureCpu:     number;
+    /** Every request of the window, counted. Absent on entries written before this field existed. */
+    requests?:       WindowRequestCounts;
     sig: LedgerEntrySig;
 }
 
@@ -360,17 +389,17 @@ export class ResourceUsageLedger {
      * Subscribes to surface request events and arms the window snapshot timer.
      * Subsequent calls while already running are silently ignored.
      *
-     * @param windowMs - Window snapshot interval in milliseconds.  Default: 10 000.
-     *   Values below 1 000 are clamped to 1 000.
+     * @param windowMs - Window interval in milliseconds.  Default: 10 minutes; never below 1 minute
+     *   (resolveTelemetryIntervalMs).
      * @returns `this` for chaining.
      */
-    start(windowMs = 10_000): this {
+    start(windowMs: number = TELEMETRY_DEFAULT_INTERVAL_MS): this {
         if (this._unsubscribe) return this;   // already running
 
         this._windowStart = Date.now();
         this._unsubscribe = addSurfaceRequestListener(e => this._enqueue(e));
 
-        const interval = Math.max(1_000, windowMs);
+        const interval = resolveTelemetryIntervalMs(windowMs);
         this._windowTimer = setInterval(() => this.flushWindowSnapshot(), interval);
         // Unref so the timer does not prevent clean process exit.
         this._windowTimer.unref?.();
@@ -392,7 +421,7 @@ export class ResourceUsageLedger {
             this._windowTimer = null;
         }
 
-        // Flush remaining buffered Level 1 events before teardown.
+        // Count buffered events before teardown (they belong to the current window).
         this._drainNow();
     }
 
@@ -444,73 +473,63 @@ export class ResourceUsageLedger {
         this._drainScheduled = false;
         const events = this._pending.splice(0);
         for (const event of events) {
-            this._writeRequestEntry(event);
+            this._accumulate(event);
         }
     }
 
     /**
-     * Writes one Level 1 (per-request) entry to `surface.usage.requests`
-     * and accumulates the event into the rolling window aggregate.
+     * Counts one request into the window aggregate.  Writes nothing to the chain: the window entry carries the counts
+     * (telemetryPolicy.ts).  Identities beyond TELEMETRY_MAX_KEYS share the anonymous bucket's overflow accounting.
      */
-    private _writeRequestEntry(event: SurfaceRequestEvent): void {
-        const payload: Omit<RequestLedgerEntry, 'sig'> = {
-            identityHash: event.identityHash ?? null,
-            namespace:    event.namespace    || this._resolveNamespace(),
-            method:       event.method,
-            url:          event.url,
-            status:       event.status,
-            durationMs:   event.durationMs,
-            host:         event.host,
-            operation:    event.operation,
-            requestedAt:  event.timestamp,
-            cpuRatio:     computeCpuRatio(),
-            memoryRatio:  computeMemoryRatio(),
-        };
-
-        try {
-            appendSemanticMemory({
-                namespace: this._resolveNamespace(),
-                path:      'surface.usage.requests',
-                data:      { ...payload, sig: this._sign(payload as Record<string, unknown>) } satisfies RequestLedgerEntry,
-            });
-        } catch {
-            // Silently ignore — ledger writes must never affect request handling.
+    private _accumulate(event: SurfaceRequestEvent): void {
+        let key: string | null = event.identityHash ?? null;
+        if (key !== null && !this._agg.byIdentity.has(key)) {
+            const named = this._agg.byIdentity.size - (this._agg.byIdentity.has(null) ? 1 : 0);
+            if (named >= TELEMETRY_MAX_KEYS) key = TELEMETRY_OVERFLOW_KEY;
         }
-
-        // Accumulate into the rolling window aggregate regardless of ledger success.
-        this._accumulate(payload);
-    }
-
-    /**
-     * Accumulates one request event into the in-memory rolling aggregate.
-     * Called synchronously after each Level 1 write.
-     */
-    private _accumulate(payload: Omit<RequestLedgerEntry, 'sig'>): void {
-        const key = payload.identityHash ?? null;
 
         if (!this._agg.byIdentity.has(key)) {
             this._agg.byIdentity.set(key, freshBucket());
         }
         const b = this._agg.byIdentity.get(key)!;
+        const durationMs = Number.isFinite(event.durationMs) ? event.durationMs : 0;
         b.requests++;
-        b.totalDurationMs      += payload.durationMs;
-        const sc                = String(payload.status);
-        b.statusCodes[sc]       = (b.statusCodes[sc]            ?? 0) + 1;
-        b.operations[payload.operation]  = (b.operations[payload.operation]   ?? 0) + 1;
-        b.hosts[payload.host]            = (b.hosts[payload.host]             ?? 0) + 1;
+        b.totalDurationMs += durationMs;
+        countCapped(b.statusCodes, String(event.status));
+        countCapped(b.operations, String(event.operation));
+        countCapped(b.hosts, String(event.host));
 
-        this._agg.byHost.set(payload.host,      (this._agg.byHost.get(payload.host)      ?? 0) + 1);
-        this._agg.byOperation.set(payload.operation, (this._agg.byOperation.get(payload.operation) ?? 0) + 1);
+        countCappedMap(this._agg.byHost, String(event.host));
+        countCappedMap(this._agg.byOperation, String(event.operation));
         this._agg.total++;
     }
 
+    /** The current window's counts, in the shape written to the chain and to gateway-usage.json. */
+    private _requestCounts(): WindowRequestCounts {
+        const identities: Record<string, IdentityUsageBucket> = {};
+        let anonymous: IdentityUsageBucket = bucketToPublic(freshBucket());
+        for (const [key, bucket] of this._agg.byIdentity) {
+            if (key === null) anonymous = bucketToPublic(bucket);
+            else identities[key] = bucketToPublic(bucket);
+        }
+        return {
+            total:       this._agg.total,
+            anonymous,
+            identities,
+            byHost:      Object.fromEntries(this._agg.byHost),
+            byOperation: Object.fromEntries(this._agg.byOperation),
+        };
+    }
+
     /**
-     * Writes one Level 2 (window aggregate) entry to `surface.usage.window`.
+     * Writes the window's single aggregate entry to `surface.usage.window` and resets the counts.
      *
      * Called automatically by the internal timer; may also be invoked directly
      * (e.g. during tests or on graceful shutdown for a final snapshot).
      */
     flushWindowSnapshot(): void {
+        // Requests still queued for the next tick belong to this window.
+        if (this._pending.length) this._drainNow();
         const now  = Date.now();
         const snap = getSurfaceTelemetrySnapshot();
 
@@ -521,6 +540,7 @@ export class ResourceUsageLedger {
             cpuRatio:        snap.usage.cpu,
             memoryRatio:     computeMemoryRatio(),
             pressureCpu:     snap.pressure.cpu,
+            requests:        this._requestCounts(),
         };
 
         // Advance the window start for the next snapshot.
@@ -544,6 +564,15 @@ export class ResourceUsageLedger {
         this._agg = freshAggregate();
     }
 
+    /**
+     * Closes the open window if it counted any request (on shutdown, before the snapshot is saved), so those counts
+     * are not lost with the process.  An idle window writes nothing.
+     */
+    closeWindowIfActive(): void {
+        if (this._pending.length) this._drainNow();
+        if (this._agg.total > 0) this.flushWindowSnapshot();
+    }
+
     // ── File export (Level 3) ─────────────────────────────────────────────────
 
     /**
@@ -559,31 +588,21 @@ export class ResourceUsageLedger {
      *
      * @param windowPayload - The Level 2 payload from the most recent window flush.
      */
-    _exportToFile(windowPayload: Omit<WindowLedgerEntry, 'sig'>): void {
+    _exportToFile(windowPayload: Omit<WindowLedgerEntry, 'sig' | 'requests'>): void {
         const netgetDir = (process.env.NETGET_DATA_DIR ?? '').trim();
         if (!netgetDir) return;
 
-        // Build per-identity map
-        const identities: Record<string, IdentityUsageBucket> = {};
-        let anonymous: IdentityUsageBucket = bucketToPublic(freshBucket());
-
-        for (const [key, bucket] of this._agg.byIdentity) {
-            if (key === null) {
-                anonymous = bucketToPublic(bucket);
-            } else {
-                identities[key] = bucketToPublic(bucket);
-            }
-        }
+        const counts = this._requestCounts();
 
         const snapBase: Omit<GatewayUsageSnapshot, 'version' | 'updatedAt'> = {
             gatewayId:       normalizeHostname(os.hostname()),
             windowStartedAt: windowPayload.windowStartedAt,
             windowEndedAt:   windowPayload.windowEndedAt,
-            totalRequests:   this._agg.total,
-            identities,
-            anonymous,
-            byHost:          Object.fromEntries(this._agg.byHost),
-            byOperation:     Object.fromEntries(this._agg.byOperation),
+            totalRequests:   counts.total,
+            identities:      counts.identities,
+            anonymous:       counts.anonymous,
+            byHost:          counts.byHost,
+            byOperation:     counts.byOperation,
             system: {
                 cpuRatio:    windowPayload.cpuRatio,
                 memoryRatio: windowPayload.memoryRatio,

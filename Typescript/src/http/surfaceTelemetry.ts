@@ -85,6 +85,8 @@ type SurfaceRequestInput = Omit<SurfaceRequestEvent, "id" | "timestamp" | "ident
 type SurfaceStreamClient = {
   id: number;
   res: express.Response;
+  /** Carries this process's internal token: may see individual requests. */
+  privileged: boolean;
 };
 
 const MAX_RECENT_REQUESTS = Math.max(20, Math.min(500, Number(process.env.MONAD_SURFACE_RECENT_REQUESTS || 120)));
@@ -258,7 +260,13 @@ function computeRequestPressure(now: number) {
   return clamp01(rate / REQUEST_RATE_PRESSURE_THRESHOLD);
 }
 
-export function getSurfaceTelemetrySnapshot(): SurfaceTelemetrySnapshot {
+/**
+ * The surface telemetry. Individual requests (paths, namespaces, hosts, timings) are left out unless the caller asks
+ * for them -- only for a request carrying this process's internal token (providerSurface.ts): /__surface, /__bootstrap
+ * and the event stream are public and answer any origin, and a list of recent requests told anyone which names were
+ * being looked up. The aggregates (requestRatePer10s, pressure) stay public.
+ */
+export function getSurfaceTelemetrySnapshot(options: { includeRequests?: boolean } = {}): SurfaceTelemetrySnapshot {
   const now = Date.now();
   const cpuUsage = computeCpuUsageRatio();
   const requestPressure = computeRequestPressure(now);
@@ -291,7 +299,7 @@ export function getSurfaceTelemetrySnapshot(): SurfaceTelemetrySnapshot {
       },
     },
     monitor: {
-      recentRequests: recentRequests.slice(0, MAX_RECENT_REQUESTS),
+      recentRequests: options.includeRequests ? recentRequests.slice(0, MAX_RECENT_REQUESTS) : [],
     },
   };
 }
@@ -301,9 +309,13 @@ function writeSseEvent(res: express.Response, event: string, data: unknown) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
-function broadcast(event: string, data: unknown) {
+/** Individual requests go to privileged stream clients only; everyone else gets the aggregate snapshots. */
+function broadcastRequest(event: SurfaceRequestEvent) {
+  let privileged: SurfaceTelemetrySnapshot | null = null;
   for (const client of clients) {
-    writeSseEvent(client.res, event, data);
+    if (!client.privileged) continue;
+    privileged ??= getSurfaceTelemetrySnapshot({ includeRequests: true });
+    writeSseEvent(client.res, "request", { request: event, telemetry: privileged });
   }
 }
 
@@ -329,10 +341,7 @@ export function recordSurfaceRequest(input: SurfaceRequestInput) {
     recentRequests.length = MAX_RECENT_REQUESTS;
   }
 
-  broadcast("request", {
-    request: event,
-    telemetry: getSurfaceTelemetrySnapshot(),
-  });
+  broadcastRequest(event);
 
   // Notify registered listeners (e.g. ResourceUsageLedger).
   // Errors are swallowed — listeners must never affect request handling.
@@ -341,10 +350,11 @@ export function recordSurfaceRequest(input: SurfaceRequestInput) {
   }
 }
 
-export function attachSurfaceStreamClient(req: express.Request, res: express.Response) {
+export function attachSurfaceStreamClient(req: express.Request, res: express.Response, privileged = false) {
   const client: SurfaceStreamClient = {
     id: nextClientId++,
     res,
+    privileged,
   };
 
   res.status(200);
@@ -355,11 +365,11 @@ export function attachSurfaceStreamClient(req: express.Request, res: express.Res
   res.write(`retry: 2000\n\n`);
 
   clients.add(client);
-  writeSseEvent(res, "surface", getSurfaceTelemetrySnapshot());
+  writeSseEvent(res, "surface", getSurfaceTelemetrySnapshot({ includeRequests: privileged }));
 
   const heartbeat = setInterval(() => {
     if (res.writableEnded || res.destroyed) return;
-    writeSseEvent(res, "surface", getSurfaceTelemetrySnapshot());
+    writeSseEvent(res, "surface", getSurfaceTelemetrySnapshot({ includeRequests: privileged }));
   }, SURFACE_STREAM_HEARTBEAT_MS);
   heartbeat.unref?.();
 

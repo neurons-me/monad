@@ -1,3 +1,4 @@
+import { isInternalRequest } from "../http/internalToken.js";
 import { Router, type Router as ExpressRouter } from "express";
 import { getRootNamespace } from "../kernel/manager.js";
 import { createEnvelope, createErrorEnvelope } from "../http/envelope.js";
@@ -69,7 +70,7 @@ export function createProviderSurface(config: ProviderSurfaceConfig): ExpressRou
     const target = normalizeHttpRequestToMeTarget(req);
     const surfaceEntry = buildSurfaceEntry(req, namespace, config);
     const provider = buildProviderBoot(req, namespace, config);
-    const telemetry = getSurfaceTelemetrySnapshot();
+    const telemetry = getSurfaceTelemetrySnapshot({ includeRequests: isInternalRequest(req) });
     return res.json(createEnvelope(target, {
       host,
       namespace,
@@ -137,7 +138,7 @@ export function createProviderSurface(config: ProviderSurfaceConfig): ExpressRou
     if (refuseUnservedRequestedNamespace(req, res, (error) => createErrorEnvelope(target, { error }))) return;
     const namespace = resolveNamespace(req);
     const surfaceEntry = buildSurfaceEntry(req, namespace, config);
-    const telemetry = getSurfaceTelemetrySnapshot();
+    const telemetry = getSurfaceTelemetrySnapshot({ includeRequests: isInternalRequest(req) });
     return res.json(createEnvelope(target, {
       host,
       namespace,
@@ -149,7 +150,7 @@ export function createProviderSurface(config: ProviderSurfaceConfig): ExpressRou
   });
 
   router.get("/__surface/events", (req, res) => {
-    attachSurfaceStreamClient(req, res);
+    attachSurfaceStreamClient(req, res, isInternalRequest(req));
   });
 
   return router;

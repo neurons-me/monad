@@ -407,6 +407,25 @@ export const rootCommandHandler: express.RequestHandler = async (req, res) => {
 // from. Requires an existing claim: an unclaimed namespace has no signed
 // writes to protect, and returning a head for one would just be extra
 // surface for no purpose.
+/**
+ * GET /api/v1/claim-status?namespace=<ns> -- public: is this namespace claimed here, and since when. Deliberately
+ * NOTHING about the identity: no identityHash, no public key. For a v1 identity both are derived from a single fast
+ * hash of name + secret, so publishing them would hand anyone a target for guessing the secret offline.
+ */
+export const claimStatusHandler: express.RequestHandler = (req, res) => {
+  const namespace = normalizeClaimableNamespace(String(req.query.namespace || ""));
+  const target = normalizeHttpRequestToMeTarget(req);
+  if (!namespace) {
+    return res.status(400).json(createErrorEnvelope(target, { error: "NAMESPACE_REQUIRED" }));
+  }
+  const claim = getClaim(namespace);
+  return res.json(createEnvelope(target, {
+    namespace,
+    claimed: Boolean(claim),
+    ...(claim && Number.isFinite(Number(claim.createdAt)) ? { since: Number(claim.createdAt) } : {}),
+  }));
+};
+
 export const writeHeadHandler: express.RequestHandler = (req, res) => {
   const namespace = normalizeClaimableNamespace(String(req.query.namespace || ""));
   const target = normalizeHttpRequestToMeTarget(req);

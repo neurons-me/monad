@@ -281,23 +281,6 @@ export const commitHandler: express.RequestHandler = async (req, res) => {
 // (publicKey, etc.) -- identityHash is already a public
 // fingerprint (shown in the UI, meant to be shared), so confirming a
 // namespace/identityHash pair leaks nothing that wasn't already public.
-export const namespaceOwnerHandler: express.RequestHandler = async (req, res) => {
-  try {
-    const namespace = String(req.query.namespace || "").trim().toLowerCase();
-    const identityHash = String(req.query.identityHash || "").trim();
-    if (!namespace || !identityHash) {
-      return res.status(400).json({ error: "namespace and identityHash are required" });
-    }
-    const claim = getClaim(namespace);
-    return res.json({
-      claimed: Boolean(claim),
-      isOwner: Boolean(claim && claim.identityHash === identityHash),
-    });
-  } catch (err) {
-    return res.status(500).json({ error: String(err) });
-  }
-};
-
 export const syncEventsHandler: express.RequestHandler = async (req, res) => {
   try {
     const namespace = String(req.query.namespace || "").trim().toLowerCase();

@@ -5,7 +5,7 @@ import { createBridgeHandler } from "./handlers/bridgeHandler.js";
 import { claimStatusHandler, meCommandHandler, rootCommandHandler, rootCompatHandler, writeHeadHandler } from "./handlers/commandHandler.js";
 import { explainRequestHandler, inspectRequestHandler } from "./handlers/explainHandler.js";
 import { createLedgerHandlers } from "./handlers/ledgerHandler.js";
-import { commitHandler, syncEventsHandler, namespaceOwnerHandler } from "./handlers/syncHandler.js";
+import { commitHandler, syncEventsHandler } from "./handlers/syncHandler.js";
 import {
   getKeychainKeyHandler,
   listKeychainKeysHandler,
@@ -191,7 +191,8 @@ export async function createMonadApp(options: MonadOptions = {}): Promise<MonadA
   app.get("/@*", ledger.atPath);
   app.post("/api/v1/commit", commitHandler);
   app.get("/api/v1/sync", syncEventsHandler);
-  app.get("/api/v1/namespace-owner", namespaceOwnerHandler);
+  // /api/v1/namespace-owner removed (2026-11-13): it confirmed any guessed identityHash (`isOwner`), an unlimited
+  // oracle for v1 identities, and nothing used it; /api/v1/claim-status answers whether a namespace is claimed.
   app.get("/api/v1/write-head", writeHeadHandler);
   app.get("/api/v1/claim-status", claimStatusHandler);
   app.get("/api/v1/keychain/keys", listKeychainKeysHandler);

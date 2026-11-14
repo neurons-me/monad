@@ -5,6 +5,9 @@
  * show a namespace live -- and nothing about the identity: no identityHash, no public key (for a v1 identity both come
  * from one fast hash of name + secret: a target for guessing the secret offline).
  *
+ * GET /api/v1/namespace-owner is gone: it answered `isOwner` for any identityHash a caller tried -- an unlimited oracle
+ * for confirming guesses about a v1 identity -- and nothing used it (claim-status gives what was useful in it).
+ *
  * /__surface, /__bootstrap and /__surface/events answer any origin; they used to carry the last 120 requests (paths,
  * namespaces looked up), and the stream pushed every request live. Now individual requests only reach a caller with
  * this process's internal token; the aggregates stay public.
@@ -115,5 +118,16 @@ describe("public surface reads do not list requests", () => {
     assert.ok(!pub.includes("stream-public"), "the public stream disclosed a looked-up name");
     const internal = await streamAround(true, () => get(`/api/v1/claim-status?namespace=stream-internal.${ROOT}`));
     assert.ok(internal.includes("event: request") && internal.includes("stream-internal"), "the internal stream lost its per-request events");
+  });
+});
+
+describe("GET /api/v1/namespace-owner is gone", () => {
+  it("does not confirm an identityHash for a namespace (no isOwner, no claimed)", async () => {
+    for (const hash of [claimed.identityHash, "0".repeat(64)]) {
+      const r = await fetch(`${base}/api/v1/namespace-owner?namespace=ana.${ROOT}&identityHash=${hash}`, { headers: { accept: "application/json", "x-forwarded-host": ROOT } });
+      const text = await r.text();
+      assert.ok(!/isOwner/.test(text), `namespace-owner still answers isOwner: ${text.slice(0, 200)}`);
+      assert.ok(!/"claimed"\s*:/.test(text), `namespace-owner still answers claimed: ${text.slice(0, 200)}`);
+    }
   });
 });

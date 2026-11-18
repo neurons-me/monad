@@ -65,6 +65,25 @@ function localControlGuard(req: express.Request, res: express.Response, next: ex
   });
 }
 
+/**
+ * HTTP orders are closed (typedocs/Mesh/monad-control-orders.md §6, D10 option a, approved 2026-11-17).
+ *
+ * The guard above decides from `Host` and `Origin`, headers the caller writes, so it cannot authorize an order.
+ * Until orders are signed through .me (that contract's §3), every request under /__monads that is not a read is
+ * refused here, whatever its path, method or headers -- including the older aliases (`stop`, `start`, `resume`,
+ * `POST /:name/delete`, `DELETE /:name`) and any route added later. Reads (list, status, logs) stay. The CLI is
+ * unaffected: it acts on the files, not over HTTP.
+ */
+export const ORDERS_DISABLED = "ORDERS_DISABLED";
+export const ORDERS_DISABLED_MESSAGE =
+  "Monad orders over HTTP are closed until they are signed through .me. Use the monads CLI on this machine.";
+const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+function refuseHttpOrders(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (READ_METHODS.has(req.method.toUpperCase())) return next();
+  return res.status(403).json({ ok: false, error: ORDERS_DISABLED, message: ORDERS_DISABLED_MESSAGE });
+}
+
 function serializeStatus(status: MonadRuntimeStatus) {
   return {
     name: status.record.name,
@@ -86,27 +105,37 @@ async function listStatuses() {
   return Promise.all((await listMonadRecords()).map(getMonadStatus));
 }
 
+// Orders are advertised as CLI-only (method "CLI", no path), the same convention `proxy` already uses, so a client
+// renders them unavailable from the web instead of calling a route that refuses them.
+const ORDER_ACTIONS = new Set(["start", "on", "resume", "pause", "off", "stop", "restart", "delete"]);
+
 function monadsCommandPayload() {
   return {
     name: "monads",
     available: true,
     install: "npm install -g monad.ai",
     start: "monads start",
-    actions: [
-      { name: "list", label: "List", command: "monads list", method: "GET", path: "/__monads", scope: "registry" },
-      { name: "start", label: "Start New", command: "monads start [name]", method: "POST", path: "/__monads/start", scope: "registry" },
-      { name: "on", label: "On", command: "monads on <name>", method: "POST", path: "/__monads/:name/on", scope: "monad" },
-      { name: "resume", label: "Resume", command: "monads resume <name>", method: "POST", path: "/__monads/:name/resume", scope: "monad" },
-      { name: "pause", label: "Pause", command: "monads pause <name>", method: "POST", path: "/__monads/:name/pause", scope: "monad" },
-      { name: "off", label: "Off", command: "monads off <name>", method: "POST", path: "/__monads/:name/off", scope: "monad" },
-      { name: "stop", label: "Stop", command: "monads stop <name>", method: "POST", path: "/__monads/:name/stop", scope: "monad" },
-      { name: "restart", label: "Restart", command: "monads restart <name>", method: "POST", path: "/__monads/:name/restart", scope: "monad" },
-      { name: "delete", label: "Delete", command: "monads delete <name>", method: "POST", path: "/__monads/:name/delete", scope: "monad" },
-      { name: "status", label: "Status", command: "monads status <name>", method: "GET", path: "/__monads/:name/status", scope: "monad" },
-      { name: "logs", label: "Logs", command: "monads logs <name> --tail", method: "GET", path: "/__monads/:name/logs", scope: "monad" },
-      { name: "proxy", label: "Proxy", command: "monads proxy", method: "CLI", path: "", scope: "gateway" },
-    ],
+    orders: { enabled: false, error: ORDERS_DISABLED, message: ORDERS_DISABLED_MESSAGE },
+    actions: monadsActions().map((action) =>
+      ORDER_ACTIONS.has(action.name) ? { ...action, method: "CLI", path: "" } : action),
   };
+}
+
+function monadsActions() {
+  return [
+    { name: "list", label: "List", command: "monads list", method: "GET", path: "/__monads", scope: "registry" },
+    { name: "start", label: "Start New", command: "monads start [name]", method: "POST", path: "/__monads/start", scope: "registry" },
+    { name: "on", label: "On", command: "monads on <name>", method: "POST", path: "/__monads/:name/on", scope: "monad" },
+    { name: "resume", label: "Resume", command: "monads resume <name>", method: "POST", path: "/__monads/:name/resume", scope: "monad" },
+    { name: "pause", label: "Pause", command: "monads pause <name>", method: "POST", path: "/__monads/:name/pause", scope: "monad" },
+    { name: "off", label: "Off", command: "monads off <name>", method: "POST", path: "/__monads/:name/off", scope: "monad" },
+    { name: "stop", label: "Stop", command: "monads stop <name>", method: "POST", path: "/__monads/:name/stop", scope: "monad" },
+    { name: "restart", label: "Restart", command: "monads restart <name>", method: "POST", path: "/__monads/:name/restart", scope: "monad" },
+    { name: "delete", label: "Delete", command: "monads delete <name>", method: "POST", path: "/__monads/:name/delete", scope: "monad" },
+    { name: "status", label: "Status", command: "monads status <name>", method: "GET", path: "/__monads/:name/status", scope: "monad" },
+    { name: "logs", label: "Logs", command: "monads logs <name> --tail", method: "GET", path: "/__monads/:name/logs", scope: "monad" },
+    { name: "proxy", label: "Proxy", command: "monads proxy", method: "CLI", path: "", scope: "gateway" },
+  ];
 }
 
 function readString(...values: unknown[]): string | undefined {
@@ -140,6 +169,9 @@ export function createMonadsControlRouter(): express.Router {
   const router = express.Router();
   // Guard applies only to /__monads control plane routes.
   // Public namespace/data routes must pass through freely.
+  // First, before the header-based guard: every order is refused the same way, whatever headers it carries, on all
+  // routes below, present and future (see refuseHttpOrders).
+  router.use('/__monads', refuseHttpOrders);
   router.use('/__monads', localControlGuard);
 
   router.get("/__monads", async (_req, res) => {

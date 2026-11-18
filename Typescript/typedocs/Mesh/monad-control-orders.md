@@ -109,13 +109,13 @@ key of the owner signing a statement that names the attesting monad's key, revoc
 same open question as mesh trust, and this contract does not close it.
 
 **A2. Stale authorization window.** Whatever the attestation says was true when the attester read it. A
-revocation committed **after that read and before the root's fsync at step 9 can still be accepted**. That is
+revocation committed **after that read and before the root's fsync at step 10 can still be accepted**. That is
 not "a revocation that happened after acceptance": it is an acceptance on stale authority, and the contract names
 it so. Its length must be bounded and measured without trusting clocks:
 
 - the root sends a fresh random `rootChallenge` with the request and starts a **monotonic** timer;
 - the attester signs the challenge with its answer (so the answer cannot predate the request);
-- the root accepts only if `monotonic(fsync at step 9) - monotonic(request sent) <= STALE_WINDOW_MAX` (D7), and
+- the root accepts only if `monotonic(fsync at step 10) - monotonic(request sent) <= STALE_WINDOW_MAX` (D7), and
   otherwise refuses with `AUTHORITY_STALE` and writes nothing.
 
 So the window is at most `STALE_WINDOW_MAX`, measured on the root's own monotonic clock. Clock skew between
@@ -130,41 +130,51 @@ If the namespace's monad does not answer, there is no attestation and the call i
 ### 3.3 The acceptance point
 
 Everything that can change the decision is read **inside the record lock**, and the call is accepted by one
-durable write, also inside it:
+durable write, also inside it. An order that was already accepted is recognized right after authentication, before
+anything about the target is read, so retries keep working after the target changed (§5.2).
 
 ```
-outside the lock  (may only REFUSE, never accept; reads no protected state)
+outside the lock  (may only REFUSE, never accept)
   1. parse strictly; kind known; body has exactly its fields; path and body agree     failedAt: "parse"
   2. audience == this rootId; time window valid                                         failedAt: "audience"
-  3. authenticate: read the authority state for the PROOF's namespace (§3.2, mechanism open); the signer's key
-     exists and is active, and the signature over the exact bytes is valid            failedAt: "signature"
+  3. authenticate: read the signer's key state only (the minimum needed to authenticate, §3.2, mechanism open);
+     the key exists and is active, and the signature over the exact bytes is valid     failedAt: "signature"
+  4. orderId already in the journal?  -> ALREADY_ACCEPTED { orderId }: no execution, no outcome (§5.2)
+     (read from the home journal, no record lock, nothing about the target read)
 
 inside the record lock  (for monad.create: the home lock, the name does not exist yet)
-  4. re-check the signer's key is still active (it may have been revoked while waiting for the lock)
+  5. re-check the signer's key is still active (it may have been revoked while waiting for the lock)
                                                                                         failedAt: "signature"
-  5. re-read the record (exists for order/configure/reassign; absent for create)       failedAt: "record"
-  6. the record's namespace == the proof's namespace                                    failedAt: "namespace"
-  7. authority: the namespace is claimed, and the signer is its owner or holds a live grant covering
+  6. re-read the record (exists for order/configure/reassign; absent for create)       failedAt: "record"
+  7. the record's namespace == the proof's namespace                                    failedAt: "namespace"
+  8. authority: the namespace is claimed, and the signer is its owner or holds a live grant covering
      (order, monad)                                                                     failedAt: "authority"
-  8. orderId already in the journal?  -> answer its recorded outcome (§5.2); do not execute again
-  9. ACCEPT = append { orderId, kind, body, identityHash, keyId, grantId?, authorityReadMs, state: "accepted" }
-     to the journal and fsync.            <-- the acceptance point, and the only place a nonce is reserved
- 10. apply (the same runtime function the CLI uses, already holding the lock)
- 11. append { orderId, state: "applied" | "failed", error? } and fsync
+  9. orderId in the journal now?  -> ALREADY_ACCEPTED (a concurrent identical request got there first)
+ 10. ACCEPT = append { orderId, kind, body, identityHash, keyId, grantId?, authorityReadMs, state: "accepted" }
+     to the journal and fsync.            <-- the acceptance point, and the only place an order's nonce is reserved
+ 11. apply (the same runtime function the CLI uses, already holding the lock)
+ 12. append { orderId, state: "applied" | "failed", error? } and fsync
 release the lock
- 12. project the journal entry to the tree (§5.3)
+ 13. project the journal entry to the tree (§5.3)
 ```
 
-Nothing before step 9 changes state: no nonce is consumed, no journal entry is written, and a request that has not
-authenticated (steps 1-3) never takes a record lock, so it cannot create a runtime directory or hold up a real
-order. Authentication comes before anything that reads protected state: the record, the namespace's claim, who
-holds which permission, the journal.
+**What is read before authentication.** Only what authenticating needs: the signer's key and its status. Not the
+target record, not the target namespace's claim or grants, not the journal. An unauthenticated request takes no
+record lock (it cannot create a runtime directory or hold up a real order), burns no nonce and writes nothing.
 
-**Replay and retries happen only after authentication (step 8).** The journal is looked up by orderId only once
-the signature over those exact bytes is verified, so only the signer of a call can learn its outcome. There is no
-earlier "replay" check: an unauthenticated request never gets a stored result and never burns a nonce. The durable
-reservation is the journal append at step 9 (§5.2). Two concurrent requests with the same proof serialize on the
-record lock: the second finds the orderId at step 8 and gets the first's outcome.
+**Nothing before step 10 changes state.** Two concurrent identical requests: one reaches step 10, the other is
+answered `ALREADY_ACCEPTED` at step 4 or step 9.
+
+**A signed proof is a bearer artifact.** Whoever holds the complete request, signature included, can resend it;
+the signature proves who signed, not who is sending. The contract limits what holding it gives:
+
+- resending it never executes the order again and never returns its outcome, only `ALREADY_ACCEPTED`;
+- the outcome is read with a separate, fresh, single-use call (§5.2), so reading it needs the signer's key now;
+- outside loopback, orders travel only over TLS, so the request is not readable in transit.
+
+What stays possible: someone who obtains a valid request **before** it reaches the root can submit it first. That
+executes exactly what the signer signed, for this root, within its validity window; it is not prevented here, only
+bounded by audience and TTL.
 
 ### 3.4 Internal diagnosis and public answers
 
@@ -177,19 +187,19 @@ record lock: the second finds the orderId at step 8 and gets the first's outcome
 - **Public, before authentication (steps 1-3):** a malformed call may be told it is malformed (`PROOF_MALFORMED`:
   nothing protected in that). Everything else gets one answer, `UNAUTHENTICATED`, whether the key is unknown,
   revoked or the signature is wrong, and whatever exists on this root.
-- **Public, after authentication (steps 4-8):** what the caller may learn depends on the read policy (D1). Until D1
+- **Public, after authentication (steps 4-9):** what the caller may learn depends on the read policy (D1). Until D1
   says otherwise, a caller with no authority over the named monad gets `NOT_AUTHORIZED` both when the monad exists
   and when it does not (`NOT_FOUND` only to callers allowed to read it), so authenticating is not a way to list
   another owner's monads. The owner and its grantees get the specific reason.
 
-For `monad.reassign` both proofs go through steps 3-7, both attestations must be fresh, and the root pins the
+For `monad.reassign` both proofs go through steps 3-8, both attestations must be fresh, and the root pins the
 new namespace's monad key in the same journal write.
 
 ## 4. Delegation (node grants)
 
 The owner grants a program (panel, phone, another machine's agent) `nodePath: "monads.<name>"` (or `"monads"`),
 `operations: [...]`, the executor's own key, optional expiry. The executor signs the concrete call with its own
-key. At step 7 the authority state carries the grant **and** the granter's current ownership: if the owner lost the
+key. At step 8 the authority state carries the grant **and** the granter's current ownership: if the owner lost the
 namespace, every grant it issued stops at the next use. AND, never OR. A grant never covers `monad.create`,
 `monad.reassign` or `delete` unless it names them explicitly (D9).
 
@@ -199,20 +209,35 @@ Needs `feat/node-grants` merged first (D4).
 
 ### 5.1 Where
 
-`MONADS_HOME/orders.journal` — append-only JSON lines, one file per home, owned by the root, fsync'd at steps 9
-and 11. Home-level (not per record) because `delete` removes the record's directory. Bounded: entries older than
+`MONADS_HOME/orders.journal` — append-only JSON lines, one file per home, owned by the root, fsync'd at steps 10
+and 12. Home-level (not per record) because `delete` removes the record's directory. Bounded: entries older than
 the longest proof TTL plus a margin are compacted into a summary, never silently dropped (D2).
 
 ### 5.2 Retries and lost responses
 
-A client that lost the response resends **the same proof**. After it authenticates, step 8 finds the orderId and
-answers the recorded outcome: `applied` or `failed` (with the error). If the first request still holds the lock,
-the retry waits for it and then reads the outcome.
-The call is never executed twice. A client that wants to do it again signs a new call (new nonce, new orderId).
+Two separate things, so that neither depends on the target still being as it was:
+
+- **Resending the same proof** (the client does not know whether it arrived) is answered at step 4 with
+  `ALREADY_ACCEPTED { orderId }` once the order is in the journal, before the record, namespace or authority are
+  read. It works after a successful `delete` (the record is gone) and after a `reassign` (the signer is no longer
+  the owner). It never executes again and carries no outcome.
+- **Reading the outcome** is its own call, `kind: "monad.order.result"`, body `{ root, orderId }`, signed fresh
+  (new nonce). Rules:
+  - authenticate the signer as in step 3 (its key active **now**; an identity whose signing key was revoked uses
+    another active key of the same identity);
+  - the signer's `identityHash` must equal the one recorded in the journal entry (for a delegated order, the
+    executor's);
+  - the record, the namespace's current ownership and any grant are **not** required: the question is "what
+    happened to the order I signed", not "may I act on this monad now";
+  - the answer is `applied`, `failed` (with the error) or `in-progress`; an unknown orderId and another identity's
+    orderId get the same `NOT_FOUND`;
+  - the query's nonce is single-use (reserved when answered), so a captured query cannot be replayed to read the
+    outcome again.
+- A client that wants the order done again signs a new call (new nonce, new orderId).
 
 ### 5.3 The tree projection
 
-After step 11 the root writes the entry to its tree as `monads.<name>.orders.<orderId>`. Keyed by orderId, so
+After step 12 the root writes the entry to its tree as `monads.<name>.orders.<orderId>`. Keyed by orderId, so
 writing it twice is a no-op. That makes "one memory per accepted order" hold even with crashes: the projection is
 at-least-once, the key makes it once. `monads.*` is reserved: generic write surfaces refuse it.
 
@@ -220,11 +245,11 @@ at-least-once, the key makes it once. `monads.*` is reserved: generic write surf
 
 | The root dies… | On restart the root finds… | It does |
 |---|---|---|
-| before step 9 | nothing in the journal | nothing; the call was never accepted; the client may resend (same proof is still valid if unexpired) |
-| between 9 and 10 (accepted, not applied) | `accepted` with no outcome | **does not run it blindly.** For `on/off/pause/resume/start/stop/recovery-*` it checks the record: if `desired` already matches the order, marks `applied (recovered)`; if not, marks `failed (interrupted)`. `restart` and `delete` are never re-run: `failed (interrupted)`, or `applied (recovered)` if the record shows it happened (delete: the record is gone). |
-| during 10 (e.g. `desired` written, process not yet started) | `accepted`; `desired` already changed | `applied (recovered)`; the supervisor converges the process to `desired` as it always does (local-supervisor.md) |
-| between 11 and 12 | outcome written, no tree memory | writes the projection (§5.3); idempotent |
-| during 12 | partial or no projection | same; idempotent by orderId |
+| before step 10 | nothing in the journal | nothing; the call was never accepted; the client may resend (same proof is still valid if unexpired) |
+| between 10 and 11 (accepted, not applied) | `accepted` with no outcome | **does not run it blindly.** For `on/off/pause/resume/start/stop/recovery-*` it checks the record: if `desired` already matches the order, marks `applied (recovered)`; if not, marks `failed (interrupted)`. `restart` and `delete` are never re-run: `failed (interrupted)`, or `applied (recovered)` if the record shows it happened (delete: the record is gone). |
+| during 11 (e.g. `desired` written, process not yet started) | `accepted`; `desired` already changed | `applied (recovered)`; the supervisor converges the process to `desired` as it always does (local-supervisor.md) |
+| between 12 and 13 | outcome written, no tree memory | writes the projection (§5.3); idempotent |
+| during 13 | partial or no projection | same; idempotent by orderId |
 
 The rule behind the table: **`desired` is the intent, and the supervisor converges to it**, so for intent-setting
 orders "was it applied" reduces to "does `desired` say so". Only the non-idempotent orders (`restart`, `delete`,
@@ -259,22 +284,25 @@ Proposal: **(a)**. The order buttons come back with §3, signed.
   handler, and the card shows one line: orders from the web are paused until signed with the `.me` identity; use
   the `monads` CLI, with an example. Status, Logs and Rescan stay enabled. Works through both ways the UI gets the
   control (direct `/__monads` read, and GUI discovery, which keeps `method`).
-- Tests: `tests/httpOrdersClosed.test.ts` (6) on a disposable home with stand-in monads: 15 order requests (all
-  routes, old aliases, PUT/PATCH, unknown paths) refused and nothing changed (same PID, start time, `desired`,
-  namespace, no new record); CN1–CN3 header variants incl. the LAN address and no `Host`; reads 200; CLI-only
-  advertisement; CN15: the runtime functions the CLI calls still work (called directly); CN15b: the `monads` command itself, run as its own process from source with `tsx`, starts, turns off and back on a monad. The built `dist/` binary was not run (it is built at release). Removing the middleware makes the 2 order tests fail. The UI was checked by
-  rendering the card from that disposable server's real payload through both paths (scratch harness, not
-  committed): order buttons disabled without handlers, explanation present, server still refuses a direct call.
-- Scope: this branch only. **Monads already running elsewhere (the VM, any other checkout) still serve the old
-  routes until this code is released there.** An older `all.this` UI still shows enabled buttons; the server
-  refuses them and the UI shows the error.
+- Tests on `main`: `tests/httpOrdersClosed.test.ts` (5) on a disposable home with a stand-in monad (a sleeping
+  process and a hand-written record; `main` has no supervisor): 15 order requests (all routes, old aliases,
+  PUT/PATCH, unknown paths) refused with the process alive and the record byte-identical, and no new record;
+  CN1–CN3 header variants incl. the LAN address and no `Host`; reads 200; CLI-only advertisement; the `monads`
+  command itself, run as its own process from source with `tsx`, still turns a monad off. The built `dist/` binary
+  was not run. Removing the middleware makes the 2 order tests fail. (On `dev/agent-local` the same file has 6
+  tests on the supervisor's stand-in monads.) The UI was checked by rendering the card from a disposable server's
+  real payload through both paths (scratch harness, not committed): order buttons disabled without handlers,
+  explanation present, server still refuses a direct call.
+- Scope: released on `main` (`be840997`); not deployed. **Monads already running elsewhere (the VM, any other
+  checkout) still serve the old routes until this code is deployed there.** An older `all.this` UI still shows
+  enabled buttons; the server refuses them and the UI shows the error.
 
 ## 7. Invariants
 
 | # | Invariant | Tested by |
 |---|---|---|
 | C1 | No `Host`, `Origin` or other caller-written header authorizes a call. | CN1–CN3 |
-| C2 | A call is accepted only at step 9, after every authority check inside the record lock; nothing before step 9 changes state. | CN4–CN9, CN17, CN20 |
+| C2 | A call is accepted only at step 10, after every authority check inside the record lock; nothing before step 10 changes state. | CN4–CN9, CN17, CN20 |
 | C3 | The server decides the capability; the request never names it. Order bodies carry only `{root, monad, order}`. | CN10, CN19 |
 | C4 | Only the root answers, only for records under its home, and nothing can order the root itself. | CN11, CN12, CN22 |
 | C5 | An unclaimed namespace accepts no network call; creating and reassigning are separate kinds with their own signers. | CN13, CN18, CN19 |
@@ -283,7 +311,8 @@ Proposal: **(a)**. The order buttons come back with §3, signed.
 | C8 | The authority used was read at most `STALE_WINDOW_MAX` before acceptance, measured on the root's monotonic clock; a revocation inside that window may be accepted, and the contract says so. | CN16, CN17, CN23 |
 | C9 | The CLI keeps working with HTTP orders closed. | CN15 |
 | C10 | **Recognizing a signer is not obeying it.** Without applicable authority (ownership of the namespace, or a delegation that covers this order on this monad) the order is refused, however valid everything else is. Authority in one scope (gateway admin) never carries over to another (monads). | CN25, CN25b |
-| C11 | **No authorization decision or protected state is revealed before authentication**; internal diagnosis (`failedAt`) is never the public answer by itself. An unauthenticated request never reads the journal, burns a nonce or takes a record lock. | CN26–CN28 |
+| C11 | **Before authentication, only the signer's key state is read**, never the target record, the target namespace's claim or grants, or the journal; and no response reveals protected information or an authorization decision. Internal diagnosis (`failedAt`) is never the public answer by itself. An unauthenticated request never takes a record lock, burns a nonce or writes. Scope: what CN26–CN28 check, the **content** of responses and the absence of writes; timing and other side channels are not covered (§11). | CN26–CN28 |
+| C12 | **Retries and results do not depend on the target's current state.** A resent proof of an accepted order is recognized before the record, namespace or authority are read; its outcome is read only with a fresh single-use query by the identity that signed it. Resending a proof never re-executes and never returns the outcome. | CN28–CN31 |
 
 ## 8. Negative tests
 
@@ -332,7 +361,10 @@ security log. That log is a different thing from the journal and is not specifie
 | **CN25** | **The jewel.** Ana: active agent key, valid v2 proof, fresh nonce, audience = this root, `off` on monad `m`; gateway admin; not the owner of `m`'s namespace; no delegation. **Every other requirement is also valid**: the record exists under this root, the namespace is claimed, a fresh attestation from an attester the namespace's authority names, time window and body correct. | refused at the **authorization** step and nowhere earlier: the decision trace reports `failedAt: "authority"` and the test asserts that every earlier step passed (a test-visible decision trace, not the error code alone); `m`'s PID, start time and `desired` unchanged; no entry in the orders journal; nonce not burned |
 | **CN26** | Unauthenticated calls (unknown key; revoked key; bad signature) naming an existing monad, a non-existent one, and an unclaimed namespace | every combination answers the same `UNAUTHENTICATED`; internal trace has the real reason; no lock directory created for the non-existent name |
 | **CN27** | Authenticated caller with no authority over monad `x`: `off` on an existing `x` and on a non-existent `y` | both `NOT_AUTHORIZED`, indistinguishable; only a caller whom D1 allows to read this root's records gets `NOT_FOUND` for `y` |
-| **CN28** | Someone holding the exact signed bytes of an accepted order (but not the signer's key) resends them with a wrong signature | `UNAUTHENTICATED`; the recorded outcome is not returned; journal and nonce untouched |
+| **CN28** | Someone holding the exact signed bytes of an accepted order: (a) resends them with a wrong signature; (b) resends them **unchanged** (valid signature, not the signer) | (a) `UNAUTHENTICATED`; (b) `ALREADY_ACCEPTED { orderId }` only: no second execution, no outcome; in both, journal and nonce untouched |
+| **CN29** | `delete m` applied, response lost; the client resends the same proof; then reads the result with a fresh `monad.order.result` | resend: `ALREADY_ACCEPTED` although `m` no longer exists; result: `applied` |
+| **CN30** | `reassign m` applied (the signer is no longer the owner); same resend and result query by the original signer | resend: `ALREADY_ACCEPTED`; result: `applied`, without the signer being owner now |
+| **CN31** | Result query for an orderId by another identity; for an unknown orderId; and the same query proof sent twice | first two: the same `NOT_FOUND`; the repeated query: refused (single-use nonce), outcome not returned again |
 | **CN25b** | **Positive control.** The owner then delegates to Ana only `off` on `m`. Ana sends three calls, **each with its own new proof and nonce, and its own path and body**: `off` on `m`; `delete` on `m`; `off` on another monad `n` of the same owner | `off m` applied; `delete m` and `off n` refused at the authorization step (`failedAt: "authority"`, `NOT_GRANTED`), not by signature, destination or replay |
 
 ### All the others
@@ -368,7 +400,7 @@ Signed (§3–§5):
 | **CN18** | **Create without a record:** `monad.order start` for a name with no record | refused (`NOT_FOUND`); `monad.create` by the namespace's owner works; `monad.create` by someone else refused |
 | **CN19** | **Namespace change:** `monad.order start` with `namespace` in the body; `monad.reassign` with one proof only; with both | refused (`FIELD_NOT_ALLOWED`); refused; applied |
 | **CN20** | **Two concurrent requests with the same proof** | one executes; the other waits for the lock, then gets the same outcome; one journal acceptance |
-| **CN21** | **Crash after writing `desired`, before the projection** (kill the root at step 10/11 with a hook) | on restart: `applied (recovered)`, one projection, `desired` and process converge |
+| **CN21** | **Crash after writing `desired`, before the projection** (kill the root at step 11/12 with a hook) | on restart: `applied (recovered)`, one projection, `desired` and process converge |
 | **CN22** | An order whose `monad` is the root, or a second `monads supervise` on the same home | refused (`NOT_A_RECORD`); second root refuses to start |
 | **CN23** | Attester answers slower than `STALE_WINDOW_MAX`, answers an old challenge, or its clock is hours off | refused (`AUTHORITY_STALE` / `PROOF_INVALID`); clock skew alone changes nothing |
 | **CN24** | Attestation signed by a key the namespace's authority never named | refused |
@@ -394,7 +426,7 @@ Signed (§3–§5):
 1. ~~§6 option chosen in D10 + CN1–CN3, CN15.~~ **Done locally 2026-11-17** (§6.1).
 2. Root service: home lock, `root.json`, order listener; siblings answer `NOT_THE_ROOT` (CN11, CN22).
 3. Journal + acceptance point + recovery (§3.3, §5) with owner proofs, attestation from the namespace's monad
-   (CN4–CN9, CN12–CN14, CN17–CN21, CN26–CN28, **CN25 the jewel**: no signed order ships without it).
+   (CN4–CN9, CN12–CN14, CN17–CN21, CN26–CN31, **CN25 the jewel**: no signed order ships without it).
 4. After D4: delegation (§4) + CN10, CN16, CN25b (the jewel's positive control).
 5. D1 read policy.
 
@@ -406,6 +438,11 @@ Nothing here touches the kernel, the VM or a real monad; every test runs on a di
 - Calls whose namespace is served on another machine (the attestation route over the mesh; gated by the mesh-trust
   gap).
 - A malicious process of the same OS user (local operator level, local-supervisor.md S3).
+- **Timing and other side channels.** CN26–CN28 check what responses say and that nothing is written; they do not
+  show that response times, lock contention or resource use reveal nothing. The disclosure guarantees (§3.4, C11)
+  are limited to response content until such tests exist.
+- **A valid request captured before it reaches the root** can be submitted by whoever holds it; it executes exactly
+  what was signed, bounded by audience and TTL (§3.3). Preventing that needs channel binding, not covered here.
 
 ## 12. Changes from v1
 
@@ -420,3 +457,4 @@ Nothing here touches the kernel, the VM or a real monad; every test runs on a di
 | Jewel review | Named test "the jewel" (CN25) + positive control (CN25b), invariant C10. Then: every refusal reports `failedAt`; CN25 has every other requirement valid and asserts it failed at authority; CN25b signs each attempt fresh; signature now verified (step 6) before authority (step 7); refusals may go to a separate security log; status "specified, not demonstrated". |
 | Disclosure review | "Learns nothing" withdrawn as stated. Authentication moved first (step 3, outside the lock; key re-checked at 4), then record, namespace, authority; replay/retry lookup only after authentication (step 8); no early replay check; nonce reserved only at the acceptance point. §3.4: internal `failedAt` vs public answers (`UNAUTHENTICATED` before auth; after auth per D1, non-owners can't tell existing from missing). C11, CN26–CN28. |
 | v2.1 review: who may attest; stale window vs revocation; D8 circularity | §3.2 marked not approved, A1 and A2 written out; challenge + monotonic `STALE_WINDOW_MAX` replace clock comparison; D8 options (i)–(iii); D11; CN23–CN24. |
+| Retry / bearer review | Already-accepted orders recognized right after authentication (step 4), before record/namespace/authority, so `delete` and `reassign` retries work; outcome read by a separate fresh single-use `monad.order.result` call by the signing identity, not by resending; a signed proof stated as a bearer artifact (resend never re-executes, never returns the outcome; TLS outside loopback; pre-arrival capture named as not covered). "Reads no protected state" replaced by "reads only the signer's key state before authenticating". Disclosure guarantees limited to response content (timing not covered). Steps renumbered (acceptance = step 10). C11 reworded, C12, CN28 extended, CN29–CN31. |

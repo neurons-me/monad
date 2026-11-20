@@ -43,7 +43,9 @@ npm install
 npm run test
 ```
 
-**Run it.** A **monad** needs a seed — the 64-hex key its cryptographic identity and every derived secret trace back to.
+**Run it.** A **monad** needs a seed: any string. It is passed to `new ME(seed)`, and the monad's cryptographic identity and every derived secret trace back to it. The same seed always gives the same identity.
+
+`Tetragramaton` below is a literal example: fine for trying it, not private, since anyone who knows the string derives the same identity. For a real monad, generate one once (for example `openssl rand -hex 32`) and keep it: a different seed is a different identity.
 
 ```bash
 SEED="Tetragramaton" npm run dev

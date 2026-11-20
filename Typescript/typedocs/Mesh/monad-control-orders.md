@@ -219,18 +219,22 @@ Two separate things, so that neither depends on the target still being as it was
 
 - **Resending the same proof** (the client does not know whether it arrived) is answered at step 4 with
   `ALREADY_ACCEPTED { orderId }` once the order is in the journal, before the record, namespace or authority are
-  read. It works after a successful `delete` (the record is gone) and after a `reassign` (the signer is no longer
+  read. **Accepted, not finished:** it says the order is in the journal, nothing about how it ended. It works after a successful `delete` (the record is gone) and after a `reassign` (the signer is no longer
   the owner). It never executes again and carries no outcome.
 - **Reading the outcome** is its own call, `kind: "monad.order.result"`, body `{ root, orderId }`, signed fresh
   (new nonce). Rules:
-  - authenticate the signer as in step 3 (its key active **now**; an identity whose signing key was revoked uses
-    another active key of the same identity);
+  - authenticate the signer as in step 3, with a key that is active **now**. Independence from the target's state
+    is not independence from current authentication: a key revoked since it signed the order gets nothing, not
+    even the outcome of its own order. The same identity may read it with another of its keys that is active;
   - the signer's `identityHash` must equal the one recorded in the journal entry (for a delegated order, the
     executor's);
   - the record, the namespace's current ownership and any grant are **not** required: the question is "what
     happened to the order I signed", not "may I act on this monad now";
-  - the answer is `applied`, `failed` (with the error) or `in-progress`; an unknown orderId and another identity's
-    orderId get the same `NOT_FOUND`;
+  - the answer is one of: `in-progress` (accepted, no outcome yet, the root still holds it); `applied`; `failed`
+    (with the error); or, after a crash, what recovery (§5.4) established: `applied (recovered)`;
+    `failed (interrupted)` when it is certain the order did not take effect (an intent order whose `desired` was
+    never written); or `interrupted (uncertain)` when the record cannot show whether a non-idempotent order (`restart`, `delete`,
+    `create`, `reassign`) took effect. An unknown orderId and another identity's orderId get the same `NOT_FOUND`;
   - the query's nonce is single-use (reserved when answered), so a captured query cannot be replayed to read the
     outcome again.
 - A client that wants the order done again signs a new call (new nonce, new orderId).
@@ -246,15 +250,15 @@ at-least-once, the key makes it once. `monads.*` is reserved: generic write surf
 | The root dies… | On restart the root finds… | It does |
 |---|---|---|
 | before step 10 | nothing in the journal | nothing; the call was never accepted; the client may resend (same proof is still valid if unexpired) |
-| between 10 and 11 (accepted, not applied) | `accepted` with no outcome | **does not run it blindly.** For `on/off/pause/resume/start/stop/recovery-*` it checks the record: if `desired` already matches the order, marks `applied (recovered)`; if not, marks `failed (interrupted)`. `restart` and `delete` are never re-run: `failed (interrupted)`, or `applied (recovered)` if the record shows it happened (delete: the record is gone). |
+| between 10 and 11 (accepted, not applied) | `accepted` with no outcome | **does not run it blindly.** For `on/off/pause/resume/start/stop/recovery-*` it checks the record: if `desired` already matches the order, marks `applied (recovered)`; if not, marks `failed (interrupted)`. `restart` and `delete` are never re-run: `applied (recovered)` if the record shows it happened (delete: the record is gone), otherwise `interrupted (uncertain)`. |
 | during 11 (e.g. `desired` written, process not yet started) | `accepted`; `desired` already changed | `applied (recovered)`; the supervisor converges the process to `desired` as it always does (local-supervisor.md) |
 | between 12 and 13 | outcome written, no tree memory | writes the projection (§5.3); idempotent |
 | during 13 | partial or no projection | same; idempotent by orderId |
 
 The rule behind the table: **`desired` is the intent, and the supervisor converges to it**, so for intent-setting
 orders "was it applied" reduces to "does `desired` say so". Only the non-idempotent orders (`restart`, `delete`,
-`create`, `reassign`) need the record to show it, and are otherwise reported `failed (interrupted)` for the
-client to decide.
+`create`, `reassign`) need the record to show it, and are otherwise reported `interrupted (uncertain)`, not
+`failed`: the root does not know, and says so, for the client to decide.
 
 ## 6. Transitional measure (before §3 exists)
 
@@ -312,7 +316,7 @@ Proposal: **(a)**. The order buttons come back with §3, signed.
 | C9 | The CLI keeps working with HTTP orders closed. | CN15 |
 | C10 | **Recognizing a signer is not obeying it.** Without applicable authority (ownership of the namespace, or a delegation that covers this order on this monad) the order is refused, however valid everything else is. Authority in one scope (gateway admin) never carries over to another (monads). | CN25, CN25b |
 | C11 | **Before authentication, only the signer's key state is read**, never the target record, the target namespace's claim or grants, or the journal; and no response reveals protected information or an authorization decision. Internal diagnosis (`failedAt`) is never the public answer by itself. An unauthenticated request never takes a record lock, burns a nonce or writes. Scope: what CN26–CN28 check, the **content** of responses and the absence of writes; timing and other side channels are not covered (§11). | CN26–CN28 |
-| C12 | **Retries and results do not depend on the target's current state.** A resent proof of an accepted order is recognized before the record, namespace or authority are read; its outcome is read only with a fresh single-use query by the identity that signed it. Resending a proof never re-executes and never returns the outcome. | CN28–CN31 |
+| C12 | **Retries and results do not depend on the target's current state.** A resent proof of an accepted order is recognized before the record, namespace or authority are read; its outcome is read only with a fresh single-use query by the identity that signed it. Resending a proof never re-executes and never returns the outcome. | CN28–CN33 |
 
 ## 8. Negative tests
 
@@ -365,6 +369,8 @@ security log. That log is a different thing from the journal and is not specifie
 | **CN29** | `delete m` applied, response lost; the client resends the same proof; then reads the result with a fresh `monad.order.result` | resend: `ALREADY_ACCEPTED` although `m` no longer exists; result: `applied` |
 | **CN30** | `reassign m` applied (the signer is no longer the owner); same resend and result query by the original signer | resend: `ALREADY_ACCEPTED`; result: `applied`, without the signer being owner now |
 | **CN31** | Result query for an orderId by another identity; for an unknown orderId; and the same query proof sent twice | first two: the same `NOT_FOUND`; the repeated query: refused (single-use nonce), outcome not returned again |
+| **CN32** | The signer's key is revoked after the order was accepted; it queries the result; then the same identity queries with another active key | first: `UNAUTHENTICATED`, nothing returned; second: the outcome |
+| **CN33** | Result query while the order is still applying; after it applied; after it failed; after a crash in the middle of a `restart` whose effect the record cannot show | `in-progress`; `applied`; `failed`; `interrupted (uncertain)` — never `applied` or `failed` by guess |
 | **CN25b** | **Positive control.** The owner then delegates to Ana only `off` on `m`. Ana sends three calls, **each with its own new proof and nonce, and its own path and body**: `off` on `m`; `delete` on `m`; `off` on another monad `n` of the same owner | `off m` applied; `delete m` and `off n` refused at the authorization step (`failedAt: "authority"`, `NOT_GRANTED`), not by signature, destination or replay |
 
 ### All the others
@@ -458,3 +464,4 @@ Nothing here touches the kernel, the VM or a real monad; every test runs on a di
 | Disclosure review | "Learns nothing" withdrawn as stated. Authentication moved first (step 3, outside the lock; key re-checked at 4), then record, namespace, authority; replay/retry lookup only after authentication (step 8); no early replay check; nonce reserved only at the acceptance point. §3.4: internal `failedAt` vs public answers (`UNAUTHENTICATED` before auth; after auth per D1, non-owners can't tell existing from missing). C11, CN26–CN28. |
 | v2.1 review: who may attest; stale window vs revocation; D8 circularity | §3.2 marked not approved, A1 and A2 written out; challenge + monotonic `STALE_WINDOW_MAX` replace clock comparison; D8 options (i)–(iii); D11; CN23–CN24. |
 | Retry / bearer review | Already-accepted orders recognized right after authentication (step 4), before record/namespace/authority, so `delete` and `reassign` retries work; outcome read by a separate fresh single-use `monad.order.result` call by the signing identity, not by resending; a signed proof stated as a bearer artifact (resend never re-executes, never returns the outcome; TLS outside loopback; pre-arrival capture named as not covered). "Reads no protected state" replaced by "reads only the signer's key state before authenticating". Disclosure guarantees limited to response content (timing not covered). Steps renumbered (acceptance = step 10). C11 reworded, C12, CN28 extended, CN29–CN31. |
+| Result-state review | `ALREADY_ACCEPTED` = accepted, not finished. Result states: `in-progress`, `applied`, `failed`, `applied (recovered)`, `failed (interrupted)` (certain: not applied), `interrupted (uncertain)` (non-idempotent orders the record cannot confirm; uncertainty is reported, not guessed). Reading a result needs a key active now; a revoked key gets nothing. CN32–CN33. |
